@@ -1,0 +1,131 @@
+--- nda_models/mt48lc2m32b2.v	2026-07-04 01:09:36.872198514 +0900
++++ models/mt48lc2m32b2.v	2026-07-06 02:51:04.962802635 +0900
+@@ -1,4 +1,25 @@
+ /**************************************************************************
++* HS3 TESTBENCH COPY - patched for Verilator 5 --timing (pristine original
++* lives in nda_models/mt48lc2m32b2.v). Patch:
++*   - the three Dq_reg output delays (#tOH/#tAC/#tHZ) stripped: at a 20 ns
++*     bus cycle the data is sampled at the next rising edge either way
++*   - the nonblocking z-assign to Dq_reg converted to blocking (Verilator's
++*     tristate graph rejects NBA-z; the z/data writes in that block are
++*     condition-exclusive per pass, so ordering is unchanged)
++*   - NEW PORT Dq_in: Verilator cannot resolve an external tristate driver
++*     when a module reads its own inout, so the write path samples write
++*     data from this explicit input (testbench ties it to the driver bus).
++*     Verified against a minimal reproduction. 4 read sites changed.
++*   - internal z removed: Dq_dqm/Dq_reg z-assignments made Verilator shadow
++*     them with enable bits that zeroed every read. Dq_dqm masked-read lanes
++*     now drive 0 (never taken: the BSC reads with DQM all-low); Dq_reg is a
++*     plain data reg; the ONLY tristate is the canonical port driver
++*     "assign Dq = Dq_oe_i ? Dq_reg : 'z". Write+read round trip verified.
++*   - Debug tied 0
++* Timing-violation $display checks are UNTOUCHED - the testbench greps the
++* sim output for "ERROR" and fails on any hit.
++**************************************************************************/
++/**************************************************************************
+ *
+ *    File Name:  MT48LC2M32B2.V
+ *      Version:  2.1
+@@ -39,7 +60,7 @@
+ 
+ `timescale 1ns / 1ps
+ 
+-module mt48lc2m32b2 (Dq, Addr, Ba, Clk, Cke, Cs_n, Ras_n, Cas_n, We_n, Dqm);
++module mt48lc2m32b2 (Dq, Dq_in, Addr, Ba, Clk, Cke, Cs_n, Ras_n, Cas_n, We_n, Dqm);
+ 
+     parameter addr_bits =      11;
+     parameter data_bits =      32;
+@@ -47,6 +68,7 @@
+     parameter mem_sizes =  524287;
+ 
+     inout     [data_bits - 1 : 0] Dq;
++    input     [data_bits - 1 : 0] Dq_in;                         // HS3 patch: explicit write-data input (Verilator cannot read an inout back internally)
+     input     [addr_bits - 1 : 0] Addr;
+     input                 [1 : 0] Ba;
+     input                         Clk;
+@@ -120,10 +142,11 @@
+     // Write Burst Mode
+     wire      Write_burst_mode = Mode_reg[9];
+ 
+-    wire      Debug            = 1'b1;                          // Debug messages : 1 = On
++    wire      Debug            = 1'b0;                          // Debug messages : 1 = On
+     wire      Dq_chk           = Sys_clk & Data_in_enable;      // Check setup/hold time for DQ
+ 
+-    assign    Dq               = Dq_reg;                        // DQ buffer
++    reg                           Dq_oe_i;                     // HS3 patch: whole-bus output enable
++    assign    Dq               = Dq_oe_i ? Dq_reg : {data_bits{1'bz}};   // DQ buffer (canonical tristate)
+ 
+     // Commands Operation
+     `define   ACT       0
+@@ -159,7 +182,7 @@
+     time  RP_chk0, RP_chk1, RP_chk2, RP_chk3;
+ 
+     initial begin
+-        Dq_reg = {data_bits{1'bz}};
++        Dq_reg = {data_bits{1'b0}}; Dq_oe_i = 0;
+         Data_in_enable = 0; Data_out_enable = 0;
+         Act_b0 = 1; Act_b1 = 1; Act_b2 = 1; Act_b3 = 1;
+         Pc_b0 = 0; Pc_b1 = 0; Pc_b2 = 0; Pc_b3 = 0;
+@@ -886,7 +909,7 @@
+         end
+ 
+         if (Data_out_enable == 1'b0) begin
+-            Dq_reg <= #tOH {data_bits{1'bz}};
++            Dq_oe_i = 1'b0;
+         end
+ 
+         // Detect Read or Write command
+@@ -930,16 +953,16 @@
+ 
+             // Dqm operation
+             if (Dqm[0] == 1'b0) begin
+-                Dq_dqm [ 7 :  0] = Dq [ 7 :  0];
++                Dq_dqm [ 7 :  0] = Dq_in [ 7 :  0];
+             end
+             if (Dqm[1] == 1'b0) begin
+-                Dq_dqm [15 :  8] = Dq [15 :  8];
++                Dq_dqm [15 :  8] = Dq_in [15 :  8];
+             end
+             if (Dqm[2] == 1'b0) begin
+-                Dq_dqm [23 : 16] = Dq [23 : 16];
++                Dq_dqm [23 : 16] = Dq_in [23 : 16];
+             end
+             if (Dqm[3] == 1'b0) begin
+-                Dq_dqm [31 : 24] = Dq [31 : 24];
++                Dq_dqm [31 : 24] = Dq_in [31 : 24];
+             end
+ 
+             // Write to memory
+@@ -978,26 +1001,26 @@
+ 
+             // Dqm operation
+             if (Dqm_reg0 [0] == 1'b1) begin
+-                Dq_dqm [ 7 :  0] = 8'bz;
++                Dq_dqm [ 7 :  0] = 8'h00;   // HS3 patch: masked read lanes drive 0, not z
+             end
+             if (Dqm_reg0 [1] == 1'b1) begin
+-                Dq_dqm [15 :  8] = 8'bz;
++                Dq_dqm [15 :  8] = 8'h00;
+             end
+             if (Dqm_reg0 [2] == 1'b1) begin
+-                Dq_dqm [23 : 16] = 8'bz;
++                Dq_dqm [23 : 16] = 8'h00;
+             end
+             if (Dqm_reg0 [3] == 1'b1) begin
+-                Dq_dqm [31 : 24] = 8'bz;
++                Dq_dqm [31 : 24] = 8'h00;
+             end
+ 
+             // Display debug message
+             if (Dqm_reg0 !== 4'b1111) begin
+-                Dq_reg = #tAC Dq_dqm;
++                Dq_reg = Dq_dqm; Dq_oe_i = 1'b1;
+                 if (Debug) begin
+                     $display("%m : at time %t READ : Bank = %d Row = %d, Col = %d, Data = %h", $time, Bank, Row, Col, Dq_reg);
+                 end
+             end else begin
+-                Dq_reg = #tHZ {data_bits{1'bz}};
++                Dq_oe_i = 1'b0;
+                 if (Debug) begin
+                     $display("%m : at time %t READ : Bank = %d Row = %d, Col = %d, Data = Hi-Z due to DQM", $time, Bank, Row, Col);
+                 end

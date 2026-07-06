@@ -1,0 +1,22 @@
+`verilator_config
+// Lint waivers scoped to simulation-only files. Design sources under
+// ip_cores/ stay fully linted; any warning there still fails the build.
+
+// vendor memory models (patched copies; recipe in models/*.verilator.patch)
+lint_off -rule WIDTHEXPAND -file "*/models/*"
+lint_off -rule WIDTHTRUNC  -file "*/models/*"
+lint_off -rule RISEFALLDLY -file "*/models/*"
+lint_off -rule INITIALDLY  -file "*/models/*"
+lint_off -rule MULTIDRIVEN -file "*/models/*"
+lint_off -rule REALCVT     -file "*/models/*"
+lint_off -rule UNSIGNED    -file "*/models/*"
+lint_off -rule CMPCONST    -file "*/models/*"
+lint_off -rule CASEINCOMPLETE -file "*/models/*"
+lint_off -rule WIDTHCONCAT -file "*/models/*"
+lint_off -rule IMPLICIT    -file "*/models/*"
+lint_off -rule BLKSEQ      -file "*/models/*"
+
+// testbench + PCB glue: the shared tristate bus is intentionally multidriven
+lint_off -rule MULTIDRIVEN -file "*tb_cv1k.sv"
+lint_off -rule MULTIDRIVEN -file "*ikacore_CV1k.sv"
+lint_off -rule WIDTHEXPAND -file "*tb_cv1k.sv"
