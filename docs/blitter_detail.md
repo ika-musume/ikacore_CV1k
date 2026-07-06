@@ -35,7 +35,7 @@ X1 12.8000 MHz
 | VRAM CLK period | 13.021 ns | **C** | [PDF] uses 13 ns. 93 CLK × 13.021 = 1211 ns vs. measured 1212 ns — better fit than 13 ns flat. |
 | DDR data rate | 153.6 MT/s × 32 bit = 614.4 MB/s = **4 px / VRAM CLK** | **C** | Two ×16 chips in lockstep (CS/RAS/CAS/WE/A/BA tied). |
 | FPGA-internal clock | probably 76.8 MHz core + DDR I/O regs; Cyclone I has 2 PLLs, a 153.6 MHz capture clock is possible | **D** | Externally unobservable. Our core: run blitter datapath at one clock, enforce external cadence with counters. |
-| Video dot clock | unknown | **A** | See §9. |
+| Video dot clock | 6.4 MHz (12.8/2), ÷12 enable in VRAM domain | **B** | Working assumption, see §9.1; confirm via ppm frame-rate measurement. |
 
 > Note: 12.8 × 8 = **102.4** MHz (not 102.8); CKIO = 102.4/2 = **51.2** MHz (not
 > 51.4). If a frequency counter on the PCB really reads 51.4, X1 is off-nominal —
@@ -444,6 +444,44 @@ Anchors: 8×8 → 36 beats, 2 gaps ≈ 2.98 µs; 256×5 → 644 beats, 40 gaps �
 between T_GAP≈1.13 µs (upload) and ≈0.7 µs (idle op stream) is unexplained —
 probably BACK-ack latency under different CPU load — **A/B: measure both cases.**
 
+### 7.6 Timing-decoupled FSM pattern (design contract for latency tuning)
+
+Inter-instruction switch latencies are **not isolated anywhere**: the per-sprite
++10/+12 CLK is a lumped fit-constant (draw→draw only); draw↔upload, clip/exit
+decode cost, and cross-chunk FIFO-drain transitions are Level A. Therefore the
+RTL must keep function and timing separate so these can be tuned post-measurement
+without FSM surgery:
+
+- The datapath FSM emits **events** (src-row done, rd→wr turn, wr done, op
+  retired, op-type switch, kick); a separate timing unit inserts stalls from a
+  **latency table** indexed by event — the single source of truth, shared with
+  the TB scoreboard, runtime-loadable in sim (`$plusargs`/backdoor) so PCB
+  fitting is a sweep, not a recompile.
+- **Knobs map 1:1 to observables**: every table entry corresponds to exactly one
+  measurable gap on the DDR command bus (CAS-to-CAS spacing / CS idle) or BREQ
+  timing. Datapath is fully pipelined (0-cycle nominal); *all* dead time lives
+  in the table — never smear latency into pipeline-fill of the blend ALU.
+- **hline steal and fetch starvation are orthogonal stall inputs** that gate the
+  penalty counter; they are not table entries (tuning must not interact).
+- **Nondeterminism is quarantined**: only BREQ→BACK grant latency varies; it
+  stays behind the op FIFO in the fetch unit, so the execution side is
+  cycle-reproducible (same op list in → same cycle count out).
+
+```systemverilog
+typedef enum logic [2:0] {EV_SRC_ROW, EV_RD2WR, EV_WR2RD, EV_OP_DRAW,
+                          EV_OP_UPLD, EV_OP_CLIP, EV_KICK} evt_t;
+logic [7:0] lat [7] = '{6, 20, 11, 12, /*A:*/0, /*A:*/0, /*A:*/0};
+
+always_ff @(posedge clk_vram)
+  if (evt_valid)                                stall_cnt <= lat[evt];
+  else if (!hline_steal && stall_cnt != 0)      stall_cnt <= stall_cnt - 1;
+assign engine_go = (stall_cnt == 0) && !hline_steal;
+```
+
+Tuning loop later: PCB LA capture → diff observed vs. RTL command-bus gaps →
+edit table → re-run scoreboard. Pixel correctness is never re-verified because
+function and timing share no logic.
+
 ---
 
 ## 8. CLIP operation semantics (updated by [CLIP] — supersedes [PDF] "unknown")
@@ -475,14 +513,28 @@ issued, and must be exact to the padded-4-px grid or slowdown accuracy drifts.
 | Hsync width / porches / vsync width / dot clock | — | **A** — measure JAMMA sync with scope + LA |
 | IRQ2 position = "V-sync pulse, not V-blank" | [MAME] comment | **B** — pin down edge vs. sync, and pulse width (**A**) |
 
-Dot-clock candidates (all divide the board clocks; none proven — **A**):
+**Working assumption (B, upgraded from A): dot clock = 6.4 MHz, HTOTAL = 407 dots.**
+Rationale:
+- (a) only candidate that keeps the whole design in the 12.8 MHz integer clock
+  family: 6.4 = 12.8/2 = 76.8/12 = 153.6/24. The pixel "clock" is a ÷12 clock
+  enable inside the VRAM domain — **zero CDC** between scanout counter, hline
+  steal, and blitter datapath;
+- (b) htotal = 6.4 MHz/(60.024 Hz × 262) = 406.96 → integer within 0.01 %;
+- (c) active fractions come out NTSC-like: 320/407 = 78.6 % H, 240/262 = 91.6 % V.
 
-| Candidate | htotal @ 15.726 kHz | active fraction (320) | comment |
-|---|---|---|---|
-| 6.4 MHz (12.8/2) | 407.0 | 78.6 % | suspiciously exact fit, odd htotal |
-| 7.68 MHz (76.8/10) | 488.4 | 65.5 % | non-integer |
-| 8.533 MHz (25.6/3) | 542.6 | 59 % | non-integer |
-| 12.8 MHz | 813.9 | 39 % | unlikely (too much blank) |
+Derived timing set (with HTOTAL = 407 exact):
+line = 6.4 MHz/407 = 15,724.8 Hz (63.594 µs); frame = 60.0184 Hz;
+**4884 VRAM CLK per line**; 106,634 dot clocks (1,279,608 VRAM CLK) per frame.
+Residual vs. MAME's "60.024 Hz" is 93 ppm — inside plausible measurement error;
+the ppm-grade IRQ2/vsync frequency measurement (checklist #1/#2) confirms or
+kills this with one probe (expect ≈60.018 Hz if true).
+
+Rejected candidates: 7.68 MHz (htotal 488.4, non-integer), 8.533 MHz (542.6),
+12.8 MHz (813.9, implausible 39 % active).
+The only other integer-VRAM-CLK line length inside the 60.024 error band is
+4883 CLK/line → 60.031 Hz, but 4883 = 19 × 257 admits no sensible dot clock —
+so the frequency measurement discriminates cleanly: **60.0184 Hz ⇒ 407 × 12
+confirmed; 60.031 Hz ⇒ hypothesis dead, re-derive.**
 
 ### 9.2 The per-line VRAM steal (**C** existence/values, **B** composition)
 
@@ -513,9 +565,10 @@ priority: scanout line fetch  >  draw/upload engine  >  (refresh: unknown slot)
   (probe: does an hline ever split a 256-CLK tile read?).
 
 ```systemverilog
-// scanout cadence, VRAM domain. NOTE: 63.586 µs is NOT an integer number of
-// 13.02 ns clocks (≈4883.5) — real HW derives it from the video counter chain,
-// not a free divider. Implement as: hcounter in dot-clock domain → sync pulse
+// scanout cadence, VRAM domain. Under the §9.1 working assumption (6.4 MHz dot
+// = ÷12 enable, HTOTAL = 407) one line = exactly 4884 VRAM CLK: derive the hline
+// pulse from the video hcounter itself (same domain, no free divider, no drift).
+// If the dot clock hypothesis changes, re-derive; never use an async divider.
 // → CDC into VRAM domain. (Getting this wrong accumulates 0.5 CLK/line drift.)
 always_ff @(posedge clk_vram) begin
   hline_req <= hline_toggle_sync ^ hline_toggle_sync_d;   // one pulse per line
@@ -582,7 +635,8 @@ package cv1k_blit_params;
   localparam int  EXEC_TO_BREQ_CK = 8;         // ??? CKIO cycles
   localparam int  AREF_PER_HLINE  = 8;         // ??? see §6.6
   localparam bit  SCROLL_LATCH_PER_LINE = 1;   // ??? see §9.4
-  localparam int  DOT_CLK_HZ      = 6_400_000; // ??? see §9.1
+  localparam int  DOT_CLK_HZ      = 6_400_000; // working assumption §9.1 (B)
+  localparam int  HTOTAL_DOTS     = 407;       // → 4884 VRAM CLK/line (B)
 endpackage
 ```
 

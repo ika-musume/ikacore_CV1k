@@ -39,9 +39,11 @@ module tb_cv1k;
         $display("[tb] reset released @ %0t (flash powered up)", $time);
     end
 
-    // watchdog: bound number of clock cycles so the run always terminates
-    integer max_cycles = 20000000;
-    integer cyc = 0;
+    // watchdog: bound number of clock cycles so the run always terminates.
+    // 64-bit: long runs (+maxinsn in the tens of millions) need >2^31 cycles.
+    // Default is effectively unbounded so +maxinsn alone controls the stop.
+    longint max_cycles = 64'd100_000_000_000;
+    longint cyc = 0;
     initial void'($value$plusargs("cycles=%d", max_cycles));
     always @(posedge i_CLK) begin
         cyc = cyc + 1;

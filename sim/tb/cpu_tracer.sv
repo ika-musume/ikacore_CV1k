@@ -24,8 +24,8 @@ module cpu_tracer (
     input wire [31:0] fetch_pc
 );
     integer  fh;
-    integer  count;
-    integer  maxinsn;
+    longint  count;                 // 64-bit: allow tens/hundreds of millions
+    longint  maxinsn;
     string   tracefile;
 
     // debug heartbeat: is the fetch PC advancing / is anything retiring?
