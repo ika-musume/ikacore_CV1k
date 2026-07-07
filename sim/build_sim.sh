@@ -13,9 +13,19 @@ MDIR=build/obj_dir
 TOP=tb_cv1k
 BIN=V$TOP
 
+# FASTBOOT=1: use the patched ROM (copy/FPGA/delay loops NOP'd) + preload SDRAM,
+# so the sim reaches the blitter/game code in a few k insns instead of ~1M.
+#   FASTBOOT=1 ./build_sim.sh +maxinsn=200000
+FBDEF=""
+if [ "${FASTBOOT:-0}" = "1" ]; then
+    FBDEF="+define+IBARA_FASTBOOT"
+    echo "== FASTBOOT enabled (patched ROM + SDRAM preload) =="
+fi
+
 echo "== Verilating (Verilator $(verilator --version | awk '{print $2}')) =="
 verilator --binary --timing -j 0 -O3 --sv \
     -Wno-fatal \
+    $FBDEF \
     verilator_waivers.vlt \
     --Mdir "$MDIR" \
     -f filelist.f \

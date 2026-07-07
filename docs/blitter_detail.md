@@ -482,6 +482,46 @@ Tuning loop later: PCB LA capture → diff observed vs. RTL command-bus gaps →
 edit table → re-run scoreboard. Pixel correctness is never re-verified because
 function and timing share no logic.
 
+### 7.7 Tile buffer (existence **C** — implied by sequencing; layout **D**)
+
+The op FIFO (§5) carries *commands only*; draw pixel payloads come from VRAM
+(§7.2) and need their own on-chip storage. The per-tile sequence (§7.1) is
+strictly serial — all source pixels of the dst-tile intersection are read
+*before* the dst read/write phases, and the src DRAM row is closed by then —
+so the source data must be buffered locally. The real chip provably does this:
+LA captures show uninterrupted src-read bursts (up to 256 CLK), never
+interleaved with dst accesses.
+
+**Load unit = sprite ∩ dst-tile intersection, not a fixed tile.** The buffer is
+*sized* for the worst case — full 32×32 coverage = 1024 px × 16 b = 2 KB (one
+DRAM row) — but each fill reads only the intersection's actual pixels:
+
+| Draw | intersection px | src read CLK | anchor |
+|---|---|---|---|
+| 8×8, 1 row | 64 | 16 | [PDF] 93-CLK trace |
+| 16×12, 1 row | 192 | 48 | [PDF] 2.484 µs trace |
+| 240×64 full tile | 1024 | 256 | [PDF] 803-CLK/row |
+
+Src reads are exact (`src_px = w·h`, always 4-px aligned in VRAM — §6.5); only
+the **dst** span is padded to the 4-px grid.
+
+**Datapath integration:**
+- **D_RD_SRC** fills the buffer, addressed in *dst-tile-relative* coordinates.
+  Src and dst tile grids don't align in general (`src_x%32 ≠ dst_x%32`), so one
+  fill may stream from up to 4 src rows (the D_RD_SRC/D_SW_SRC interleave, 5–6
+  CLK per src row switch).
+- **D_RD_DST** blends on the fly: incoming dst px + buffered src px → §7.4 ALU
+  (4 px/CLK) → merged result written back into the buffer (dual-port BRAM, or a
+  second 2 KB buffer for a simpler pipeline). Zero added time — consistent with
+  blend settings changing nothing in timing.
+- **D_WR_DST** streams the merged buffer out at 4 px/CLK. Buffer locations in
+  the padded 4-px dst columns but outside the sprite (or trans-skipped, A=0)
+  hold the pass-through dst value from D_RD_DST — they are rewritten unchanged,
+  not skipped (matches writes landing up to 32 px outside the clip window, §8).
+
+**Sizing**: minimum one dual-port 2 KB BRAM (1024 × 16); 2 × 2 KB (src +
+merged) is cheap on EP1C12-class BRAM budgets (§9.4) and recommended.
+
 ---
 
 ## 8. CLIP operation semantics (updated by [CLIP] — supersedes [PDF] "unknown")

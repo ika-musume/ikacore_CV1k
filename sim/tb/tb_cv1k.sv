@@ -55,7 +55,11 @@ module tb_cv1k;
 
     // DUT: the CV1000-B PCB
     ikacore_CV1k #(
+`ifdef IBARA_FASTBOOT
+        .ROM_FILE("rom/ibara_u4_4M_fastboot.hex")   // copy/FPGA/delay loops NOP'd; SDRAM preloaded
+`else
         .ROM_FILE("rom/ibara_u4_4M.hex")
+`endif
     ) dut (
         .i_CLK   (i_CLK),
         .i_CEN   (i_CEN),
