@@ -56,9 +56,9 @@ module tb_cv1k;
     // DUT: the CV1000-B PCB
     ikacore_CV1k #(
 `ifdef IBARA_FASTBOOT
-        .ROM_FILE("rom/ibara_u4_4M_fastboot.hex")   // copy/FPGA/delay loops NOP'd; SDRAM preloaded
+        .ROM_FILE("roms/ibara_patched/ibara_u4_4M_fastboot.hex")   // copy/FPGA/delay loops NOP'd; SDRAM preloaded
 `else
-        .ROM_FILE("rom/ibara_u4_4M.hex")
+        .ROM_FILE("roms/ibara_patched/ibara_u4_4M.hex")
 `endif
     ) dut (
         .i_CLK   (i_CLK),
@@ -81,6 +81,63 @@ module tb_cv1k;
             nprobe = nprobe + 1;
         end
     end
+
+    // optional DMA/NAND timing probe (+define+DMA_MON): segments the U2 read
+    // stream into bursts (a gap of >64 i_CLK cycles between RE_n pulses starts
+    // a new burst) and reports pulse count + span, plus SDRAM write commands.
+`ifdef DMA_MON
+    longint ckio_cyc = 0;
+    always @(posedge i_CLK) if (dut.CKIO_PCEN) ckio_cyc = ckio_cyc + 1;
+
+    longint sdram_wr = 0;
+    always @(posedge i_CLK) if (dut.CKIO_PCEN)
+        if (!dut.CS3_n && dut.RAS3L_n && !dut.CASL_n && !dut.RD_WR)
+            sdram_wr = sdram_wr + 1;
+
+    reg     re_d    = 1'b1;
+    longint re_tot  = 0;                 // every RE_n fall since reset
+    longint burst_n = 0;                 // RE_n falls in the current burst
+    longint burst_t0 = 0, burst_t1 = 0, burst_c0 = 0, burst_c1 = 0;
+    longint bursts  = 0;
+
+    task automatic flush_burst;
+        if (burst_n != 0) begin
+            bursts = bursts + 1;
+            $display("[dma] burst %0d: %0d RE pulses, %0d i_CLK cyc (%0d CKIO cyc), %0d i_CLK/byte",
+                     bursts, burst_n, burst_t1 - burst_t0, burst_c1 - burst_c0,
+                     (burst_t1 - burst_t0) / burst_n);
+            burst_n = 0;
+        end
+    endtask
+
+    always @(posedge i_CLK) begin
+        re_d <= dut.u2_re_n;
+        if (burst_n != 0 && (cyc - burst_t1) > 64) flush_burst();
+        if (re_d && !dut.u2_re_n) begin              // RE_n falling edge = 1 byte out
+            if (burst_n == 0) begin burst_t0 = cyc; burst_c0 = ckio_cyc; end
+            burst_n = burst_n + 1;
+            re_tot  = re_tot + 1;
+            burst_t1 = cyc; burst_c1 = ckio_cyc;
+        end
+    end
+
+    // capture the bytes U2 actually drives (valid on RE_n rising) so they can be
+    // diffed against the raw dump:  cmp build/nand_bytes.bin roms/ibara/u2
+    integer nb_fd = 0, nb_cnt = 0;
+    integer nb_max = 0;
+    initial void'($value$plusargs("nandbytes=%d", nb_max));
+    initial if (nb_max != 0) nb_fd = $fopen("build/nand_bytes.bin", "wb");
+    always @(posedge i_CLK) if (!re_d && dut.u2_re_n && nb_fd != 0 && nb_cnt < nb_max) begin
+        $fwrite(nb_fd, "%c", dut.D[7:0]);
+        nb_cnt = nb_cnt + 1;
+        if (nb_cnt == nb_max) begin $fclose(nb_fd); nb_fd = 0; $display("[dma] captured %0d NAND bytes", nb_cnt); end
+    end
+
+    final begin
+        $display("[dma] TOTAL: %0d NAND RE pulses, %0d bursts, %0d SDRAM writes, %0d i_CLK cyc, %0d CKIO cyc",
+                 re_tot, bursts, sdram_wr, cyc, ckio_cyc);
+    end
+`endif
 
 endmodule
 

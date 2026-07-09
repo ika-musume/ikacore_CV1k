@@ -21,8 +21,11 @@ ip_cores/HS3/cpu_core/cpu_core.sv
 // --- SH7709S peripherals + chip top ---
 ip_cores/HS3/peri/ibus_splitter.sv
 ip_cores/HS3/peri/ibus_bridge.sv
+ip_cores/HS3/peri/ibus_arb.sv
 ip_cores/HS3/peri/bsc.sv
 ip_cores/HS3/peri/cpg_wdt.sv
+ip_cores/HS3/peri/dmac_channel.sv
+ip_cores/HS3/peri/dmac.sv
 ip_cores/HS3/peri/intc.sv
 ip_cores/HS3/peri/ioport.sv
 ip_cores/HS3/peri/rtc.sv
@@ -32,8 +35,13 @@ ip_cores/HS3/HS3.sv
 // --- board: vendor memory models (patched for Verilator, see *.verilator.patch) ---
 models/mt48lc2m32b2.v
 models/MX29LV320E.v
+// U2 NAND: Micron MT29F1G08 model (ID-patched to Samsung K9F1G08U0M, EC/F1)
++incdir+models/MT29F1G08ABAFA
+models/MT29F1G08ABAFA/nand_die_model.v
+models/MT29F1G08ABAFA/nand_model.v
 
-// --- PCB top + testbench ---
+// --- PCB top + board glue ---
+ikacore_CV1k_cpld.v
 ikacore_CV1k.sv
 tb/cpu_tracer.sv
 tb/tb_cv1k.sv

@@ -15,10 +15,10 @@ Artifacts:
 
 | File | Role |
 |---|---|
-| `sim/roms/ibara/u4_fastboot` | patched raw 2 MB NOR image (reference) |
-| `sim/rom/ibara_u4_4M_fastboot.hex` | patched flash `$readmemh` image (4 MB mirror) |
-| `sim/rom/ibara_sdram_bank0.hex` | SDRAM preload, bank 0 (P = 0x000000–0x1FFFFC) |
-| `sim/rom/ibara_sdram_bank1.hex` | SDRAM preload, bank 1 (P = 0x200000–0x3950B8) |
+| `sim/roms/ibara_patched/u4_fastboot` | patched raw 2 MB NOR image (reference) |
+| `sim/roms/ibara_patched/ibara_u4_4M_fastboot.hex` | patched flash `$readmemh` image (4 MB mirror) |
+| `sim/roms/ibara_patched/ibara_sdram_bank0.hex` | SDRAM preload, bank 0 (P = 0x000000–0x1FFFFC) |
+| `sim/roms/ibara_patched/ibara_sdram_bank1.hex` | SDRAM preload, bank 1 (P = 0x200000–0x3950B8) |
 
 Wiring: `tb_cv1k.sv` selects the patched flash hex under `IBARA_FASTBOOT`;
 `models/mt48lc2m32b2.v` `$readmemh`'s the two bank files at t=0 under the same

@@ -8,7 +8,7 @@ module tb_flash_only;
     reg  [15:0] Q_in = 0;
     reg  CE_B=1, WE_B=1, OE_B=1, RESET_B=0;
 
-    MX29LV320E #(.Init_File("rom/ibara_u4_4M.hex")) dut (
+    MX29LV320E #(.Init_File("roms/ibara_patched/ibara_u4_4M.hex")) dut (
         .A(A), .Q(Q), .Q_in(Q_in), .CE_B(CE_B), .WE_B(WE_B), .OE_B(OE_B),
         .BYTE_B(1'b1), .RESET_B(RESET_B), .RYBY_B(), .WP_B(1'b1));
 

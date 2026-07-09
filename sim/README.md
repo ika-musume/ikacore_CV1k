@@ -27,7 +27,7 @@ instructions verified byte-for-byte against the U4 ROM (`0` mismatches).
 | `scripts/compare_flow.py`   | diff RTL vs MAME retired-PC streams → first divergence |
 | `scripts/validate_trace.py` | check retired opcodes == U4 ROM content (golden, no MAME needed) |
 | `scripts/mame_trace.md`     | how to capture the MAME SH-3 reference trace |
-| `rom/`, `build/`            | generated ROM hex + Verilator output (git-ignored) |
+| `roms/ibara_patched/`, `build/` | generated ROM/NAND hex + Verilator output (git-ignored) |
 | `ip_cores/HS3`              | symlink to the read-only SH-3 IP (see note below) |
 
 ## Verified address map — the shared bus (SH7709S HW manual + MAME)

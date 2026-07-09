@@ -34,7 +34,7 @@
 // drop-in via the same sibling patch recipe if the exact part is wanted.
 //============================================================================
 module ikacore_CV1k #(
-    parameter ROM_FILE = "rom/ibara_u4_4M.hex"
+    parameter ROM_FILE = "roms/ibara_patched/ibara_u4_4M.hex"
 ) (
     input  wire i_CLK,      // SH-3 architectural clock (board = 102.4 MHz domain)
     input  wire i_CEN,      // architectural clock enable (1 in sim)
@@ -54,11 +54,19 @@ wire        BS_n, CS0_n, CS2_n, CS3_n, CS4_n, CS5_n, CS6_n;
 wire        RD_WR, RAS3L_n, RAS3U_n, CASL_n, CASU_n, RD_n;
 wire [3:0]  WE_n;
 wire        CKE, CKIO, BACK_n, BUS_OE;
+wire        CKIO_PCEN;                       // i_CLK cycle in which CKIO rises
+
+// U13 CPLD + U2 NAND nets
+wire [3:0]  cpld_D;                          // CPLD drive value for D[3:0]
+wire        cpld_D_OE;                       // CPLD drives (EEPROM/RTC reads)
+wire        u2_ce_n, u2_re_n, u2_we_n;       // U13 -> U2 NAND control strobes
+wire        nand_rb_n;                       // U2 ready/busy -> PTE5 (NAND ready)
 
 // the true bidirectional board data bus (shared A/D bus, Table 10.1)
 wire [31:0] D;
 assign D   = D_OE ? D_O : 32'hzzzz_zzzz;    // SH-3 drives on writes
 assign D_I = D;                             // SH-3 samples the resolved bus
+assign D[3:0] = cpld_D_OE ? cpld_D : 4'hz;  // U13 drives the low nibble on EEPROM reads
 
 // area-0 bus width strap = 16 bit (Table 10.4: MD4=1, MD3=0)
 localparam MD4 = 1'b1, MD3 = 1'b0;
@@ -73,6 +81,7 @@ HS3 #(
     .i_POR_n (i_POR_n), .i_RST_n (i_RST_n),
     .i_CLK   (i_CLK),   .i_CEN   (i_CEN),
     .o_CKIO  (CKIO),    .i_EXTAL2(i_EXTAL2),
+    .o_CKIO_PCEN(CKIO_PCEN), .o_CKIO_NCEN(),    // single-clock enables for board glue
 
     // shared external bus
     .o_A(A), .o_D_O(D_O), .o_D_OE(D_OE), .i_D_I(D_I),
@@ -106,7 +115,8 @@ HS3 #(
     .i_PTB_I(8'hFF), .o_PTB_O(), .o_PTB_OE(), .o_PTB_PU(),
     .i_PTC_I(8'hFF), .o_PTC_O(), .o_PTC_OE(), .o_PTC_PU(),
     .i_PTD_I(8'hFF), .o_PTD_O(), .o_PTD_OE(), .o_PTD_PU(),
-    .i_PTE_I(8'hFF), .o_PTE_O(), .o_PTE_OE(), .o_PTE_PU(),   // bit5 = NAND ready
+    .i_PTE_I({2'b11, nand_rb_n, 5'b11111}),                 // bit5 = U2 NAND ready/busy
+    .o_PTE_O(), .o_PTE_OE(), .o_PTE_PU(),
     .i_PTF_I(8'hFF), .o_PTF_PU(),
     .i_PTG_I(8'hFF), .o_PTG_PU(),
     .i_PTH_I(8'hFF), .o_PTH_O(), .o_PTH_OE(), .o_PTH_PU(),
@@ -152,6 +162,92 @@ mt48lc2m32b2 u_u1_sdram (
     .We_n (RD_WR),
     .Dqm  (WE_n)
 );
+
+//==================================================================
+//  U13 - EPM7032 address-decoder CPLD
+//        Decodes the CS4 window [0x10000000,0x14000000) by {A23,A22}
+//        into U2 NAND / YMZ770 / RTC-9701, and passes CS6 to the
+//        blitter. Runs in the single i_CLK domain via CKIO_PCEN (no
+//        derived clocks). Only the U2 NAND path is wired downstream
+//        here; audio + EEPROM/RTC strobes are carried but left open.
+//==================================================================
+ikacore_CV1k_cpld u_u13_cpld (
+    .i_CLK        (i_CLK),
+    .i_CKIO_PCEN  (CKIO_PCEN),
+    .i_RST_n      (i_POR_n),
+    .i_CS4_n      (CS4_n),
+    .i_CS5_n      (CS5_n),
+    .i_CS6_n      (CS6_n),
+    .i_RD_n       (RD_n),
+    .i_WE_n       (WE_n[0]),           // SH-3 WE0 pin (low byte lane)
+    .i_A_HI       ({A[23], A[22]}),    // region select
+    .i_A_LO       ({A[1],  A[0]}),     // operation / U2 CLE,ALE
+    .i_A2         (A[2]),
+    .i_D          (D_O[3:0]),          // SH-3 write-data view of the nibble
+    .o_D          (cpld_D),
+    .o_D_OE       (cpld_D_OE),
+    .o_U2_CE_n    (u2_ce_n),
+    .o_U2_RE_n    (u2_re_n),
+    .o_U2_WE_n    (u2_we_n),
+    .o_AUDIO_CS_n (),                  // YMZ770 not modelled yet
+    .o_AUDIO_RESET(),
+    .i_EEPROM_DO  (1'b0),              // RTC-9701 not modelled (stub 0)
+    .i_EEPROM_TIRQ(1'b0),
+    .o_EEPROM_DI  (), .o_EEPROM_CLK(), .o_EEPROM_CE(), .o_EEPROM_FOE(),
+    .i_AUDIO_PLAY (1'b1),
+    .o_BLITTER_n  (),                  // -> blitter (next bring-up step)
+    .o_SH3_WAIT   (),
+    .o_GLOBAL_CLR (),
+    .o_DEVICE_READY()
+);
+
+//==================================================================
+//  U2 - graphics / asset NAND flash (Samsung K9F1G08U0M). Uses the
+//       Micron MT29F1G08 behavioural model, ID-patched to EC/F1 and
+//       model patched for Verilator 5 (see models/MT29F1G08ABAFA). x8 on D[7:0];
+//       CLE=A0, ALE=A1; CE/RE/WE from U13; R/B -> PTE5.
+//
+//  Array contents (mutually exclusive, selected by build_sim.sh):
+//    +define+NAND_ONDEMAND  BIN_FILE = the raw 128 MB dump, read a page at a
+//                           time off disk on first touch. Whole device, no
+//                           preprocessing, RAM grows only with pages used.
+//    +define+NAND_INIT      INIT_FILE = a $readmemh image (scripts/make_nand_init.py).
+//                           Bounded by the model's NUM_ROW; boot slice only.
+//==================================================================
+`ifdef NO_NAND
+assign nand_rb_n = 1'b1;                // +define+NO_NAND: omit U2 (R/B tied ready) - compare boot paths
+`else
+`ifdef NAND_ONDEMAND
+localparam NAND_BIN_FILE  = "roms/ibara/u2";                        // pristine dump, never written
+localparam NAND_INIT_FILE = "";
+`else
+// $readmemh must not be handed more lines than the model's NUM_ROW array:
+//   FullMem      -> all 65536 rows  (correct, but Verilator is very slow on it)
+//   sparse (dflt)-> first NAND_ROWS rows (boot slice; see scripts/make_nand_init.py)
+localparam NAND_BIN_FILE  = "";
+`ifdef FullMem
+localparam NAND_INIT_FILE = "roms/ibara_patched/ibara_u2.8.init";
+`else
+localparam NAND_INIT_FILE = "roms/ibara_patched/ibara_u2_boot.8.init";
+`endif
+`endif
+
+nand_model #(
+    .INIT_FILE(NAND_INIT_FILE),
+    .BIN_FILE (NAND_BIN_FILE)
+) u_u2_nand (
+    .Lock     (1'b0),
+    .Dq_Io    (D[7:0]),                // NAND IO on the low byte of the shared bus
+    .Dq_Io_in (D_O[7:0]),              // write-data view (SH-3 drives cmd/addr)
+    .Cle      (A[0]),                  // command latch enable
+    .Ale      (A[1]),                  // address latch enable
+    .Clk_We_n (u2_we_n),               // write enable (active low)
+    .Wr_Re_n  (u2_re_n),               // read enable  (active low)
+    .Ce_n     (u2_ce_n),               // chip enable  (from U13, 0x10C00003 d0)
+    .Wp_n     (1'b1),                  // write protect off
+    .Rb_n     (nand_rb_n)              // ready/busy -> PTE5
+);
+`endif
 
 endmodule
 `default_nettype none

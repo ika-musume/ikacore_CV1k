@@ -6,10 +6,10 @@ Reads the pristine U4 NOR image (roms/ibara/u4, 2 MB, byte-swapped-per-16bit as
 the SH-3 fetches it big-endian), applies three NOP patches that remove the boot
 loops unnecessary for RTL simulation, and emits:
 
-  rom/ibara_u4_4M_fastboot.hex   patched flash image, 4 MB mirror, 1 byte/line
-  rom/ibara_sdram_bank0.hex      SDRAM bank0 preload (P = 0x000000..0x1FFFFC)
-  rom/ibara_sdram_bank1.hex      SDRAM bank1 preload (P = 0x200000..0x3950B8)
-  roms/ibara/u4_fastboot         patched raw 2 MB binary (reference)
+  roms/ibara_patched/ibara_u4_4M_fastboot.hex   patched flash image, 4 MB mirror, 1 byte/line
+  roms/ibara_patched/ibara_sdram_bank0.hex      SDRAM bank0 preload (P = 0x000000..0x1FFFFC)
+  roms/ibara_patched/ibara_sdram_bank1.hex      SDRAM bank1 preload (P = 0x200000..0x3950B8)
+  roms/ibara_patched/u4_fastboot         patched raw 2 MB binary (reference)
 
 Patches (CPU addr -> NOP 0x0009; file stores each 16-bit word byte-swapped):
   0x000092..0x00009a  flash->SDRAM copy loop  (5 insns)  -> SDRAM is preloaded
@@ -55,13 +55,13 @@ def main():
     print(f"patched {len(NOP_SITES)} sites -> NOP")
 
     # --- patched raw binary -------------------------------------------
-    open(os.path.join(SIM, "roms/ibara/u4_fastboot"), "wb").write(rom)
+    open(os.path.join(SIM, "roms/ibara_patched/u4_fastboot"), "wb").write(rom)
 
     # --- flash hex: 4 MB (2 MB mirrored), one byte per line -----------
-    with open(os.path.join(SIM, "rom/ibara_u4_4M_fastboot.hex"), "w") as f:
+    with open(os.path.join(SIM, "roms/ibara_patched/ibara_u4_4M_fastboot.hex"), "w") as f:
         for i in range(0x400000):
             f.write(f"{rom[i & 0x1FFFFF]:02x}\n")
-    print("wrote rom/ibara_u4_4M_fastboot.hex (4 MB)")
+    print("wrote roms/ibara_patched/ibara_u4_4M_fastboot.hex (4 MB)")
 
     # --- SDRAM bank preloads ------------------------------------------
     # flash mirror the copy loop reads: fm[P] = rom[P % 0x200000]
@@ -76,11 +76,11 @@ def main():
         bank = (p >> 21) & 3
         bank_words[bank].append(word(p))
     for b in (0, 1):
-        path = os.path.join(SIM, f"rom/ibara_sdram_bank{b}.hex")
+        path = os.path.join(SIM, f"roms/ibara_patched/ibara_sdram_bank{b}.hex")
         with open(path, "w") as f:
             for w in bank_words[b]:
                 f.write(f"{w:08x}\n")
-        print(f"wrote rom/ibara_sdram_bank{b}.hex ({len(bank_words[b])} words)")
+        print(f"wrote roms/ibara_patched/ibara_sdram_bank{b}.hex ({len(bank_words[b])} words)")
 
 if __name__ == "__main__":
     main()
