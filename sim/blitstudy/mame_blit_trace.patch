@@ -1,0 +1,182 @@
+diff --git a/src/mame/cave/cv1k.cpp b/src/mame/cave/cv1k.cpp
+index 795ca1d060b..b7a7d1de9b9 100644
+--- a/src/mame/cave/cv1k.cpp
++++ b/src/mame/cave/cv1k.cpp
+@@ -902,7 +902,7 @@ ROM_START( dfkbl )
+ 	ROM_LOAD16_WORD_SWAP( "u24", 0x400000, 0x400000, CRC(31f9eb0a) SHA1(322158779e969bb321241065dd49c1167b91ff6c) )
+ ROM_END
+ 
+-#if 0 // not included in MAME, see driver notes
++#if 1 // ikacore: re-enabled locally for private trace harvesting (was: not included in MAME, see driver notes)
+ ROM_START( akatana )
+ 	ROM_REGION( 0x400000, "maincpu", ROMREGION_ERASEFF)
+ 	ROM_LOAD16_WORD_SWAP( "u4", 0x000000, 0x400000, CRC(613fd380) SHA1(6e28480eef3b483d00b42d811a9d2c7fa1097924) ) // (2010/ 8/13 MASTER VER.)
+@@ -1055,10 +1055,10 @@ GAME( 2008, ddpdfk10,   ddpdfk,   cv1k_d, cv1k, cv1k_state, init_ddpdfk,   ROT27
+ GAME( 2010, dfkbl,      0,        cv1k_d, cv1k, cv1k_state, init_ddpdfk,   ROT270, "Cave",                 "DoDonPachi Dai-Fukkatsu Black Label (Japan, 2010/1/18 BLACK LABEL)",                   MACHINE_IMPERFECT_TIMING )
+ 
+ // CA021  Akai Katana
+-//GAME( 2010, akatana,    0,        cv1k_d, cv1k, cv1k_state, init_ddpdfk,   ROT0,   "Cave",                 "Akai Katana (Japan, 2010/ 8/13 MASTER VER.)",                                          MACHINE_IMPERFECT_TIMING )
++GAME( 2010, akatana,    0,        cv1k_d, cv1k, cv1k_state, init_ddpdfk,   ROT0,   "Cave",                 "Akai Katana (Japan, 2010/ 8/13 MASTER VER.)",                                          MACHINE_IMPERFECT_TIMING ) // ikacore: re-enabled locally for private trace harvesting
+ 
+ // CA??? DoDonPachi SaiDaiOuJou
+-//GAME( 2012, ddpsdoj,    0,        cv1k_d, cv1k, cv1k_state, init_ddpdfk,   ROT270, "Cave",                 "DoDonPachi SaiDaiOuJou (Japan, 2012/ 4/20)",                                           MACHINE_IMPERFECT_TIMING )
++GAME( 2012, ddpsdoj,    0,        cv1k_d, cv1k, cv1k_state, init_ddpdfk,   ROT270, "Cave",                 "DoDonPachi SaiDaiOuJou (Japan, 2012/ 4/20)",                                           MACHINE_IMPERFECT_TIMING ) // ikacore: re-enabled locally for private trace harvesting
+ 
+ // CMDL01 Medal Mahjong Moukari Bancho
+ GAME( 2007, mmmbanc,    0,        cv1k,   cv1k, cv1k_state, init_pinkswts, ROT0,   "Cave (AMI license)",   "Medal Mahjong Moukari Bancho (Japan, 2007/06/05 MASTER VER.)",                         MACHINE_NOT_WORKING )
+diff --git a/src/mame/cave/cv1k_v.cpp b/src/mame/cave/cv1k_v.cpp
+index 2314dc20176..aa25a953344 100644
+--- a/src/mame/cave/cv1k_v.cpp
++++ b/src/mame/cave/cv1k_v.cpp
+@@ -10,6 +10,8 @@
+ 
+ #include "endianness.h"
+ 
++#include <cstdlib>
++
+ #define LOG_DEBUG     (1U << 1)
+ #define LOG_GFX       (1U << 2)
+ #define LOG_FIRMWARE  (1U << 3)
+@@ -179,6 +181,8 @@ inline u16 cv1k_blitter_device::COPY_NEXT_WORD(address_space &space, offs_t &add
+ 	const u16 data = m_ram16[get_ram_addr(addr, m_main_rammask)];
+ 	m_ram16_copy[get_ram_addr(addr, m_main_rammask)] = data;
+ 
++	trace_word(data);
++
+ 	addr += 2;
+ 
+ 	return data;
+@@ -739,11 +743,13 @@ void cv1k_blitter_device::gfx_create_shadow_copy(address_space &space)
+ 
+ 			case 0x2000:
+ 				addr -= 2;
++				trace_unword();
+ 				gfx_upload_shadow_copy(space, addr);
+ 				break;
+ 
+ 			case 0x1000:
+ 				addr -= 2;
++				trace_unword();
+ 				gfx_draw_shadow_copy(space, addr);
+ 				break;
+ 
+@@ -812,6 +818,54 @@ u32 cv1k_blitter_device::gfx_ready_r()
+ 	return m_blitter_busy ? 0x00000000 : 0x00000010;
+ }
+ 
++// ikacore .blit trace hook --------------------------------------------------
++// File: 8-byte header {"BLT1", u32 version}, then per EXEC:
++//   u32 "EXEC" | u64 t_ns | u64 frame | u32 gfx_addr |
++//   u16 clip_x, clip_y, scroll_x, scroll_y | u64 mame_delay_ns |
++//   u32 nwords | u16 op_words[nwords]   (exact shadow-copy walk order)
++// All little-endian. Enabled via env CV1K_BLIT_TRACE=<path>.
++
++void cv1k_blitter_device::trace_open_if_needed()
++{
++	if (m_trace_checked)
++		return;
++	m_trace_checked = true;
++	const char *const path = std::getenv("CV1K_BLIT_TRACE");
++	if (!path)
++		return;
++	m_trace_fp = std::fopen(path, "wb");
++	if (m_trace_fp)
++	{
++		static const u8 header[8] = { 'B', 'L', 'T', '1', 1, 0, 0, 0 };
++		std::fwrite(header, 1, 8, m_trace_fp);
++	}
++}
++
++void cv1k_blitter_device::trace_exec_record()
++{
++	if (!m_trace_fp)
++		return;
++	const u32 rec_magic = 0x43455845; // "EXEC"
++	const u64 t_ns = u64(machine().time().as_double() * 1e9);
++	const u64 frame = screen().frame_number();
++	const u32 gfx_addr = m_gfx_addr;
++	const u16 regs[4] = { u16(m_gfx_clip_x_shadowcopy), u16(m_gfx_clip_y_shadowcopy),
++			u16(m_gfx_scroll_x), u16(m_gfx_scroll_y) };
++	const u64 delay_ns = m_blit_delay_ns;
++	const u32 nwords = u32(m_trace_words.size());
++	std::fwrite(&rec_magic, 4, 1, m_trace_fp);
++	std::fwrite(&t_ns, 8, 1, m_trace_fp);
++	std::fwrite(&frame, 8, 1, m_trace_fp);
++	std::fwrite(&gfx_addr, 4, 1, m_trace_fp);
++	std::fwrite(regs, 2, 4, m_trace_fp);
++	std::fwrite(&delay_ns, 8, 1, m_trace_fp);
++	std::fwrite(&nwords, 4, 1, m_trace_fp);
++	if (nwords)
++		std::fwrite(m_trace_words.data(), 2, nwords, m_trace_fp);
++	std::fflush(m_trace_fp);
++	m_trace_words.clear();
++}
++
+ void cv1k_blitter_device::gfx_exec_w(address_space &space, offs_t offset, u32 data, u32 mem_mask)
+ {
+ 	if (ACCESSING_BITS_0_7)
+@@ -834,6 +888,7 @@ void cv1k_blitter_device::gfx_exec_w(address_space &space, offs_t offset, u32 da
+ 
+ 			// Create a copy of the blit list so we can safely thread it.
+ 			// Copying the Blitter operations will also estimate the delay needed for processing.
++			trace_open_if_needed();
+ 			m_blit_delay_ns = 0;
+ 			gfx_create_shadow_copy(space);
+ 
+@@ -847,6 +902,8 @@ void cv1k_blitter_device::gfx_exec_w(address_space &space, offs_t offset, u32 da
+ 			if (m_blit_delay_ns > CV1K_FRAME_DURATION_NANOSEC)
+ 				LOGDBG("Blitter delay! Blit duration %lld ns.\n", m_blit_delay_ns);
+ 
++			trace_exec_record();
++
+ 			m_blitter_busy = 1;
+ 			m_blitter_delay_timer->adjust(attotime::from_nsec(m_blit_delay_ns));
+ 
+diff --git a/src/mame/cave/cv1k_v.h b/src/mame/cave/cv1k_v.h
+index 145332332f4..b6c919804ac 100644
+--- a/src/mame/cave/cv1k_v.h
++++ b/src/mame/cave/cv1k_v.h
+@@ -8,6 +8,9 @@
+ 
+ #pragma once
+ 
++#include <cstdio>
++#include <vector>
++
+ #define CV1K_DEBUG_VRAM_VIEWER 0 // VRAM viewer for debug
+ 
+ class cv1k_blitter_device : public device_t, public device_video_interface
+@@ -855,6 +858,18 @@ private:
+ 	u64 m_blit_delay_ns;
+ 	u16 m_blit_idle_op_bytes;
+ 
++	// ikacore .blit trace hook (enabled via env CV1K_BLIT_TRACE=<path>):
++	// one record per EXEC with the exact op-word stream walked by the
++	// shadow copy, written on the main thread before the blit is queued.
++	std::FILE *m_trace_fp = nullptr;
++	bool m_trace_checked = false;
++	std::vector<u16> m_trace_words;
++	void trace_open_if_needed();
++	void trace_word(u16 w) { if (m_trace_fp) m_trace_words.push_back(w); }
++	// drop the duplicate when the shadow-copy dispatch rewinds addr by one word
++	void trace_unword() { if (m_trace_fp && !m_trace_words.empty()) m_trace_words.pop_back(); }
++	void trace_exec_record();
++
+ 	// fpga firmware
+ 	std::vector<u8> m_firmware;
+ 	s32 m_firmware_pos;
+diff --git a/src/mame/mame.lst b/src/mame/mame.lst
+index be548046770..7c63c6ec88c 100644
+--- a/src/mame/mame.lst
++++ b/src/mame/mame.lst
+@@ -16917,8 +16917,10 @@ zoomer
+ deathsm2
+ 
+ @source:cave/cv1k.cpp
++akatana
+ ddpdfk
+ ddpdfk10
++ddpsdoj
+ deathsml
+ dfkbl
+ dsmbl

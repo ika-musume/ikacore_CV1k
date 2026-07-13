@@ -26,6 +26,7 @@ module cpu_tracer (
     integer  fh;
     longint  count;                 // 64-bit: allow tens/hundreds of millions
     longint  maxinsn;
+    longint  tracefrom;             // suppress output until this many retires
     string   tracefile;
 
     // debug heartbeat: is the fetch PC advancing / is anything retiring?
@@ -44,8 +45,10 @@ module cpu_tracer (
         count     = 0;
         maxinsn   = 200000;                 // default cap
         tracefile = "build/trace_rtl.txt";
+        tracefrom = 0;
         void'($value$plusargs("trace=%s",   tracefile));
         void'($value$plusargs("maxinsn=%d", maxinsn));
+        void'($value$plusargs("tracefrom=%d", tracefrom));   // window: [tracefrom, maxinsn)
         fh = $fopen(tracefile, "w");
         if (fh == 0) begin
             $display("[tracer] ERROR: cannot open %s", tracefile);
@@ -56,10 +59,12 @@ module cpu_tracer (
 
     always @(posedge i_CLK) begin
         if (i_RST_n && i_CEN && valid) begin
-            if (gpr_we)
-                $fwrite(fh, "%08x %04x ; r%0d=%08x\n", pc, inst, gpr, gpr_data);
-            else
-                $fwrite(fh, "%08x %04x\n", pc, inst);
+            if (count >= tracefrom) begin
+                if (gpr_we)
+                    $fwrite(fh, "%08x %04x ; r%0d=%08x\n", pc, inst, gpr, gpr_data);
+                else
+                    $fwrite(fh, "%08x %04x\n", pc, inst);
+            end
             count = count + 1;
             if (count >= maxinsn) begin
                 $display("[tracer] reached %0d retired instructions - stop", count);

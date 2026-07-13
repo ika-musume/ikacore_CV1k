@@ -42,6 +42,12 @@ models/MT29F1G08ABAFA/nand_model.v
 
 // --- PCB top + board glue ---
 ikacore_CV1k_cpld.v
+blit_regs.sv
+blit_fetch.sv
+blit_gov.sv
+blit_draw.sv
+blit_vram_beh.sv
+blit_video.sv
 ikacore_CV1k.sv
 tb/cpu_tracer.sv
 tb/tb_cv1k.sv
