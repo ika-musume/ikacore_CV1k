@@ -44,11 +44,16 @@ models/MT29F1G08ABAFA/nand_die_model.v
 models/MT29F1G08ABAFA/nand_model.v
 
 // --- blitter core (sim/CV1k_blit: platform-agnostic, ships to MiSTer) ---
+// (blit_batch + ddr3_harness are H7a MiSTer-stack layers; the board sim
+//  does not instantiate them - kept in the one manifest so every ship
+//  file elaborates in every build)
 CV1k_blit/blit_regs.sv
 CV1k_blit/blit_fetch.sv
 CV1k_blit/blit_gov.sv
 CV1k_blit/blit_draw.sv
+CV1k_blit/blit_batch.sv
 CV1k_blit/blit_video.sv
+CV1k_blit/ddr3_harness.sv
 CV1k_blit/blit_top.sv
 
 // --- PCB top + board glue ---

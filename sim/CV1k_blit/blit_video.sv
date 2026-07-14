@@ -47,6 +47,21 @@
 //   * the vrd channel maps onto the DDR3 scanout port (absolute priority);
 //   * o_hline/o_vsync cross into the CKIO domain as toggle-syncs;
 //   * i_scroll_* are quasi-static CPU-written registers (2-FF sync).
+//
+// PREFETCH=1 (H7a, the second approved core touch): behind the shared DDR3
+// port a line fetch is a ~0.7 us train that can be delayed a whole batch
+// train (~5-8 us), so fetch-at-line-start cannot feed the same line's
+// readout.  This mode double-buffers the line: at the start of line n the
+// fetcher requests line n+1's 384-px window as ONE train (o_lf_req pulse +
+// o_lf_y/o_lf_x0; data returns on i_lf_dvld) into the fill buffer while the
+// readout scans the other buffer, swap at line start.  ALL timing outputs
+// (o_hline / o_vsync / o_steal / o_px_de cadence) are untouched - only the
+// VRAM-sampling instant of a line moves one hline earlier, invisible on
+// real content (games draw only to the non-displayed window,
+// FINDINGS.md §1) and absorbed as the fetch-vs-scanout race margin.
+// Scroll for a line is latched one line early for the same reason.  The
+// beat-wise o_vrd channel is idle in this mode (and the o_lf face in the
+// default mode) - the board sim stays bit-identical with PREFETCH=0.
 //============================================================================
 module blit_video #(
     parameter int unsigned HTOTAL_DOT = 407,   // dots per line (P-30)
@@ -56,7 +71,8 @@ module blit_video #(
     parameter int unsigned VACT       = 240,   // visible lines 0..239
     parameter int unsigned VSYNC_LINE = 240,   // IRQ2 line (provisional, M-2)
     parameter int unsigned DOT_CKIO   = 8,     // 1 dot = 8 CKIO (P-30)
-    parameter int unsigned STEAL_CKIO = 111    // ~166 VCLK engine-stall window
+    parameter int unsigned STEAL_CKIO = 111,   // ~166 VCLK engine-stall window
+    parameter bit          PREFETCH   = 1'b0   // H7a: 1-hline train prefetch
 )(
     input  wire        i_CLK,
     input  wire        i_CKIO_PCEN,
@@ -76,6 +92,13 @@ module blit_video #(
     output reg         o_vrd_req,
     output reg  [24:0] o_vrd_addr,
     input  wire [63:0] i_vrd_data,
+
+    // PREFETCH=1 line-train face (ddr3_harness video client; idle otherwise)
+    output reg         o_lf_req,        // 1-cycle pulse: fetch one line window
+    output reg  [11:0] o_lf_y,          // VRAM row
+    output reg  [12:0] o_lf_x0,         // window start (32-px aligned)
+    input  wire        i_lf_dvld,       // 96 words, in order
+    input  wire [63:0] i_lf_data,
 
     // arbitration + timing-plane taps
     output wire        o_steal,          // scanout owns VRAM: stall engine writes
@@ -119,8 +142,13 @@ module blit_video #(
                                      : vcnt;
 
     // ---------------------------------------------------------------------
-    // per-line latch + hline/vsync pulses (all at the line-start instant)
+    // per-line latch + hline/vsync pulses (all at the line-start instant).
+    // PREFETCH=1 fetches for the line AFTER the one starting now, so its
+    // row target is next_line+1 (mod VTOTAL).
     // ---------------------------------------------------------------------
+    wire [8:0] pf_line = (next_line == 9'(VTOTAL - 1)) ? 9'd0
+                                                       : next_line + 9'd1;
+
     reg [12:0] lat_sx;                        // scroll_x latched at line start
     reg [11:0] y_v;                           // fetch row = (scroll_y+line)&4095
 
@@ -136,7 +164,8 @@ module blit_video #(
             o_vsync <= line_start && (next_line == 9'(VSYNC_LINE));
             if (line_start) begin
                 lat_sx <= i_scroll_x[12:0];
-                y_v    <= i_scroll_y[11:0] + {3'd0, next_line};
+                y_v    <= i_scroll_y[11:0]
+                          + {3'd0, PREFETCH ? pf_line : next_line};
             end
         end
     end
@@ -157,72 +186,146 @@ module blit_video #(
     end
 
     // ---------------------------------------------------------------------
-    // line fetcher: 96 beats (12 tiles x 8) at 1 beat/i_CLK, kicked by
-    // o_hline.  Beat n reads x = ((lat_sx & ~31) + n*4) & 8191 - the +n*4
-    // never crosses the row edge inside a tile (32-px tiles, 8192-px rows),
-    // so the & 8191 per beat IS the per-tile wrap.  Data lands one cycle
-    // after the request (hold contract) into line_buf[n*4 +: 4].
+    // line fetch + readout.  Default: 96 beats (12 tiles x 8) at 1
+    // beat/i_CLK on the o_vrd hold-contract channel, kicked by o_hline;
+    // beat n reads x = ((lat_sx & ~31) + n*4) & 8191 - the +n*4 never
+    // crosses the row edge inside a tile (32-px tiles, 8192-px rows), so
+    // the & 8191 per beat IS the per-tile wrap.  PREFETCH=1: one o_lf_req
+    // train per line into the fill half of a double buffer; swap at line
+    // start (see header).
     // ---------------------------------------------------------------------
     localparam int unsigned FETCH_BEATS = 96;   // 12 tiles = 384 px
 
-    reg  [15:0] line_buf [0:383];
-    reg  [6:0]  f_beat;                        // 0..96; 96 = idle
-    reg  [6:0]  f_beat_d;                      // beat whose data lands now
-    reg         f_dvalid;
-
-    always_ff @(posedge i_CLK or negedge i_RST_n) begin
-        if (!i_RST_n) begin
-            f_beat     <= 7'(FETCH_BEATS);
-            f_beat_d   <= 7'd0;
-            f_dvalid   <= 1'b0;
-            o_vrd_req  <= 1'b0;
-            o_vrd_addr <= 25'd0;
-        end
-        else begin
-            // request stage
-            if (o_hline) begin
-                f_beat     <= 7'd0;
-                o_vrd_req  <= 1'b0;            // address stage next cycle
-            end
-            else if (f_beat != 7'(FETCH_BEATS)) begin
-                o_vrd_req  <= 1'b1;
-                o_vrd_addr <= {y_v, ({lat_sx[12:5], 5'd0} + {4'd0, f_beat, 2'd0}) & 13'h1FFF};
-                f_beat     <= f_beat + 7'd1;
-            end
-            else
-                o_vrd_req  <= 1'b0;
-
-            // capture stage (data for the request issued last cycle)
-            f_dvalid <= o_vrd_req;
-            if (o_vrd_req)
-                f_beat_d <= f_beat - 7'd1;
-            if (f_dvalid) begin
-                line_buf[{f_beat_d, 2'd0} + 9'd0] <= i_vrd_data[15:0];
-                line_buf[{f_beat_d, 2'd0} + 9'd1] <= i_vrd_data[31:16];
-                line_buf[{f_beat_d, 2'd0} + 9'd2] <= i_vrd_data[47:32];
-                line_buf[{f_beat_d, 2'd0} + 9'd3] <= i_vrd_data[63:48];
-            end
-        end
-    end
-
-    // ---------------------------------------------------------------------
-    // pixel readout: visible dot d shows line_buf[(scroll_x & 31) + d]
-    // ---------------------------------------------------------------------
     wire visible = (vcnt < 9'(VACT)) &&
                    (hcnt >= 9'(HACT_START)) && (hcnt < 9'(HACT_START + HACT));
     wire [8:0] act_x = hcnt - 9'(HACT_START);
 
-    always_ff @(posedge i_CLK or negedge i_RST_n) begin
-        if (!i_RST_n) begin
-            o_px_de <= 1'b0;
-            o_px    <= 16'd0;
+    generate if (!PREFETCH) begin : g_fetch_beat
+
+        reg  [15:0] line_buf [0:383];
+        reg  [6:0]  f_beat;                    // 0..96; 96 = idle
+        reg  [6:0]  f_beat_d;                  // beat whose data lands now
+        reg         f_dvalid;
+
+        always_ff @(posedge i_CLK or negedge i_RST_n) begin
+            if (!i_RST_n) begin
+                f_beat     <= 7'(FETCH_BEATS);
+                f_beat_d   <= 7'd0;
+                f_dvalid   <= 1'b0;
+                o_vrd_req  <= 1'b0;
+                o_vrd_addr <= 25'd0;
+            end
+            else begin
+                // request stage
+                if (o_hline) begin
+                    f_beat     <= 7'd0;
+                    o_vrd_req  <= 1'b0;        // address stage next cycle
+                end
+                else if (f_beat != 7'(FETCH_BEATS)) begin
+                    o_vrd_req  <= 1'b1;
+                    o_vrd_addr <= {y_v, ({lat_sx[12:5], 5'd0} + {4'd0, f_beat, 2'd0}) & 13'h1FFF};
+                    f_beat     <= f_beat + 7'd1;
+                end
+                else
+                    o_vrd_req  <= 1'b0;
+
+                // capture stage (data for the request issued last cycle)
+                f_dvalid <= o_vrd_req;
+                if (o_vrd_req)
+                    f_beat_d <= f_beat - 7'd1;
+                if (f_dvalid) begin
+                    line_buf[{f_beat_d, 2'd0} + 9'd0] <= i_vrd_data[15:0];
+                    line_buf[{f_beat_d, 2'd0} + 9'd1] <= i_vrd_data[31:16];
+                    line_buf[{f_beat_d, 2'd0} + 9'd2] <= i_vrd_data[47:32];
+                    line_buf[{f_beat_d, 2'd0} + 9'd3] <= i_vrd_data[63:48];
+                end
+            end
         end
-        else begin
-            o_px_de <= dot_ce && visible;
-            if (dot_ce && visible)
-                o_px <= line_buf[{4'd0, lat_sx[4:0]} + act_x];
+
+        // pixel readout: visible dot d shows line_buf[(scroll_x & 31) + d]
+        always_ff @(posedge i_CLK or negedge i_RST_n) begin
+            if (!i_RST_n) begin
+                o_px_de <= 1'b0;
+                o_px    <= 16'd0;
+            end
+            else begin
+                o_px_de <= dot_ce && visible;
+                if (dot_ce && visible)
+                    o_px <= line_buf[{4'd0, lat_sx[4:0]} + act_x];
+            end
         end
+
+        always_comb begin
+            o_lf_req = 1'b0;
+            o_lf_y   = 12'd0;
+            o_lf_x0  = 13'd0;
+        end
+        wire unused_pf = i_lf_dvld | (|i_lf_data);
+
     end
+    else begin : g_fetch_train
+
+        reg  [15:0] line_buf [0:1023];         // {half, px}: fill vs display
+        reg         sel;                       // display half
+        reg  [6:0]  fill_w;                    // fill word 0..96
+        reg  [12:0] lat_sx_d;                  // display copy of the latched
+                                               // scroll_x (fetch copy=lat_sx)
+
+        always_comb begin
+            o_lf_req = o_hline;                // 1-cycle pulse per line
+            o_lf_y   = y_v;
+            o_lf_x0  = {lat_sx[12:5], 5'd0};
+        end
+        // note: o_lf_y/o_lf_x0 sample y_v/lat_sx on the SAME cycle o_hline
+        // is high - both were latched at the line_start edge one cycle
+        // earlier, so they are stable and belong to this line's fetch.
+
+        always_ff @(posedge i_CLK or negedge i_RST_n) begin
+            if (!i_RST_n) begin
+                sel      <= 1'b0;
+                fill_w   <= 7'(FETCH_BEATS);
+                lat_sx_d <= 13'd0;
+            end
+            else begin
+                if (o_hline) begin
+                    sel      <= ~sel;          // filled half becomes display
+                    lat_sx_d <= lat_sx;        // its scroll_x rides along
+                    fill_w   <= 7'd0;
+`ifndef SYNTHESIS
+                    if (fill_w != 7'(FETCH_BEATS))
+                        $display("[blit_video] WARNING: line fetch underrun (%0d/96 words) t=%0t",
+                                 fill_w, $time);
+`endif
+                end
+                else if (i_lf_dvld && fill_w != 7'(FETCH_BEATS)) begin
+                    line_buf[{~sel, fill_w, 2'd0} + 10'd0] <= i_lf_data[15:0];
+                    line_buf[{~sel, fill_w, 2'd0} + 10'd1] <= i_lf_data[31:16];
+                    line_buf[{~sel, fill_w, 2'd0} + 10'd2] <= i_lf_data[47:32];
+                    line_buf[{~sel, fill_w, 2'd0} + 10'd3] <= i_lf_data[63:48];
+                    fill_w <= fill_w + 7'd1;
+                end
+            end
+        end
+
+        always_ff @(posedge i_CLK or negedge i_RST_n) begin
+            if (!i_RST_n) begin
+                o_px_de <= 1'b0;
+                o_px    <= 16'd0;
+            end
+            else begin
+                o_px_de <= dot_ce && visible;
+                if (dot_ce && visible)
+                    o_px <= line_buf[{sel, 4'd0, lat_sx_d[4:0]} + act_x];
+            end
+        end
+
+        always_comb begin
+            o_vrd_req  = 1'b0;
+            o_vrd_addr = 25'd0;
+        end
+        wire unused_vb = |i_vrd_data;
+
+    end endgenerate
 
     wire unused = i_irq_ack | (|i_scroll_x[15:13]) | (|i_scroll_y[15:12]);
 
