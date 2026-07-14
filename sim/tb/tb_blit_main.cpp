@@ -159,6 +159,14 @@ struct Rig {
                 return false;
             }
         }
+        // drain the batch layer's write trains (H7a build; constant 1 else)
+        while (!tb.o_bat_idle) {
+            tick();
+            if (cycles > limit + 12000000ull) {
+                std::printf("  TIMEOUT: batch layer never drained\n");
+                return false;
+            }
+        }
         for (int i = 0; i < 4; i++) tick();
         return true;
     }
@@ -622,6 +630,82 @@ static int selftest(int fuzz_execs)
 }
 
 // ---------------------------------------------------------------------------
+// op-level bisect inside one exec (H7a debug): replay execs 0..N-1 normally,
+// then probe exec N with op-truncated word lists (prefix + END) against the
+// golden engine run the same way, binary-searching the first op whose
+// inclusion diverges the VRAM.  State is snapshotted/restored around probes.
+// ---------------------------------------------------------------------------
+static long first_diff(Rig &rig, const Engine &e)
+{
+    auto &m = rig.mem();
+    const uint32_t *g = e.vram.data();
+    for (size_t i = 0; i < VRAM::SIZE; i++)
+        if (m[i] != pen_to_argb1555(g[i])) return long(i);
+    return -1;
+}
+
+static int bisect(const char *path, long target)
+{
+    Rig rig;
+    Engine e;
+    blit::TraceReader tr(path);
+    blit::ExecRecord rec;
+    long n = 0;
+    while (tr.next(rec)) {
+        if (n == target) break;
+        if (!rig.run_exec(rec.words, rec.clip_x, rec.clip_y)) return 1;
+        e.exec(rec.words, rec.clip_x, rec.clip_y);
+        n++;
+        if ((n % 200) == 0) std::printf("[bisect] warmup %ld\n", n);
+    }
+    if (n != target) { std::printf("[bisect] trace too short\n"); return 1; }
+
+    // snapshot pre-exec state
+    std::vector<uint16_t> m0(VRAM::SIZE);
+    { auto &m = rig.mem(); for (size_t i = 0; i < VRAM::SIZE; i++) m0[i] = m[i]; }
+    Engine e0 = e;
+
+    const auto ops = blit::walk(rec.words);
+    std::printf("[bisect] exec %ld: %zu ops\n", target, ops.size());
+
+    auto probe = [&](size_t nops) -> long {
+        { auto &m = rig.mem(); for (size_t i = 0; i < VRAM::SIZE; i++) m[i] = m0[i]; }
+        Engine ep = e0;
+        std::vector<uint16_t> w;
+        const size_t end_off = (nops < ops.size())
+            ? ops[nops].off : rec.words.size();
+        w.assign(rec.words.begin(), rec.words.begin() + long(end_off));
+        w.push_back(0x0000);                       // END
+        if (!rig.run_exec(w, rec.clip_x, rec.clip_y)) return -2;
+        ep.exec(w, rec.clip_x, rec.clip_y);
+        return first_diff(rig, ep);
+    };
+
+    size_t lo = 0, hi = ops.size();               // lo clean, hi divergent
+    long d = probe(hi);
+    if (d < 0) { std::printf("[bisect] full exec is CLEAN here?!\n"); return 1; }
+    std::printf("[bisect] full exec diverges at px %ld (%ld,%ld)\n",
+                d, d % long(VRAM_W), d / long(VRAM_W));
+    while (hi - lo > 1) {
+        size_t mid = (lo + hi) / 2;
+        long r = probe(mid);
+        std::printf("[bisect] ops[0..%zu): %s\n", mid,
+                    r < 0 ? "clean" : "DIVERGED");
+        if (r < 0) lo = mid; else hi = mid;
+    }
+    const uint16_t *w = &rec.words[ops[hi - 1].off];
+    std::printf("[bisect] first divergent op = #%zu kind=%d off=%zu words:",
+                hi - 1, int(ops[hi - 1].kind), ops[hi - 1].off);
+    for (int k = 0; k < 10 && ops[hi - 1].off + size_t(k) < rec.words.size(); k++)
+        std::printf(" %04x", w[k]);
+    std::printf("\n");
+    long r = probe(hi);
+    std::printf("[bisect] with that op: first bad px at (%ld,%ld)\n",
+                r % long(VRAM_W), r / long(VRAM_W));
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
 // .blit trace replay
 // ---------------------------------------------------------------------------
 static int replay(const char *path, long max_execs, const std::string &outdir,
@@ -702,7 +786,7 @@ int main(int argc, char **argv)
 
     const char *trace = nullptr;
     std::string outdir = "build/h3_out";
-    long execs = -1;
+    long execs = -1, bisect_at = -1;
     int fuzz = 40;
     uint32_t jitter = 0;
     bool self = false, png = false;
@@ -713,8 +797,10 @@ int main(int argc, char **argv)
         else if (!std::strcmp(argv[i], "--execs")  && i + 1 < argc) execs = std::atol(argv[++i]);
         else if (!std::strcmp(argv[i], "--out")    && i + 1 < argc) outdir = argv[++i];
         else if (!std::strcmp(argv[i], "--jitter") && i + 1 < argc) jitter = uint32_t(std::strtoul(argv[++i], nullptr, 0));
+        else if (!std::strcmp(argv[i], "--bisect") && i + 1 < argc) bisect_at = std::atol(argv[++i]);
         else if (!std::strcmp(argv[i], "--png")) png = true;
     }
+    if (trace && bisect_at >= 0) return bisect(trace, bisect_at);
     if (self)  return selftest(fuzz);
     if (trace) return replay(trace, execs, outdir, png, jitter);
     std::printf("usage: %s --selftest [--fuzz N]\n"

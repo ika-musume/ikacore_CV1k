@@ -7,19 +7,34 @@
 #   ./build_blit_tb.sh                         # build + selftest
 #   ./build_blit_tb.sh --trace blitstudy/traces/ibarao.blit --execs 40
 #   BUILD_ONLY=1 ./build_blit_tb.sh
+#   BATCH=1 ./build_blit_tb.sh                 # H7a: blit_batch + train port
+#                                              #   (+portjit=SEED for jitter)
 set -euo pipefail
 cd "$(dirname "$0")"
 
-MDIR=build/obj_blit
 TOP=tb_blit
 BIN=V$TOP
 
-echo "== Verilating $TOP (Verilator $(verilator --version | awk '{print $2}')) =="
+if [ "${BATCH:-0}" = "1" ]; then
+    MDIR=build/obj_blit_batch
+    XDEF="-DBLIT_BATCH"
+    XSRC="CV1k_blit/blit_batch.sv tb/blit_port_beh.sv"
+    echo "== Verilating $TOP [BLIT_BATCH] (Verilator $(verilator --version | awk '{print $2}')) =="
+else
+    MDIR=build/obj_blit
+    XDEF=""
+    XSRC=""
+    echo "== Verilating $TOP (Verilator $(verilator --version | awk '{print $2}')) =="
+fi
+
+# shellcheck disable=SC2086
 verilator --cc -j 0 -O3 --sv \
     -Wno-fatal \
     --Mdir "$MDIR" \
     --top-module $TOP \
+    $XDEF \
     CV1k_blit/blit_draw.sv blit_vram_beh.sv CV1k_blit/blit_gov.sv \
+    $XSRC \
     tb/blit_dsc_check.sv tb/tb_blit.sv \
     --exe ../../tb/tb_blit_main.cpp \
     -CFLAGS "-O2 -std=c++17 -I$(pwd)" \

@@ -12,6 +12,12 @@
 // as it is handed to the decoder) in warp mode - arrival pacing is synthetic
 // here, so only the per-op COSTS are checked (vs workload.h/cost_model.h);
 // the real-time anchors run in the board sim (+blitanchor).
+//
+// H7a (-DBLIT_BATCH build): blit_batch + blit_port_beh replace blit_vram_beh
+// behind the SAME engine channels - the step-3 A/B: pixel/gov/vram hashes
+// must match the non-batch build bit for bit (add +portjit=SEED for port
+// timing jitter).  o_bat_idle gates the end-of-exec VRAM compare on the
+// write-train drain (constant 1 in the non-batch build).
 //============================================================================
 module tb_blit (
     input  wire        i_CLK,
@@ -41,10 +47,11 @@ module tb_blit (
     output wire [26:0] o_dbg_cost,
 
     output wire        o_busy,
-    output wire        o_done
+    output wire        o_done,
+    output wire        o_bat_idle       // batch drained (1 when no batch)
 );
 
-    wire        srd_req, drd_req, wr_req, wr_rdy;
+    wire        srd_req, drd_req, wr_req, wr_rdy, rd_vld;
     wire [24:0] srd_addr, drd_addr, wr_addr;
     wire [63:0] srd_data, drd_data, wr_data;
     wire [3:0]  wr_mask;
@@ -79,7 +86,7 @@ module tb_blit (
         .o_wr_data    (wr_data),
         .o_wr_mask    (wr_mask),
         .i_wr_rdy     (wr_rdy),
-        .i_rd_vld     (1'b1),          // fixed-latency behavioral VRAM
+        .i_rd_vld     (rd_vld),        // 1'b1 unless the batch build stalls it
         .o_dsc_vld    (dsc_vld),       // H7 descriptor sideband
         .o_dsc_sx_lo  (dsc_sx_lo),
         .o_dsc_sx_hi  (dsc_sx_hi),
@@ -150,6 +157,85 @@ module tb_blit (
         .o_dbg_cost  (o_dbg_cost)
     );
 
+`ifdef BLIT_BATCH
+    //------------------------------------------------------------------
+    // H7a backend: engine channels -> blit_batch trains -> blit_port_beh
+    //------------------------------------------------------------------
+    wire        prd_req, prd_rdy, prd_dvld;
+    wire [22:0] prd_addr;
+    wire [10:0] prd_len;
+    wire [63:0] prd_data;
+    wire        pwr_req, pwr_rdy;
+    wire [22:0] pwr_addr;
+    wire [63:0] pwr_data;
+    wire [3:0]  pwr_be;
+    wire        rd_train, wr_train;
+
+    blit_batch u_batch (
+        .i_CLK        (i_CLK),
+        .i_RST_n      (i_RST_n),
+        .i_srd_req    (srd_req),
+        .i_srd_addr   (srd_addr),
+        .o_srd_data   (srd_data),
+        .i_drd_req    (drd_req),
+        .i_drd_addr   (drd_addr),
+        .o_drd_data   (drd_data),
+        .o_rd_vld     (rd_vld),
+        .i_wr_req     (wr_req),
+        .i_wr_addr    (wr_addr),
+        .i_wr_data    (wr_data),
+        .i_wr_mask    (wr_mask),
+        .o_wr_rdy     (wr_rdy),
+        .i_dsc_vld    (dsc_vld),
+        .i_dsc_sx_lo  (dsc_sx_lo),
+        .i_dsc_sy0    (dsc_sy0),
+        .i_dsc_rows   (dsc_rows),
+        .i_dsc_npx    (dsc_npx),
+        .i_dsc_dst0   (dsc_dst0),
+        .i_dsc_flipy  (dsc_flipy),
+        .i_dsc_blend  (dsc_blend),
+        .i_dsc_strict (dsc_strict),
+        .i_dsc_px1    (dsc_px1),
+        .i_dsc_wait   (dsc_wait),
+        .o_prd_req    (prd_req),
+        .o_prd_addr   (prd_addr),
+        .o_prd_len    (prd_len),
+        .i_prd_rdy    (prd_rdy),
+        .i_prd_dvld   (prd_dvld),
+        .i_prd_data   (prd_data),
+        .o_pwr_req    (pwr_req),
+        .o_pwr_addr   (pwr_addr),
+        .o_pwr_data   (pwr_data),
+        .o_pwr_be     (pwr_be),
+        .i_pwr_rdy    (pwr_rdy),
+        .o_rd_train   (rd_train),
+        .o_wr_train   (wr_train),
+        .o_idle       (o_bat_idle),
+        .o_op_srv     (),
+        .o_wr_idle    ()
+    );
+
+    blit_port_beh u_vram (
+        .i_CLK      (i_CLK),
+        .i_RST_n    (i_RST_n),
+        .i_prd_req  (prd_req),
+        .i_prd_addr (prd_addr),
+        .i_prd_len  (prd_len),
+        .o_prd_rdy  (prd_rdy),
+        .o_prd_dvld (prd_dvld),
+        .o_prd_data (prd_data),
+        .i_pwr_req  (pwr_req),
+        .i_pwr_addr (pwr_addr),
+        .i_pwr_data (pwr_data),
+        .i_pwr_be   (pwr_be),
+        .o_pwr_rdy  (pwr_rdy),
+        .i_rd_train (rd_train),
+        .i_wr_train (wr_train)
+    );
+`else
+    assign rd_vld     = 1'b1;          // fixed-latency behavioral VRAM
+    assign o_bat_idle = 1'b1;
+
     blit_vram_beh u_vram (
         .i_CLK      (i_CLK),
         .i_srd_req  (srd_req),
@@ -167,6 +253,7 @@ module tb_blit (
         .i_wr_mask  (wr_mask),
         .o_wr_rdy   (wr_rdy)
     );
+`endif
 
 endmodule
 `default_nettype none
