@@ -428,10 +428,19 @@ blit_top #(
     .o_wr_data   (bv_wr_data),
     .o_wr_mask   (bv_wr_mask),
     .i_wr_rdy    (bv_wr_rdy),
+    .i_rd_vld    (1'b1),               // behavioral VRAM: fixed-latency, never stalls
     .o_vrd_req   (bv_vrd_req),
     .o_vrd_addr  (bv_vrd_addr),
     .i_vrd_data  (bv_vrd_data),
     .o_steal     (blit_steal),
+
+    // H7 descriptor sideband: unused on the fixed-latency backend (the TB
+    // footprint checker taps it hierarchically; blit_batch consumes it)
+    .o_dsc_vld   (), .o_dsc_sx_lo (), .o_dsc_sx_hi (), .o_dsc_sy0 (),
+    .o_dsc_rows  (), .o_dsc_npx   (), .o_dsc_dst0  (), .o_dsc_flipx (),
+    .o_dsc_flipy (), .o_dsc_blend (), .o_dsc_strict(), .o_dsc_px1 (),
+    .o_dsc_wait  (), .o_dsc_upl   (), .o_dsc_upl_addr (),
+    .o_dsc_upl_dimx (), .o_dsc_upl_dimy (),
 
     // video timing + pixel stream (TB taps px hierarchically; the JAMMA
     // DAC / MiSTer video pipeline hangs off these at platform integration)

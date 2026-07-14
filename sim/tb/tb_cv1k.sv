@@ -835,6 +835,33 @@ module tb_cv1k;
     // too; it can false-fail only if a blit landed after the last vsync.
     //========================================================================
     string  bfr_file;
+    //========================================================================
+    // H7 descriptor-sideband footprint checker: always on (hard $fatal on a
+    // beat outside the descriptor-predicted footprint).  Taps blit_top's
+    // exported sideband + beat channels hierarchically.
+    //========================================================================
+    blit_dsc_check u_dsc_check (
+        .i_CLK          (i_CLK),
+        .i_RST_n        (dut.i_POR_n),
+        .i_dsc_vld      (dut.u_blit.o_dsc_vld),
+        .i_dsc_sx_lo    (dut.u_blit.o_dsc_sx_lo),
+        .i_dsc_sx_hi    (dut.u_blit.o_dsc_sx_hi),
+        .i_dsc_sy0      (dut.u_blit.o_dsc_sy0),
+        .i_dsc_rows     (dut.u_blit.o_dsc_rows),
+        .i_dsc_npx      (dut.u_blit.o_dsc_npx),
+        .i_dsc_dst0     (dut.u_blit.o_dsc_dst0),
+        .i_dsc_flipy    (dut.u_blit.o_dsc_flipy),
+        .i_dsc_upl      (dut.u_blit.o_dsc_upl),
+        .i_dsc_upl_addr (dut.u_blit.o_dsc_upl_addr),
+        .i_dsc_upl_dimx (dut.u_blit.o_dsc_upl_dimx),
+        .i_dsc_upl_dimy (dut.u_blit.o_dsc_upl_dimy),
+        .i_srd_req      (dut.bv_srd_req),
+        .i_srd_addr     (dut.bv_srd_addr),
+        .i_wr_req       (dut.bv_wr_req),
+        .i_wr_addr      (dut.bv_wr_addr),
+        .i_wr_mask      (dut.bv_wr_mask)
+    );
+
     integer bfr_on = 0;
     reg [15:0] bfr_cur  [0:76799];
     reg [15:0] bfr_last [0:76799];

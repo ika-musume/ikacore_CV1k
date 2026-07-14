@@ -49,6 +49,16 @@ module tb_blit (
     wire [63:0] srd_data, drd_data, wr_data;
     wire [3:0]  wr_mask;
 
+    // H7 descriptor sideband + footprint checker nets
+    wire        dsc_vld, dsc_flipx, dsc_flipy, dsc_blend, dsc_strict,
+                dsc_px1, dsc_wait, dsc_upl;
+    wire [12:0] dsc_sx_lo, dsc_sx_hi, dsc_rows;
+    wire [11:0] dsc_sy0;
+    wire [13:0] dsc_npx, dsc_upl_dimx;
+    wire [31:0] dsc_dst0;
+    wire [24:0] dsc_upl_addr;
+    wire [12:0] dsc_upl_dimy;
+
     blit_draw u_draw (
         .i_CLK        (i_CLK),
         .i_RST_n      (i_RST_n),
@@ -69,8 +79,50 @@ module tb_blit (
         .o_wr_data    (wr_data),
         .o_wr_mask    (wr_mask),
         .i_wr_rdy     (wr_rdy),
+        .i_rd_vld     (1'b1),          // fixed-latency behavioral VRAM
+        .o_dsc_vld    (dsc_vld),       // H7 descriptor sideband
+        .o_dsc_sx_lo  (dsc_sx_lo),
+        .o_dsc_sx_hi  (dsc_sx_hi),
+        .o_dsc_sy0    (dsc_sy0),
+        .o_dsc_rows   (dsc_rows),
+        .o_dsc_npx    (dsc_npx),
+        .o_dsc_dst0   (dsc_dst0),
+        .o_dsc_flipx  (dsc_flipx),
+        .o_dsc_flipy  (dsc_flipy),
+        .o_dsc_blend  (dsc_blend),
+        .o_dsc_strict (dsc_strict),
+        .o_dsc_px1    (dsc_px1),
+        .o_dsc_wait   (dsc_wait),
+        .o_dsc_upl    (dsc_upl),
+        .o_dsc_upl_addr (dsc_upl_addr),
+        .o_dsc_upl_dimx (dsc_upl_dimx),
+        .o_dsc_upl_dimy (dsc_upl_dimy),
         .o_busy       (o_busy),
         .o_done       (o_done)
+    );
+
+    // every beat must land inside the descriptor-predicted footprint -
+    // the property blit_batch's train formation relies on ($fatal on miss)
+    blit_dsc_check u_dsc_check (
+        .i_CLK          (i_CLK),
+        .i_RST_n        (i_RST_n),
+        .i_dsc_vld      (dsc_vld),
+        .i_dsc_sx_lo    (dsc_sx_lo),
+        .i_dsc_sx_hi    (dsc_sx_hi),
+        .i_dsc_sy0      (dsc_sy0),
+        .i_dsc_rows     (dsc_rows),
+        .i_dsc_npx      (dsc_npx),
+        .i_dsc_dst0     (dsc_dst0),
+        .i_dsc_flipy    (dsc_flipy),
+        .i_dsc_upl      (dsc_upl),
+        .i_dsc_upl_addr (dsc_upl_addr),
+        .i_dsc_upl_dimx (dsc_upl_dimx),
+        .i_dsc_upl_dimy (dsc_upl_dimy),
+        .i_srd_req      (srd_req),
+        .i_srd_addr     (srd_addr),
+        .i_wr_req       (wr_req),
+        .i_wr_addr      (wr_addr),
+        .i_wr_mask      (wr_mask)
     );
 
     blit_gov u_gov (

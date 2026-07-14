@@ -59,6 +59,8 @@ struct Rig {
     Vtb_blit tb;
     uint64_t cycles = 0;
 
+    ~Rig() { tb.final(); }   // run SV final blocks (dsc_check beat-count report)
+
     // per-exec governor records: {kind, cost} in push order (kind 0 = zero-
     // cost, 1 = draw with VCLK cost, 2 = end/fault)
     std::vector<std::pair<int, int64_t>> gov;

@@ -74,12 +74,51 @@ module blit_draw (
     output wire [24:0] o_drd_addr,
     input  wire [63:0] i_drd_data,
 
+    // read-stall (H7 / I-4.3): joins the pipe-advance term.  The H3 fixed-
+    // latency read contract survives behind blit_batch only if the batch
+    // layer can hold the pipe when a read would miss its staging BRAM (or,
+    // for strict-mode ops, until the per-beat port round-trip completes).
+    // At most ONE read per channel is outstanding (issue at B1, data
+    // latched at the next advancing edge), so deasserting i_rd_vld until
+    // the last accepted request's data is presented is the whole protocol.
+    // Tie 1'b1 for the H0-H6 configuration: the netlist behavior is then
+    // bit-identical (H6 re-run is the accept for this port).
+    input  wire        i_rd_vld,
+
     // VRAM write channel (per-pixel lane enables, no RMW)
     output wire        o_wr_req,
     output wire [24:0] o_wr_addr,
     output wire [63:0] o_wr_data,
     output wire [3:0]  o_wr_mask,
     input  wire        i_wr_rdy,
+
+    // -----------------------------------------------------------------
+    // descriptor sideband (H7 / I-4.3): OUTPUT-ONLY taps of what the BACK
+    // setup already computes - no datapath, state or timing change.  Drives
+    // blit_batch's K=8-objline address generation; the beat streams above
+    // remain the data path.  o_dsc_vld pulses one cycle when a SURVIVING
+    // DRAW is committed to the beat generator (B_S3 -> B_ROW); the draw
+    // fields then hold until the next op's setup.  o_dsc_upl pulses at
+    // UPLOAD streaming start (fields valid in the pulse cycle).  Ops that
+    // are clipped out / wrap-rejected emit nothing (they issue no beats).
+    // -----------------------------------------------------------------
+    output reg         o_dsc_vld,        // 1-cycle pulse: DRAW committed
+    output wire [12:0] o_dsc_sx_lo,      // src x span lo (masked coords)
+    output wire [12:0] o_dsc_sx_hi,      // src x span hi
+    output wire [11:0] o_dsc_sy0,        // first src row (masked, walk +/-1 mod 4096)
+    output wire [12:0] o_dsc_rows,       // surviving rows (1..4096)
+    output wire [13:0] o_dsc_npx,        // px per row after clip (1..8192)
+    output wire [31:0] o_dsc_dst0,       // dst row-0 flat index (signed; +8192/row)
+    output wire        o_dsc_flipx,      // beat walk descends within the row
+    output wire        o_dsc_flipy,      // src row walk descends
+    output wire        o_dsc_blend,      // dst read beats will issue (q_blend_eff)
+    output wire        o_dsc_strict,     // self-overlap: serialized fallback
+    output wire        o_dsc_px1,        // 1-px beats (smear inside a 4-px beat)
+    output wire        o_dsc_wait,       // cross-op hazard: writes must land first
+    output reg         o_dsc_upl,        // 1-cycle pulse: UPLOAD streaming starts
+    output wire [24:0] o_dsc_upl_addr,   // upload dst base (flat; +8192/row mod 2^25)
+    output wire [13:0] o_dsc_upl_dimx,   // words per row
+    output wire [12:0] o_dsc_upl_dimy,   // rows
 
     output wire        o_busy,           // EXEC accepted .. END retired
     output reg         o_done            // 1-cycle pulse at END retire
@@ -160,9 +199,10 @@ module blit_draw (
 
     wire pipe_empty = !b1_v && !b2_v && !b3_v && !b4_v;
 
-    // pipe advance: the only stall source is a write beat not accepted
+    // pipe advance: stall sources are a write beat not accepted and, behind
+    // a variable-latency backend (H7), a read not yet served (i_rd_vld=0)
     wire draw_wr    = b4_v && (b4_mask != 4'b0);
-    wire adv        = !(draw_wr && !i_wr_rdy);
+    wire adv        = !(draw_wr && !i_wr_rdy) && i_rd_vld;
 
     // ---------------------------------------------------------------------
     // FRONT: FIFO decode - ops, clip, upload streaming, end
@@ -232,6 +272,7 @@ module blit_draw (
             running  <= 1'b0;
             ob_v     <= 1'b0;
             o_done   <= 1'b0;
+            o_dsc_upl <= 1'b0;
             wcnt     <= 4'd0;
             pend_cx  <= 16'd0;  pend_cy <= 16'd0;
             exec_cx  <= 16'd0;  exec_cy <= 16'd0;
@@ -245,7 +286,8 @@ module blit_draw (
             w5q <= '0; w6q <= '0; w7q <= '0; w8q <= '0; w9q <= '0;
         end
         else begin
-            o_done <= 1'b0;
+            o_done    <= 1'b0;
+            o_dsc_upl <= 1'b0;
 
             if (i_exec) begin
                 if (running || pend_v)
@@ -363,6 +405,7 @@ module blit_draw (
                 up_x    <= 14'd0;
                 up_y    <= 13'd0;
                 up_lane <= 2'd0;
+                o_dsc_upl <= 1'b1;             // H7 sideband: upload descriptor
                 fst     <= F_UP;
             end
 
@@ -482,6 +525,7 @@ module blit_draw (
         if (!i_RST_n) begin
             bst      <= B_IDLE;
             bk_sel   <= 1'b0;
+            o_dsc_vld <= 1'b0;
             pv_valid <= 1'b0;
             pv_xlo <= 18'sd0; pv_xhi <= -18'sd1;
             pv_ylo <= 18'sd0; pv_yhi <= -18'sd1;
@@ -506,6 +550,8 @@ module blit_draw (
             bk_sa <= '0; bk_da <= '0; bk_tr <= '0; bk_tg <= '0; bk_tb <= '0;
         end
         else begin
+            o_dsc_vld <= 1'b0;
+
             case (bst)
             B_IDLE: if (ob_v) begin
                 q_smode <= ob_smode;  q_dmode <= ob_dmode;
@@ -639,6 +685,7 @@ module blit_draw (
                     bk_tr    [~bk_sel]   <= q_tr;
                     bk_tg    [~bk_sel]   <= q_tg;
                     bk_tb    [~bk_sel]   <= q_tb;
+                    o_dsc_vld <= 1'b1;         // H7 sideband: surviving DRAW
                     bst      <= B_ROW;
                 end
             end
@@ -768,6 +815,27 @@ module blit_draw (
     assign o_srd_addr = b1_sa_;
     assign o_drd_req  = b1_v && adv && bk_blend[b1_bk];
     assign o_drd_addr = b1_wa;
+
+    // ---------------------------------------------------------------------
+    // H7 descriptor sideband fields: pure taps of the S1-S3 setup registers
+    // (all written by the edge that raises o_dsc_vld; values are in-range
+    // for surviving draws, so the width slices below are lossless)
+    // ---------------------------------------------------------------------
+    assign o_dsc_sx_lo    = s_xlo[12:0];
+    assign o_dsc_sx_hi    = s_xhi[12:0];
+    assign o_dsc_sy0      = ysrc0;
+    assign o_dsc_rows     = rows[12:0];
+    assign o_dsc_npx      = n_px_s[13:0];
+    assign o_dsc_dst0     = unsigned'(didx_row0);
+    assign o_dsc_flipx    = q_flipx;
+    assign o_dsc_flipy    = q_flipy;
+    assign o_dsc_blend    = q_blend_eff;
+    assign o_dsc_strict   = q_strict;
+    assign o_dsc_px1      = q_px1;
+    assign o_dsc_wait     = q_waitpipe;
+    assign o_dsc_upl_addr = up_addr;
+    assign o_dsc_upl_dimx = up_dimx;
+    assign o_dsc_upl_dimy = up_dimy;
 
     // ALU2 (comb, from B4): the unified blend form; copy path passes raw
     logic [3:0][15:0] a2_out;

@@ -87,10 +87,34 @@ module blit_top #(
     output wire [63:0] o_wr_data,
     output wire [3:0]  o_wr_mask,
     input  wire        i_wr_rdy,
+    input  wire        i_rd_vld,       // read-stall (H7): tie 1 on fixed-latency backends
     output wire        o_vrd_req,      // video line fetch
     output wire [24:0] o_vrd_addr,
     input  wire [63:0] i_vrd_data,
     output wire        o_steal,        // scanout-owns-memory window (debug/arb tap)
+
+    //------------------------------------------------------------------
+    // descriptor sideband (H7): blit_draw's output-only geometry taps,
+    // consumed by blit_batch for K=8-objline train formation.  Leave
+    // open on fixed-latency backends (board sim / blit_vram_beh).
+    //------------------------------------------------------------------
+    output wire        o_dsc_vld,
+    output wire [12:0] o_dsc_sx_lo,
+    output wire [12:0] o_dsc_sx_hi,
+    output wire [11:0] o_dsc_sy0,
+    output wire [12:0] o_dsc_rows,
+    output wire [13:0] o_dsc_npx,
+    output wire [31:0] o_dsc_dst0,
+    output wire        o_dsc_flipx,
+    output wire        o_dsc_flipy,
+    output wire        o_dsc_blend,
+    output wire        o_dsc_strict,
+    output wire        o_dsc_px1,
+    output wire        o_dsc_wait,
+    output wire        o_dsc_upl,
+    output wire [24:0] o_dsc_upl_addr,
+    output wire [13:0] o_dsc_upl_dimx,
+    output wire [12:0] o_dsc_upl_dimy,
 
     //------------------------------------------------------------------
     // video timing + pixel stream (o_px valid on the o_px_de strobe)
@@ -246,6 +270,24 @@ blit_draw u_blit_draw (
     .o_wr_data    (o_wr_data),
     .o_wr_mask    (o_wr_mask),
     .i_wr_rdy     (i_wr_rdy && !blit_steal),   // H5: scanout owns VRAM
+    .i_rd_vld     (i_rd_vld),                  // H7: tie 1 on fixed-latency backends
+    .o_dsc_vld    (o_dsc_vld),                 // H7 descriptor sideband
+    .o_dsc_sx_lo  (o_dsc_sx_lo),
+    .o_dsc_sx_hi  (o_dsc_sx_hi),
+    .o_dsc_sy0    (o_dsc_sy0),
+    .o_dsc_rows   (o_dsc_rows),
+    .o_dsc_npx    (o_dsc_npx),
+    .o_dsc_dst0   (o_dsc_dst0),
+    .o_dsc_flipx  (o_dsc_flipx),
+    .o_dsc_flipy  (o_dsc_flipy),
+    .o_dsc_blend  (o_dsc_blend),
+    .o_dsc_strict (o_dsc_strict),
+    .o_dsc_px1    (o_dsc_px1),
+    .o_dsc_wait   (o_dsc_wait),
+    .o_dsc_upl    (o_dsc_upl),
+    .o_dsc_upl_addr (o_dsc_upl_addr),
+    .o_dsc_upl_dimx (o_dsc_upl_dimx),
+    .o_dsc_upl_dimy (o_dsc_upl_dimy),
     .o_busy       (blit_draw_busy),
     .o_done       (blit_draw_done)
 );

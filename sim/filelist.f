@@ -58,4 +58,5 @@ blit_vram_beh.sv
 ikacore_CV1k.sv
 tb/cpu_tracer.sv
 tb/ioctl_sim.sv
+tb/blit_dsc_check.sv
 tb/tb_cv1k.sv
