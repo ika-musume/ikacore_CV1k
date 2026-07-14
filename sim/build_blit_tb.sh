@@ -19,7 +19,7 @@ verilator --cc -j 0 -O3 --sv \
     -Wno-fatal \
     --Mdir "$MDIR" \
     --top-module $TOP \
-    blit_draw.sv blit_vram_beh.sv blit_gov.sv tb/tb_blit.sv \
+    CV1k_blit/blit_draw.sv blit_vram_beh.sv CV1k_blit/blit_gov.sv tb/tb_blit.sv \
     --exe ../../tb/tb_blit_main.cpp \
     -CFLAGS "-O2 -std=c++17 -I$(pwd)" \
     -o $BIN

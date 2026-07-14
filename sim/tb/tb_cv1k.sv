@@ -322,11 +322,11 @@ module tb_cv1k;
         integer    dimx, dimy, n, k;
         reg        stop;
         begin
-            a = {3'b0, dut.u_blit_regs.o_list_addr};
+            a = {3'b0, dut.u_blit.u_blit_regs.o_list_addr};
             $fdisplay(bd_fd, "EXEC frame=%0d addr=%07x clip=%0d,%0d scroll=%0d,%0d",
                       bd_done, a,
-                      dut.u_blit_regs.o_clip_x,   dut.u_blit_regs.o_clip_y,
-                      dut.u_blit_regs.o_scroll_x, dut.u_blit_regs.o_scroll_y);
+                      dut.u_blit.u_blit_regs.o_clip_x,   dut.u_blit.u_blit_regs.o_clip_y,
+                      dut.u_blit.u_blit_regs.o_scroll_x, dut.u_blit.u_blit_regs.o_scroll_y);
             stop = 1'b0;
             for (k = 0; (k < 4*1024*1024) && !stop; k = k + 1) begin
                 w0 = bd_word(a);
@@ -357,8 +357,8 @@ module tb_cv1k;
     endtask
 
     always @(posedge i_CLK) begin
-        bd_exec_d <= dut.u_blit_regs.o_exec;
-        if (bd_on && dut.u_blit_regs.o_exec && !bd_exec_d) begin
+        bd_exec_d <= dut.u_blit.u_blit_regs.o_exec;
+        if (bd_on && dut.u_blit.u_blit_regs.o_exec && !bd_exec_d) begin
             bd_dump_exec();
             bd_done = bd_done + 1;
             if (bd_done >= bd_max) begin
@@ -394,16 +394,16 @@ module tb_cv1k;
     end
 
     always @(posedge i_CLK) begin
-        if (bf_on && dut.u_blit_regs.o_exec && !bd_exec_d) begin
+        if (bf_on && dut.u_blit.u_blit_regs.o_exec && !bd_exec_d) begin
             $fdisplay(bf_fd, "EXEC frame=%0d addr=%07x clip=%0d,%0d scroll=%0d,%0d",
-                      bf_done, {3'b000, dut.u_blit_regs.o_list_addr},
-                      dut.u_blit_regs.o_clip_x,   dut.u_blit_regs.o_clip_y,
-                      dut.u_blit_regs.o_scroll_x, dut.u_blit_regs.o_scroll_y);
+                      bf_done, {3'b000, dut.u_blit.u_blit_regs.o_list_addr},
+                      dut.u_blit.u_blit_regs.o_clip_x,   dut.u_blit.u_blit_regs.o_clip_y,
+                      dut.u_blit.u_blit_regs.o_scroll_x, dut.u_blit.u_blit_regs.o_scroll_y);
             bf_done = bf_done + 1;
         end
-        if (bf_on && dut.u_blit_fetch.o_fifo_valid && dut.blit_fifo_pop)
-            $fdisplay(bf_fd, "%04x", dut.u_blit_fetch.o_fifo_word);
-        if (bf_on && bf_done >= bf_max && dut.u_blit_draw.o_done) begin
+        if (bf_on && dut.u_blit.u_blit_fetch.o_fifo_valid && dut.u_blit.blit_fifo_pop)
+            $fdisplay(bf_fd, "%04x", dut.u_blit.u_blit_fetch.o_fifo_word);
+        if (bf_on && bf_done >= bf_max && dut.u_blit.u_blit_draw.o_done) begin
             $fclose(bf_fd);
             bf_on = 1'b0;
             $display("[blitfifo] %0d execs logged to %s", bf_done, bf_file);
@@ -418,12 +418,12 @@ module tb_cv1k;
     reg [1:0] bb_d  = 2'b00;
     initial if ($test$plusargs("blitbusy")) bb_on = 1'b1;
     always @(posedge i_CLK) begin
-        if (bb_on && ({dut.u_blit_fetch.o_busy, dut.u_blit_draw.o_busy} != bb_d)) begin
+        if (bb_on && ({dut.u_blit.u_blit_fetch.o_busy, dut.u_blit.u_blit_draw.o_busy} != bb_d)) begin
             $display("[blitbusy] t=%0t fetch=%b draw=%b fst=%0d bst=%0d fifo_v=%b ob_v=%b",
-                     $time, dut.u_blit_fetch.o_busy, dut.u_blit_draw.o_busy,
-                     dut.u_blit_draw.fst, dut.u_blit_draw.bst,
-                     dut.blit_fifo_valid, dut.u_blit_draw.ob_v);
-            bb_d <= {dut.u_blit_fetch.o_busy, dut.u_blit_draw.o_busy};
+                     $time, dut.u_blit.u_blit_fetch.o_busy, dut.u_blit.u_blit_draw.o_busy,
+                     dut.u_blit.u_blit_draw.fst, dut.u_blit.u_blit_draw.bst,
+                     dut.u_blit.blit_fifo_valid, dut.u_blit.u_blit_draw.ob_v);
+            bb_d <= {dut.u_blit.u_blit_fetch.o_busy, dut.u_blit.u_blit_draw.o_busy};
         end
     end
 
@@ -447,7 +447,7 @@ module tb_cv1k;
                          $time, dut.u_u1_sdram.Bank0[19'h00889]);
 `endif
             bi_d <= dut.pth_irq1_n;
-            if (dut.blit_gov_retire)
+            if (dut.u_blit.blit_gov_retire)
                 $display("[blitirq1] t=%0t gov retire", $time);
         end
     end
@@ -490,9 +490,9 @@ module tb_cv1k;
 
     always @(posedge i_CLK) if (dut.CKIO_PCEN) ba_ckio = ba_ckio + 1;
 
-    always @(posedge i_CLK) if (ba_on != 0 && dut.u_blit_gov.o_dbg_vld) begin
-        ba_kind.push_back(int'(dut.u_blit_gov.o_dbg_kind));
-        ba_cost.push_back(int'(dut.u_blit_gov.o_dbg_cost));
+    always @(posedge i_CLK) if (ba_on != 0 && dut.u_blit.u_blit_gov.o_dbg_vld) begin
+        ba_kind.push_back(int'(dut.u_blit.u_blit_gov.o_dbg_kind));
+        ba_cost.push_back(int'(dut.u_blit.u_blit_gov.o_dbg_cost));
     end
 
     // bus-quiet detector: consecutive CKIO with no CPU CS0/CS3 activity.
@@ -582,19 +582,19 @@ module tb_cv1k;
             // wait for the WHOLE blitter to idle (gov+fetch+draw = the
             // composite STATUS busy the real game polls before EXEC; the
             // governed deassert can precede the fetch's END-chunk drain)
-            wait (dut.u_blit_gov.o_busy   == 1'b0 &&
-                  dut.u_blit_fetch.o_busy == 1'b0 &&
-                  dut.u_blit_draw.o_busy  == 1'b0);
+            wait (dut.u_blit.u_blit_gov.o_busy   == 1'b0 &&
+                  dut.u_blit.u_blit_fetch.o_busy == 1'b0 &&
+                  dut.u_blit.u_blit_draw.o_busy  == 1'b0);
             @(negedge i_CLK);
-            dut.u_blit_regs.bd_list     = list;
-            dut.u_blit_regs.bd_clip_x   = cx;
-            dut.u_blit_regs.bd_clip_y   = cy;
-            dut.u_blit_regs.bd_exec_req = 1'b1;
-            wait (dut.u_blit_gov.o_busy == 1'b1);
+            dut.u_blit.u_blit_regs.bd_list     = list;
+            dut.u_blit.u_blit_regs.bd_clip_x   = cx;
+            dut.u_blit.u_blit_regs.bd_clip_y   = cy;
+            dut.u_blit.u_blit_regs.bd_exec_req = 1'b1;
+            wait (dut.u_blit.u_blit_gov.o_busy == 1'b1);
             ba_breq_t = 0; ba_breq_n = 0; ba_breq_sum = 0; ba_breq_max = 0;
-            wait (dut.u_blit_gov.o_busy == 1'b0);
+            wait (dut.u_blit.u_blit_gov.o_busy == 1'b0);
             @(negedge i_CLK);
-            end_us = real'(dut.u_blit_gov.r_busy_end) / 153.6;
+            end_us = real'(dut.u_blit.u_blit_gov.r_busy_end) / 153.6;
             if (ba_breq_n != 0)
                 $display("[blitanchor]   chunk spacing: n=%0d avg=%.1f max=%0d CKIO (pace 36)",
                          ba_breq_n, real'(ba_breq_sum) / real'(ba_breq_n), ba_breq_max);
@@ -627,23 +627,23 @@ module tb_cv1k;
         begin
             ba_kind.delete();
             ba_cost.delete();
-            wait (dut.u_blit_gov.o_busy   == 1'b0 &&
-                  dut.u_blit_fetch.o_busy == 1'b0 &&
-                  dut.u_blit_draw.o_busy  == 1'b0);
-            wait (dut.blit_hline == 1'b0);
-            wait (dut.blit_hline == 1'b1);
+            wait (dut.u_blit.u_blit_gov.o_busy   == 1'b0 &&
+                  dut.u_blit.u_blit_fetch.o_busy == 1'b0 &&
+                  dut.u_blit.u_blit_draw.o_busy  == 1'b0);
+            wait (dut.u_blit.blit_hline == 1'b0);
+            wait (dut.u_blit.blit_hline == 1'b1);
             t0 = ba_ckio;
             while (ba_ckio < t0 + phase_ckio) @(posedge i_CLK);
             @(negedge i_CLK);
-            dut.u_blit_regs.bd_list     = list;
-            dut.u_blit_regs.bd_clip_x   = cx;
-            dut.u_blit_regs.bd_clip_y   = cy;
-            dut.u_blit_regs.bd_exec_req = 1'b1;
-            wait (dut.u_blit_gov.o_busy == 1'b1);
-            wait (dut.u_blit_gov.o_busy == 1'b0);
+            dut.u_blit.u_blit_regs.bd_list     = list;
+            dut.u_blit.u_blit_regs.bd_clip_x   = cx;
+            dut.u_blit.u_blit_regs.bd_clip_y   = cy;
+            dut.u_blit.u_blit_regs.bd_exec_req = 1'b1;
+            wait (dut.u_blit.u_blit_gov.o_busy == 1'b1);
+            wait (dut.u_blit.u_blit_gov.o_busy == 1'b0);
             @(negedge i_CLK);
-            end_us = real'(dut.u_blit_gov.r_busy_end
-                           - dut.u_blit_gov.r_first_start) / 153.6;
+            end_us = real'(dut.u_blit.u_blit_gov.r_busy_end
+                           - dut.u_blit.u_blit_gov.r_first_start) / 153.6;
         end
     endtask
 
@@ -655,7 +655,7 @@ module tb_cv1k;
             want_cost[0] = 93; want_cost[1] = 189; want_cost[2] = 12090;
 
             wait (ba_ckio >= ba_at);
-            wait (dut.u_blit_fetch.o_busy == 1'b0 && dut.u_blit_gov.o_busy == 1'b0);
+            wait (dut.u_blit.u_blit_fetch.o_busy == 1'b0 && dut.u_blit.u_blit_gov.o_busy == 1'b0);
             begin : quiet_seek
                 longint deadline;
                 deadline = ba_ckio + 64'd8_000_000;
@@ -718,9 +718,9 @@ module tb_cv1k;
                 for (int i = 0; i < 10; i++)
                     ba_draw(16'd64, 16'd0, 16'd64, 16'd0, 240, 64);
                 ba_w(16'h0000);
-                dut.u_blit_gov.t_window = 16'd2;          // sim-only pinch
+                dut.u_blit.u_blit_gov.t_window = 16'd2;          // sim-only pinch
                 ba_run(29'h0C7C4000, 16'd32, 16'd32, t_us);
-                dut.u_blit_gov.t_window = 16'd512;        // restore
+                dut.u_blit.u_blit_gov.t_window = 16'd512;        // restore
                 if (ba_breq_max > 1000)
                     $display("[blitanchor] window bind: max chunk gap %0d CKIO  PASS", ba_breq_max);
                 else begin
@@ -741,8 +741,8 @@ module tb_cv1k;
             // golden crop - (0,0)/32-multiple scrolls never touch that path.
             // Set BEFORE test E so the last logged EXEC carries it (golden
             // crops at the last exec's scroll).
-            dut.u_blit_regs.o_scroll_x = 16'd13;
-            dut.u_blit_regs.o_scroll_y = 16'd7;
+            dut.u_blit.u_blit_regs.o_scroll_x = 16'd13;
+            dut.u_blit.u_blit_regs.o_scroll_y = 16'd7;
 
             // E (H5): 240x64 fired 2000 CKIO (= 3000 VCLK) past a real hline
             // - the draw's op_start phase lands in (2230, 4630) VCLK after a
@@ -792,9 +792,9 @@ module tb_cv1k;
             // vsync spacing 853,072 CKIO (= 60.0184 Hz)
             begin
                 longint t_a, t_b;
-                wait (dut.blit_hline == 1'b0); wait (dut.blit_hline == 1'b1);
+                wait (dut.u_blit.blit_hline == 1'b0); wait (dut.u_blit.blit_hline == 1'b1);
                 t_a = ba_ckio;
-                wait (dut.blit_hline == 1'b0); wait (dut.blit_hline == 1'b1);
+                wait (dut.u_blit.blit_hline == 1'b0); wait (dut.u_blit.blit_hline == 1'b1);
                 t_b = ba_ckio;
                 if (t_b - t_a == 3256)
                     $display("[blitanchor] hline period: %0d CKIO  PASS", t_b - t_a);
@@ -802,9 +802,9 @@ module tb_cv1k;
                     $display("[blitanchor] hline period: %0d CKIO (want 3256)  FAIL", t_b - t_a);
                     ba_fail = ba_fail + 1;
                 end
-                wait (dut.blit_vsync == 1'b0); wait (dut.blit_vsync == 1'b1);
+                wait (dut.u_blit.blit_vsync == 1'b0); wait (dut.u_blit.blit_vsync == 1'b1);
                 t_a = ba_ckio;
-                wait (dut.blit_vsync == 1'b0); wait (dut.blit_vsync == 1'b1);
+                wait (dut.u_blit.blit_vsync == 1'b0); wait (dut.u_blit.blit_vsync == 1'b1);
                 t_b = ba_ckio;
                 if (t_b - t_a == 853_072)
                     $display("[blitanchor] frame period: %0d CKIO (60.0184 Hz)  PASS", t_b - t_a);
@@ -845,7 +845,7 @@ module tb_cv1k;
     initial if ($value$plusargs("blitframe=%s", bfr_file)) bfr_on = 1;
 
     always @(posedge i_CLK) if (bfr_on != 0) begin
-        if (dut.blit_vsync) begin
+        if (dut.u_blit.blit_vsync) begin
             if (bfr_idx == 76800) begin
                 for (int i = 0; i < 76800; i++) bfr_last[i] = bfr_cur[i];
                 bfr_sx_l   = bfr_sx_c;
@@ -854,12 +854,12 @@ module tb_cv1k;
             end
             bfr_idx = 0;
         end
-        else if (dut.u_blit_video.o_px_de && bfr_idx < 76800) begin
+        else if (dut.u_blit.u_blit_video.o_px_de && bfr_idx < 76800) begin
             if (bfr_idx == 0) begin      // scroll in effect at line 0
-                bfr_sx_c = dut.blit_scroll_x;
-                bfr_sy_c = dut.blit_scroll_y;
+                bfr_sx_c = dut.u_blit.blit_scroll_x;
+                bfr_sy_c = dut.u_blit.blit_scroll_y;
             end
-            bfr_cur[bfr_idx] = dut.u_blit_video.o_px;
+            bfr_cur[bfr_idx] = dut.u_blit.u_blit_video.o_px;
             bfr_idx = bfr_idx + 1;
         end
     end

@@ -43,15 +43,18 @@ models/mister_128mb.sv
 models/MT29F1G08ABAFA/nand_die_model.v
 models/MT29F1G08ABAFA/nand_model.v
 
+// --- blitter core (sim/CV1k_blit: platform-agnostic, ships to MiSTer) ---
+CV1k_blit/blit_regs.sv
+CV1k_blit/blit_fetch.sv
+CV1k_blit/blit_gov.sv
+CV1k_blit/blit_draw.sv
+CV1k_blit/blit_video.sv
+CV1k_blit/blit_top.sv
+
 // --- PCB top + board glue ---
 ikacore_CV1k_cpld.v
 u1_pump.sv
-blit_regs.sv
-blit_fetch.sv
-blit_gov.sv
-blit_draw.sv
 blit_vram_beh.sv
-blit_video.sv
 ikacore_CV1k.sv
 tb/cpu_tracer.sv
 tb/ioctl_sim.sv
