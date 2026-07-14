@@ -28,7 +28,7 @@ measurement or another item · `N/A`.
 | Area | State |
 |---|---|
 | Board-level sim (SH-3 HS3 core + U4 NOR + U1 SDRAM + U2 NAND + U13 CPLD, shared bus, Verilator) | **DONE** — boots Ibara U4, executes from flash, CKIO/BSC verified vs SH7709S manual; **H0 done: CPU now clears the VBLANK loop, runs the attract sequencer, and issues double-buffered blitter EXECs** |
-| Blitter RTL | **H0+H2+H3+H4+H5+H6 done** — CS6 register file `sim/blit_regs.sv` (I-1.1) + BREQ/BACK fetch unit `sim/blit_fetch.sv` (I-4.1, 40 KB attribute FIFO, fifo_study-frozen depths, runtime-paced) + draw engine `sim/blit_draw.sv` (I-1.5/6/7, 4 px/clk native speed, pixel-exact vs golden over all 8 attract traces end-to-end) + timing governor `sim/blit_gov.sv` (I-2.1/2.2/2.3/2.5: runtime-loadable cost tables, governed BUSY + IRQ1, 512-chunk fetch window, steal phase anchored on the real scanline; anchors 93/189/12,090 VCLK + 17.5 µs + 58.77 µs + 163.91 µs incl. 3 steals all hit in the board sim) + video scanout `sim/blit_video.sv` (I-3.1/2/3: 60.0184 Hz sync gen, per-line scroll latch, real line-fetch steal, vsync IRQ2, 240p capture pixel-exact vs the golden crop) live; **H6 conformance DONE 2026-07-14** (`sim/run_h6_conformance.sh`, NO RTL change — RTL trace-equivalent to the P-stage C++ engine over all 8 traces / 80,859 execs: pixel+cost+timeline-binding, and the governor timeline proven BIT-IDENTICAL under execution-plane feed jitter); H7 = MiSTer platform harness next (core frozen, swappable HPS-DDR3 arbiter also serving NAND/NOR) |
+| Blitter RTL | **H0+H2+H3+H4+H5+H6 done** — CS6 register file `sim/CV1k_blit/blit_regs.sv` (I-1.1) + BREQ/BACK fetch unit `sim/CV1k_blit/blit_fetch.sv` (I-4.1, 40 KB attribute FIFO, fifo_study-frozen depths, runtime-paced) + draw engine `sim/CV1k_blit/blit_draw.sv` (I-1.5/6/7, 4 px/clk native speed, pixel-exact vs golden over all 8 attract traces end-to-end) + timing governor `sim/CV1k_blit/blit_gov.sv` (I-2.1/2.2/2.3/2.5: runtime-loadable cost tables, governed BUSY + IRQ1, 512-chunk fetch window, steal phase anchored on the real scanline; anchors 93/189/12,090 VCLK + 17.5 µs + 58.77 µs + 163.91 µs incl. 3 steals all hit in the board sim) + video scanout `sim/CV1k_blit/blit_video.sv` (I-3.1/2/3: 60.0184 Hz sync gen, per-line scroll latch, real line-fetch steal, vsync IRQ2, 240p capture pixel-exact vs the golden crop) live; **H6 conformance DONE 2026-07-14** (`sim/run_h6_conformance.sh`, NO RTL change — RTL trace-equivalent to the P-stage C++ engine over all 8 traces / 80,859 execs: pixel+cost+timeline-binding, and the governor timeline proven BIT-IDENTICAL under execution-plane feed jitter); **H7 steps 1+2 DONE 2026-07-15** — core repackaged into `sim/CV1k_blit/` behind ONE instance `blit_top.sv` (pure code motion; video px stream + gov table port now real boundary ports) and `blit_draw` grew the OUTPUT-ONLY descriptor sideband + `i_rd_vld` read-stall port (tied 1 = bit-identical; full-H6 + FASTBOOT-22M re-accepted, footprint checker `tb/blit_dsc_check.sv` clean over 9.13 G src beats / 26.1 G wr lanes); NEXT = `blit_batch.sv` vs a fake port, then `ddr3_harness` + ddr3_stat port model |
 | VRAM (MT46V16M16 DDR) model in sim | **behavioral backend live (H3)** — `sim/blit_vram_beh.sv` (64 MB flat-pixel, 3 channels, per-pixel write lanes) serves the draw engine in board sim + trace TB; the vendor DDR model `sim/models/mt46v16m16.v` stays for I-4.2, the MiSTer DDR3 adapter (I-4.3) respins the same channels to ready/valid |
 | Golden pixel model (MAME port) | **DONE 2026-07-13 (H1+H1b)** — `sim/blitgold/` C++ port of MAME `cv1k_v`; 7 unit vectors pass + pixel-correct attract frames from ibarao/futaribl/ddpdfk `.blit` traces (3 games). H1b closed the loop: a `+blitdump` testbench emitter backdoor-walks the op list from the U1 SDRAM on each EXEC; replaying **our own** board-sim output renders a coherent Ibara boot/loading frame |
 | PCB measurements | **none taken** — flex PCB probe plan frozen Rev A (`docs/pcb_probe_plan.md`); **long-lead** (sourcing + PCB design), will arrive late — plan is to finish the RTL prototype (H0–H6) before the rig exists; board data later lands in the runtime-loadable governor tables |
@@ -422,6 +422,50 @@ Params updated: P-xx old→new (Part II row edited, Conf set to [M-nn])
 
 ## Part V — Update log (newest first)
 
+- 2026-07-15  [claude]  **H7 steps 1+2 — blitter core repackaged behind
+  `blit_top`; descriptor sideband + read-stall port landed (tied off,
+  proven bit-identical).**  Two commits.  (1) `69aa128`: the five frozen
+  modules moved to `sim/CV1k_blit/` and are instantiated by NEW
+  `blit_top.sv` — regs/fetch/gov/draw/video + both IRQ pulse shapers
+  (`+noirq1` stays in the board top as an `i_IRQ1_EN` input so blit_top
+  is synthesizable); H5 steal gating moved inside (inert: behavioral
+  wr_rdy = const 1); video pixel stream + governor table-load port are
+  now real boundary ports (MiSTer video pipe / HPS table pokes hang off
+  them); board top keeps only glue (tristates, U1 pin mux, blit_vram_beh
+  on the exported beat channels); TB taps rewired `dut.u_blit.*`.
+  (2) `00c1020`: `blit_draw` exports the H7 descriptor sideband as pure
+  taps of the EXISTING S1-S3 setup regs — src span (s_xlo/s_xhi) + first
+  row + flip walk, rows, npx, dst row-0 flat index (didx_row0, signed),
+  q_blend_eff / q_strict / q_px1 / q_waitpipe, one strobe at surviving-
+  DRAW commit (B_S3→B_ROW) + an UPLOAD strobe at F_UPI with base/dims —
+  the exact information timing engine.h's DES was validated under (op
+  start, no cross-op memory prefetch modeled), so K=8 train formation
+  needs no lookahead the core doesn't have.  The ONE core-RTL touch:
+  `i_rd_vld` joins the pipe-advance term `adv` (variable-latency reads
+  under the H3 fixed-latency contract are physically impossible to serve
+  otherwise — wr_rdy engages too late to stop the ≤3 op-start read beats;
+  the same stall also IS the strict-op serialized fallback).  Tied 1'b1
+  in every current build: full H6 re-run PASS (all 8 traces / 80,859
+  execs conformance + 2000-exec invariance + 8-seed sweep, worst late
+  9.83 µs deathsml, 0 > hline) and the 300-exec smoke gov_hashes are
+  IDENTICAL pre/post-sideband; FASTBOOT 22M board regression PASS
+  (5 EXECs incl. the 132 KB boot upload, blitgold FIFO-log replay
+  PIXEL-EXACT, 0 bad px).  NEW `tb/blit_dsc_check.sv` (both TBs, always
+  on, $fatal on miss) asserts every src beat / masked write lane lands
+  inside the descriptor-predicted footprint — the property blit_batch
+  relies on: clean over 9.13 G src beats + 26.1 G wr lanes (full corpus)
+  + 31 k/166 k on the board boot; it caught two of its own bring-up bugs
+  (same-cycle 1-word-upload descriptor consumption; wrapped flip beat
+  base with sx_lo<3 — checker fixes, not RTL).  tb_blit_main gained
+  `Rig::~Rig{tb.final();}` so the checker's final report prints.
+  Disclosed for later steps: the SECOND core touch (agreed) is
+  blit_video's ≥1-hline prefetch at H7a step 4 — a K=8 320-px blended
+  train (~8.5 µs) exceeds the 2.17 µs steal window, so just-in-time line
+  fetch underruns by construction; sync/steal/IRQ2 timing stays
+  untouched (execution-plane fetch moves one line early).  Remaining
+  H7a: blit_batch vs fake port → ddr3_harness + ddr3_stat.h C++ port
+  model + lateness monitor → NAND bridge + boot-through-harness; then
+  H7b on-target.
 - 2026-07-14  [claude]  **H6 conformance DONE — RTL trace-equivalent to
   the P-stage C++ engine; governor invariance re-confirmed in RTL (NO RTL
   change).**  New accept `sim/run_h6_conformance.sh` + H6 additions to the
