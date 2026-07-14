@@ -22,6 +22,18 @@ if [ "${FASTBOOT:-0}" = "1" ]; then
     echo "== FASTBOOT enabled (patched ROM + SDRAM preload) =="
 fi
 
+# MISTER=1: replace U4 NOR + U1 SDRAM with u1_pump + the 128MB MiSTer SDRAM
+# module (double-pump at 2xCKIO + SDRAM-served NOR window; see u1_pump.sv and
+# docs/double_pump_sdram.md).  Separate obj dir so A/B binaries coexist.
+#   MISTER=1 ./build_sim.sh
+#   MISTER=1 ./build_sim.sh +ioctl_test +ioctl_bytes=65536   # loader smoke test
+MSDEF=""
+if [ "${MISTER:-0}" = "1" ]; then
+    MSDEF="+define+MISTER_SDRAM"
+    MDIR=build/obj_dir_mister
+    echo "== MISTER SDRAM variant (u1_pump + mister_128mb) =="
+fi
+
 # U2 NAND model config (Micron MT29F1G08, x8, 3.3 V, short power-on reset).
 #
 # The array MUST hold real data: once the SH-3 DMAC copies NAND pages into work
@@ -58,6 +70,7 @@ echo "== Verilating (Verilator $(verilator --version | awk '{print $2}')) =="
 verilator --binary --timing -j 0 -O3 --sv \
     -Wno-fatal \
     $FBDEF \
+    $MSDEF \
     $NANDDEF \
     verilator_waivers.vlt \
     --Mdir "$MDIR" \

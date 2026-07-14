@@ -11,14 +11,26 @@
 // workload.h clip semantics) - cost-exact or fail (I-2.1/I-2.2).  The
 // real-time busy/IRQ1 anchors run in the board sim (+blitanchor).
 //
+// H6 (conformance, no RTL change): the .blit replay additionally
+//   (a) BINDS the RTL governor taps to workload::build_work(rec).gov - the
+//       EXACT per-op cost array the P-stage jitter engine consumes via
+//       cost::governor() (this harness never runs engine::run_exec; the
+//       execution-plane DES lives only in blit_study - the two-plane split),
+//   (b) folds an order-sensitive gov_hash + an RTL vram_hash so the driver
+//       can prove GOVERNOR INVARIANCE: with --jitter SEED the harness inserts
+//       seeded stall gaps into the FIFO feed (perturbing ONLY the execution-
+//       plane pacing / draw-engine backpressure), and both hashes must be
+//       bit-identical to the un-jittered run.
+//
 //   ./Vtb_blit --selftest [--fuzz N]        unit vectors + 64-way blend grid
 //                                           + hazard/clip corners + gov anchors
 //                                           + table reload + random fuzz
-//   ./Vtb_blit --trace f.blit [--execs N] [--out DIR] [--png]
+//   ./Vtb_blit --trace f.blit [--execs N] [--out DIR] [--png] [--jitter SEED]
 //                                           .blit replay, per-EXEC compare
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <string>
 #include <utility>
 #include <vector>
@@ -50,6 +62,26 @@ struct Rig {
     // per-exec governor records: {kind, cost} in push order (kind 0 = zero-
     // cost, 1 = draw with VCLK cost, 2 = end/fault)
     std::vector<std::pair<int, int64_t>> gov;
+
+    // H6 execution-plane perturbation: when feed_seed != 0 the FIFO feed
+    // inserts seeded stall gaps (i_fifo_valid deasserted) - the draw engine
+    // stalls on its existing backpressure while the governor's arrival stream
+    // (mirrored from real pops in tick()) is undisturbed.  The recorded gov
+    // timeline must be INVARIANT to this; pixels must stay golden-exact.
+    uint32_t feed_seed = 0;
+    uint32_t feed_rng = 1;
+    int      feed_stall = 0;
+    bool feed_gate()
+    {
+        if (feed_seed == 0) return true;      // H3/H4 behaviour: feed at rate
+        if (feed_stall > 0) { feed_stall--; return false; }
+        feed_rng ^= feed_rng << 13; feed_rng ^= feed_rng >> 17; feed_rng ^= feed_rng << 5;
+        if ((feed_rng & 15) == 0) {           // ~1/16 words open a 1..8-cyc stall
+            feed_stall = 1 + int((feed_rng >> 8) & 7);
+            return false;
+        }
+        return true;
+    }
 
     Rig()
     {
@@ -98,14 +130,17 @@ struct Rig {
         tick();
         tb.i_exec = 0;
 
-        const uint64_t limit = cycles + 400ull * (w.size() + 16) + 4000000ull;
+        // jitter stalls stretch wall-clock; give the timeout headroom for it
+        const uint64_t per_word = feed_seed ? 800ull : 400ull;
+        const uint64_t limit = cycles + per_word * (w.size() + 16) + 4000000ull;
         size_t idx = 0;
         bool done = false;
         while (!done) {
-            tb.i_fifo_valid = (idx < w.size());
-            tb.i_fifo_word  = (idx < w.size()) ? w[idx] : 0;
+            const bool present = (idx < w.size()) && feed_gate();
+            tb.i_fifo_valid = present;
+            tb.i_fifo_word  = present ? w[idx] : 0;
             tick();
-            if (pop) idx++;                   // consumed pre-edge
+            if (pop && present) idx++;        // consumed pre-edge (valid & pop)
             if (tb.o_done) done = true;
             if (cycles > limit) {
                 std::printf("  TIMEOUT: fed %zu/%zu words, busy=%d\n",
@@ -230,6 +265,73 @@ static bool gov_check(Rig &rig, const std::vector<uint16_t> &words,
         }
     }
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// H6 conformance binding: certify the RTL governor emits, element for element,
+// the SAME per-op cost array the P-stage jitter engine consumes.  The study
+// feeds workload::build_work(rec).gov -> cost::governor()/fetch_ready_times()
+// -> engine::run_exec().  We read ONLY .gov here; engine::run_exec is never
+// called in this binary (execution-plane DES stays in blit_study), so the
+// two-plane split holds.  build_work omits End ops from .gov; the RTL records
+// a kind==2 tap for them, so those are filtered before comparing.
+// ---------------------------------------------------------------------------
+static long g_bind_fail = 0;
+
+static bool gov_bind_check(Rig &rig, const blit::ExecRecord &rec, const char *tag)
+{
+    const auto wk = workload::build_work(rec);
+    std::vector<std::pair<int, int64_t>> rtl;
+    rtl.reserve(rig.gov.size());
+    for (const auto &kc : rig.gov)
+        if (kc.first != 2) rtl.push_back(kc);          // drop end/fault taps
+
+    if (rtl.size() != wk.gov.size()) {
+        std::printf("  BIND MISMATCH %s: rtl %zu cost-ops, study %zu\n",
+                    tag, rtl.size(), wk.gov.size());
+        g_bind_fail++;
+        return false;
+    }
+    for (size_t i = 0; i < wk.gov.size(); i++) {
+        const bool draw = wk.gov[i].cost_ns > 0.0;
+        const int kind = draw ? 1 : 0;                 // clip/upload/clipped = 0
+        const int64_t cost = draw ? std::llround(wk.gov[i].cost_ns / cost::V_NS) : 0;
+        if (rtl[i].first != kind || rtl[i].second != cost) {
+            std::printf("  BIND MISMATCH %s op %zu: rtl {%d,%lld} study {%d,%lld}\n",
+                        tag, i, rtl[i].first, (long long)rtl[i].second,
+                        kind, (long long)cost);
+            g_bind_fail++;
+            return false;
+        }
+    }
+    return true;
+}
+
+// order-sensitive fold of the recorded gov timeline (FNV-1a) - the governor-
+// invariance witness the driver compares across --jitter runs.
+static uint64_t g_govhash = 1469598103934665603ull;
+static void govhash_reset() { g_govhash = 1469598103934665603ull; }
+static void govhash_fold(const std::vector<std::pair<int, int64_t>> &g)
+{
+    for (const auto &kc : g) {
+        const uint64_t v = (uint64_t(uint32_t(kc.first)) << 40) ^ uint64_t(kc.second);
+        for (int b = 0; b < 8; b++) {
+            g_govhash ^= (v >> (8 * b)) & 0xff;
+            g_govhash *= 1099511628211ull;
+        }
+    }
+}
+
+// FNV-1a over the whole RTL VRAM - the pixel-invariance witness across jitter.
+static uint64_t rtl_vram_hash(Rig &rig)
+{
+    auto &m = rig.mem();
+    uint64_t h = 1469598103934665603ull;
+    for (size_t i = 0; i < VRAM::SIZE; i++) {
+        h ^= m[i];
+        h *= 1099511628211ull;
+    }
+    return h;
 }
 
 // load one governor table entry (I-2.1 runtime-loadable proof path)
@@ -520,9 +622,13 @@ static int selftest(int fuzz_execs)
 // ---------------------------------------------------------------------------
 // .blit trace replay
 // ---------------------------------------------------------------------------
-static int replay(const char *path, long max_execs, const std::string &outdir, bool png)
+static int replay(const char *path, long max_execs, const std::string &outdir,
+                  bool png, uint32_t jitter)
 {
     Rig rig;
+    rig.feed_seed = jitter;
+    rig.feed_rng  = jitter ? jitter : 1u;
+    govhash_reset();
     Engine e;
     blit::TraceReader tr(path);
     blit::ExecRecord rec;
@@ -531,27 +637,37 @@ static int replay(const char *path, long max_execs, const std::string &outdir, b
 
     while (tr.next(rec)) {
         if (!rig.run_exec(rec.words, rec.clip_x, rec.clip_y)) {
-            std::printf("[h3] exec %ld: RTL TIMEOUT\n", n);
+            std::printf("[h6] exec %ld: RTL TIMEOUT\n", n);
             return 1;
         }
         e.exec(rec.words, rec.clip_x, rec.clip_y);
         char tag[32];
         std::snprintf(tag, sizeof tag, "exec-%04ld", n);
         if (!gov_check(rig, rec.words, rec.clip_x, rec.clip_y, tag))
-            return 1;                         // governor cost divergence
+            return 1;                         // governor cost divergence (H4)
+        if (!gov_bind_check(rig, rec, tag))
+            return 1;                         // RTL != study input array (H6)
+        govhash_fold(rig.gov);
         if (compare_vram(rig, e, tag)) ok++;
         else return 1;                        // stop at first divergence
         lcx = rec.clip_x; lcy = rec.clip_y;
         lsx = rec.scroll_x; lsy = rec.scroll_y;
         n++;
         if ((n % 20) == 0)
-            std::printf("[h3] %ld execs pixel-exact (%.1fM cycles)\n",
+            std::printf("[h6] %ld execs pixel-exact + gov-bound (%.1fM cycles)\n",
                         n, double(rig.cycles) / 1e6);
         if (n == max_execs) break;
     }
 
-    std::printf("[h3] %s: %ld/%ld execs pixel-exact, vram_hash=%016llx, %llu cycles\n",
+    // gov_hash / rtl_vram_hash are the invariance witnesses: identical with
+    // and without --jitter proves the CPU-visible timeline and the pixels are
+    // both independent of execution-plane pacing.
+    std::printf("[h6] %s: %ld/%ld execs pixel-exact + gov-bound, "
+                "gold_hash=%016llx rtl_vram_hash=%016llx gov_hash=%016llx "
+                "jitter=%u %llu cycles\n",
                 path, ok, n, (unsigned long long)e.vram.hash(),
+                (unsigned long long)rtl_vram_hash(rig),
+                (unsigned long long)g_govhash, jitter,
                 (unsigned long long)rig.cycles);
 
     if (png) {
@@ -586,19 +702,21 @@ int main(int argc, char **argv)
     std::string outdir = "build/h3_out";
     long execs = -1;
     int fuzz = 40;
+    uint32_t jitter = 0;
     bool self = false, png = false;
     for (int i = 1; i < argc; i++) {
         if      (!std::strcmp(argv[i], "--selftest")) self = true;
-        else if (!std::strcmp(argv[i], "--fuzz")  && i + 1 < argc) fuzz = std::atoi(argv[++i]);
-        else if (!std::strcmp(argv[i], "--trace") && i + 1 < argc) trace = argv[++i];
-        else if (!std::strcmp(argv[i], "--execs") && i + 1 < argc) execs = std::atol(argv[++i]);
-        else if (!std::strcmp(argv[i], "--out")   && i + 1 < argc) outdir = argv[++i];
+        else if (!std::strcmp(argv[i], "--fuzz")   && i + 1 < argc) fuzz = std::atoi(argv[++i]);
+        else if (!std::strcmp(argv[i], "--trace")  && i + 1 < argc) trace = argv[++i];
+        else if (!std::strcmp(argv[i], "--execs")  && i + 1 < argc) execs = std::atol(argv[++i]);
+        else if (!std::strcmp(argv[i], "--out")    && i + 1 < argc) outdir = argv[++i];
+        else if (!std::strcmp(argv[i], "--jitter") && i + 1 < argc) jitter = uint32_t(std::strtoul(argv[++i], nullptr, 0));
         else if (!std::strcmp(argv[i], "--png")) png = true;
     }
     if (self)  return selftest(fuzz);
-    if (trace) return replay(trace, execs, outdir, png);
+    if (trace) return replay(trace, execs, outdir, png, jitter);
     std::printf("usage: %s --selftest [--fuzz N]\n"
-                "       %s --trace f.blit [--execs N] [--out DIR] [--png]\n",
+                "       %s --trace f.blit [--execs N] [--out DIR] [--png] [--jitter SEED]\n",
                 argv[0], argv[0]);
     return 2;
 }

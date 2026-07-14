@@ -33,10 +33,14 @@ module tb_cv1k;
     initial begin
         i_POR_n = 1'b0; i_RST_n = 1'b0;
         #205_000;                          // > Tvcs (200 us) so the flash answers fetch 0
-        @(posedge i_CLK) i_POR_n = 1'b1;
-        repeat (8) @(posedge i_CLK);
-        i_RST_n = 1'b1;
-        $display("[tb] reset released @ %0t (flash powered up)", $time);
+        if ($test$plusargs("ioctl_test")) begin
+            $display("[tb] ioctl_test: CPU held in reset for the download");
+        end else begin
+            @(posedge i_CLK) i_POR_n = 1'b1;
+            repeat (8) @(posedge i_CLK);
+            i_RST_n = 1'b1;
+            $display("[tb] reset released @ %0t (flash powered up)", $time);
+        end
     end
 
     // watchdog: bound number of clock cycles so the run always terminates.
@@ -66,7 +70,120 @@ module tb_cv1k;
         .i_POR_n (i_POR_n),
         .i_RST_n (i_RST_n),
         .i_EXTAL2(i_EXTAL2)
+`ifdef MISTER_SDRAM
+        ,
+        .i_MEM_RST_n     (mem_rst_n),
+        .i_IOCTL_DOWNLOAD(ioctl_download),
+        .i_IOCTL_WR      (ioctl_wr),
+        .i_IOCTL_ADDR    (ioctl_addr),
+        .i_IOCTL_DATA    (ioctl_data),
+        .i_IOCTL_INDEX   (ioctl_index),
+        .o_IOCTL_WAIT    (ioctl_wait)
+`endif
     );
+
+`ifdef MISTER_SDRAM
+    //------------------------------------------------------------------
+    // MiSTer memory subsystem: pump reset, HPS ioctl emulator, preloads
+    //------------------------------------------------------------------
+    reg  mem_rst_n   = 1'b0;
+    reg  ioctl_start = 1'b0;
+    wire ioctl_download, ioctl_wr, ioctl_wait, ioctl_done;
+    wire [26:0] ioctl_addr;
+    wire [7:0]  ioctl_data;
+    wire [15:0] ioctl_index;
+
+    ioctl_sim u_ioctl (
+        .i_CLK(i_CLK), .i_START(ioctl_start),
+        .o_DOWNLOAD(ioctl_download), .o_ADDR(ioctl_addr), .o_DATA(ioctl_data),
+        .o_WR(ioctl_wr), .o_INDEX(ioctl_index),
+        .i_WAIT(ioctl_wait), .o_DONE(ioctl_done)
+    );
+
+    // release the memory subsystem well before the CPU POR (205 us): the
+    // pump's JEDEC init takes ~3 us and must finish before the first fetch
+    initial begin
+        #2_000;
+        @(posedge i_CLK) mem_rst_n = 1'b1;
+    end
+
+    // Default mode: zero-time NOR-window preload with the same image the
+    // MX29LV320E served in the baseline build, so boot content and timing
+    // are diffable bit-for-bit.  Flash hex = one byte per line in raw file
+    // order; the SH-3 bus halfword is {odd byte, even byte}.
+    reg [7:0] nor_bytes [0:4194303];
+    initial if (!$test$plusargs("ioctl_test")) begin
+        integer pk;
+`ifdef IBARA_FASTBOOT
+        $readmemh("roms/ibara_patched/ibara_u4_4M_fastboot.hex", nor_bytes);
+`else
+        $readmemh("roms/ibara_patched/ibara_u4_4M.hex", nor_bytes);
+`endif
+        for (pk = 0; pk < 2097152; pk = pk + 1)
+            dut.u_sdram.chip0.Bank0[23'h40_0000 + pk] =
+                {nor_bytes[2*pk+1], nor_bytes[2*pk]};
+        $display("[tb] MISTER: NOR window preloaded (2M halfwords), [0]=%04x (expect df3d)",
+                 dut.u_sdram.chip0.Bank0[23'h40_0000]);
+    end
+
+`ifdef IBARA_FASTBOOT
+    // fastboot work-RAM preload scattered into the 16-bit chip geometry:
+    // 32-bit word w of grid bank b -> Bank_b[{w[18:8], w[7:0], beat}]
+    reg [31:0] wram0 [0:524287];
+    reg [31:0] wram1 [0:524287];
+    initial begin
+        integer wk, ix;
+        $readmemh("roms/ibara_patched/ibara_sdram_bank0.hex", wram0);
+        $readmemh("roms/ibara_patched/ibara_sdram_bank1.hex", wram1);
+        for (wk = 0; wk < 524288; wk = wk + 1) begin
+            ix = ((wk >> 8) << 10) | ((wk & 255) << 1);
+            dut.u_sdram.chip0.Bank0[ix]   = wram0[wk][31:16];
+            dut.u_sdram.chip0.Bank0[ix+1] = wram0[wk][15:0];
+            dut.u_sdram.chip0.Bank1[ix]   = wram1[wk][31:16];
+            dut.u_sdram.chip0.Bank1[ix+1] = wram1[wk][15:0];
+        end
+        $display("[tb] MISTER: fastboot work-RAM preloaded (grid banks 0/1)");
+        $display("[tb] fb check: wram0[0xA8C]=%08x Bank0[0x2918..9]=%04x %04x (expect 4f030002 / 4f03 0002)",
+                 wram0[19'h0A8C],
+                 dut.u_sdram.chip0.Bank0[23'h02918], dut.u_sdram.chip0.Bank0[23'h02919]);
+    end
+`endif
+
+    // ioctl smoke test: +ioctl_test [+ioctl_bytes=N] [+ioctl_bin=<raw dump>]
+    // CPU stays in reset; the file is streamed through the pump's loader and
+    // the NOR window is verified against the file afterwards.
+    initial if ($test$plusargs("ioctl_test")) begin
+        integer f, bb;
+        longint k, nhw, errs, tst_bytes;
+        reg [7:0]  lo8;
+        reg [15:0] expd, got;
+        string p2;
+        tst_bytes = 65536; p2 = "roms/ibara/u4";
+        void'($value$plusargs("ioctl_bytes=%d", tst_bytes));
+        void'($value$plusargs("ioctl_bin=%s", p2));
+        #12_000;                                   // pump init complete
+        @(posedge i_CLK) ioctl_start = 1'b1;
+        @(posedge ioctl_done);
+        repeat (64) @(posedge i_CLK);
+        f = $fopen(p2, "rb");
+        nhw = tst_bytes / 2; errs = 0;
+        for (k = 0; k < nhw; k = k + 1) begin
+            bb = $fgetc(f); lo8 = bb[7:0];
+            bb = $fgetc(f);
+            expd = {bb[7:0], lo8};
+            got  = dut.u_sdram.chip0.Bank0[23'h40_0000 + k[22:0]];
+            if (got !== expd) begin
+                errs = errs + 1;
+                if (errs <= 10)
+                    $display("[ioctl_test] MISMATCH hw %0d: got %04x expected %04x", k, got, expd);
+            end
+        end
+        $fclose(f);
+        if (errs == 0) $display("[ioctl_test] PASS: %0d halfwords verified", nhw);
+        else           $display("[ioctl_test] FAIL: %0d/%0d mismatches", errs, nhw);
+        $finish;
+    end
+`endif
 
     // optional shared-bus probe (+dbg=1): log the first external bus cycles
     // (PCB-level nets only, so it is independent of the read-only IP internals)
@@ -172,6 +289,19 @@ module tb_cv1k;
 
     // 16-bit op word at physical work-RAM address `a`, read from the SDRAM model.
     function automatic [15:0] bd_word(input [31:0] a);
+`ifdef MISTER_SDRAM
+        // 16-bit chip geometry: halfword index = row*1024 + col*2 + beat
+        integer ix;
+        begin
+            ix = (a[20:10] * 1024) + (a[9:2] * 2) + a[1];
+            case (a[22:21])
+                2'd0: bd_word = dut.u_sdram.chip0.Bank0[ix];
+                2'd1: bd_word = dut.u_sdram.chip0.Bank1[ix];
+                2'd2: bd_word = dut.u_sdram.chip0.Bank2[ix];
+                2'd3: bd_word = dut.u_sdram.chip0.Bank3[ix];
+            endcase
+        end
+`else
         reg [31:0] lw;
         begin
             case (a[22:21])
@@ -182,6 +312,7 @@ module tb_cv1k;
             endcase
             bd_word = a[1] ? lw[15:0] : lw[31:16];
         end
+`endif
     endfunction
 
     // Walk one op list (mirrors gfx_exec) and emit each word until EXIT.
@@ -307,8 +438,14 @@ module tb_cv1k;
     always @(posedge i_CLK) begin
         if (bi_on) begin
             if (bi_d && !dut.pth_irq1_n)
+`ifdef MISTER_SDRAM
+                $display("[blitirq1] t=%0t IRQ1 fall, callback@0c002224=%08x",
+                         $time, {dut.u_sdram.chip0.Bank0[23'h02112],
+                                 dut.u_sdram.chip0.Bank0[23'h02113]});
+`else
                 $display("[blitirq1] t=%0t IRQ1 fall, callback@0c002224=%08x",
                          $time, dut.u_u1_sdram.Bank0[19'h00889]);
+`endif
             bi_d <= dut.pth_irq1_n;
             if (dut.blit_gov_retire)
                 $display("[blitirq1] t=%0t gov retire", $time);
@@ -388,6 +525,18 @@ module tb_cv1k;
 
     // write one 16-bit op word into the U1 SDRAM model (bd_word's inverse)
     task automatic ba_wr16(input [31:0] a, input [15:0] w);
+`ifdef MISTER_SDRAM
+        integer ix;
+        begin
+            ix = (a[20:10] * 1024) + (a[9:2] * 2) + a[1];
+            case (a[22:21])
+                2'd0: dut.u_sdram.chip0.Bank0[ix] = w;
+                2'd1: dut.u_sdram.chip0.Bank1[ix] = w;
+                2'd2: dut.u_sdram.chip0.Bank2[ix] = w;
+                2'd3: dut.u_sdram.chip0.Bank3[ix] = w;
+            endcase
+        end
+`else
         reg [31:0] lw;
         begin
             case (a[22:21])
@@ -405,6 +554,7 @@ module tb_cv1k;
                 2'd3: dut.u_u1_sdram.Bank3[a[20:2]] = lw;
             endcase
         end
+`endif
     endtask
 
     reg [31:0] ba_cur;                   // sequential list-writer cursor

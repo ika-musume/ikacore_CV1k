@@ -41,6 +41,19 @@ module ikacore_CV1k #(
     input  wire i_POR_n,    // power-on reset  (RESETP)
     input  wire i_RST_n,    // manual reset    (RESETM)
     input  wire i_EXTAL2    // RTC 32.768 kHz crystal input
+`ifdef MISTER_SDRAM
+    ,
+    // MiSTer memory subsystem (u1_pump + 128MB SDRAM module): the pump gets
+    // its own reset (released before the CPU POR so init + ioctl download
+    // happen while the SH-3 is held), plus the HPS ioctl download port.
+    input  wire         i_MEM_RST_n,
+    input  wire         i_IOCTL_DOWNLOAD,
+    input  wire         i_IOCTL_WR,
+    input  wire [26:0]  i_IOCTL_ADDR,
+    input  wire [7:0]   i_IOCTL_DATA,
+    input  wire [15:0]  i_IOCTL_INDEX,
+    output wire         o_IOCTL_WAIT
+`endif
 );
 
 //------------------------------------------------------------------
@@ -167,6 +180,7 @@ HS3 #(
     .i_SCPT_I(8'hFF), .o_SCPT_O(), .o_SCPT_OE(), .o_SCPT_PU()
 );
 
+`ifndef MISTER_SDRAM
 //==================================================================
 //  U4 - program NOR flash (Macronix MX29LV320E, word mode)
 //       area 0 / CS0, 16-bit port on D[15:0]
@@ -206,6 +220,76 @@ mt48lc2m32b2 u_u1_sdram (
     .We_n (blit_own ? bf_WE       : RD_WR),
     .Dqm  (blit_own ? bf_DQM      : WE_n)
 );
+
+`else  // MISTER_SDRAM
+//==================================================================
+//  MiSTer variant: u1_pump + 128 MB dual-chip SDRAM module replace
+//  BOTH U4 (NOR served from the SDRAM window, rows 0x1000-0x17FF of
+//  chip0 bank0) and U1 (double-pumped at 2xCKIO).  See u1_pump.sv and
+//  docs/double_pump_sdram.md.
+//==================================================================
+wire [15:0] s_dq;                            // module DQ (board-level tristate)
+wire [15:0] pump_dq_o;
+wire        pump_dq_oe;
+wire [12:0] s_a;
+wire [1:0]  s_ba, s_dqm;
+wire        s_ncs, s_nras, s_ncas, s_nwe, s_cke;
+wire [31:0] pump_g_rdata;
+wire        pump_g_oe;
+wire [15:0] pump_n_rdata;
+wire        pump_n_oe;
+
+assign D        = pump_g_oe ? pump_g_rdata : 32'hzzzz_zzzz;  // CS3 read beats
+assign D[15:0]  = pump_n_oe ? pump_n_rdata : 16'hzzzz;       // CS0 (NOR) reads
+assign s_dq     = pump_dq_oe ? pump_dq_o   : 16'hzzzz;       // write beats
+
+u1_pump u_pump (
+    .i_CLK        (i_CLK),
+    .i_RST_n      (i_MEM_RST_n),
+    .i_CKIO_PCEN  (CKIO_PCEN),
+    // grid: identical mux expressions the U1 model saw (pin-true handover)
+    .i_G_A        (blit_own ? bf_A[12:2]  : A[12:2]),
+    .i_G_BA       (blit_own ? bf_A[14:13] : A[14:13]),
+    .i_G_CS_n     (blit_own ? bf_CS_n     : CS3_n),
+    .i_G_RAS_n    (blit_own ? bf_RAS_n    : RAS3L_n),
+    .i_G_CAS_n    (blit_own ? bf_CAS_n    : CASL_n),
+    .i_G_WE_n     (blit_own ? bf_WE       : RD_WR),
+    .i_G_DQM      (blit_own ? bf_DQM      : WE_n),
+    .i_G_CKE      (CKE),
+    .i_G_WDATA    (D_O),
+    .o_G_RDATA    (pump_g_rdata),
+    .o_G_RDATA_OE (pump_g_oe),
+    // NOR: same pins the MX29LV320E saw
+    .i_N_CS_n     (CS0_n),
+    .i_N_RD_n     (RD_n),
+    .i_N_A        (A[21:1]),
+    .i_N_WR_n     (WE_n[1] & WE_n[0]),
+    .o_N_RDATA    (pump_n_rdata),
+    .o_N_RDATA_OE (pump_n_oe),
+    // HPS ioctl
+    .i_IOCTL_DOWNLOAD (i_IOCTL_DOWNLOAD),
+    .i_IOCTL_WR       (i_IOCTL_WR),
+    .i_IOCTL_ADDR     (i_IOCTL_ADDR),
+    .i_IOCTL_DATA     (i_IOCTL_DATA),
+    .i_IOCTL_INDEX    (i_IOCTL_INDEX),
+    .o_IOCTL_WAIT     (o_IOCTL_WAIT),
+    // module pins
+    .o_S_A(s_a), .o_S_BA(s_ba), .o_S_nCS(s_ncs),
+    .o_S_nRAS(s_nras), .o_S_nCAS(s_ncas), .o_S_nWE(s_nwe),
+    .o_S_DQM(s_dqm), .o_S_CKE(s_cke),
+    .o_S_DQ_O(pump_dq_o), .o_S_DQ_OE(pump_dq_oe), .i_S_DQ_I(s_dq)
+);
+
+mister_128mb u_sdram (
+    .clk  (i_CLK),                           // sim: same clock as the SH-3 (2xCKIO);
+    .dq   (s_dq),                            // HW: dedicated PLL output, phase-tuned
+    .dq_in(pump_dq_o),
+    .a(s_a), .ba(s_ba), .ncs(s_ncs),
+    .nras(s_nras), .ncas(s_ncas), .nwe(s_nwe),
+    .dqml(s_dqm[0]), .dqmh(s_dqm[1]),
+    .cke(s_cke)
+);
+`endif // MISTER_SDRAM
 
 //==================================================================
 //  U13 - EPM7032 address-decoder CPLD

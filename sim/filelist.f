@@ -35,6 +35,9 @@ ip_cores/HS3/HS3.sv
 // --- board: vendor memory models (patched for Verilator, see *.verilator.patch) ---
 models/mt48lc2m32b2.v
 models/MX29LV320E.v
+// MiSTer 128MB SDRAM module (MISTER_SDRAM variant; compiles in both builds)
+models/mt48lc16m16a2.v
+models/mister_128mb.sv
 // U2 NAND: Micron MT29F1G08 model (ID-patched to Samsung K9F1G08U0M, EC/F1)
 +incdir+models/MT29F1G08ABAFA
 models/MT29F1G08ABAFA/nand_die_model.v
@@ -42,6 +45,7 @@ models/MT29F1G08ABAFA/nand_model.v
 
 // --- PCB top + board glue ---
 ikacore_CV1k_cpld.v
+u1_pump.sv
 blit_regs.sv
 blit_fetch.sv
 blit_gov.sv
@@ -50,4 +54,5 @@ blit_vram_beh.sv
 blit_video.sv
 ikacore_CV1k.sv
 tb/cpu_tracer.sv
+tb/ioctl_sim.sv
 tb/tb_cv1k.sv
