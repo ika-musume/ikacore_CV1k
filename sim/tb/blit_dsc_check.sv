@@ -9,11 +9,16 @@
 // prefetch train, so it is a hard $fatal.
 //
 // Checked:
-//   * src reads  - (row, x) against the CURRENT draw descriptor: row must
-//     be sy0 -/+ r (mod 4096, r < rows), x within [sx_lo-3, sx_hi] (the -3
-//     covers the flip-mode 4-px beat base adjust; a base 0..2 px below the
-//     row start appears as x >= 8189 in the PREVIOUS row's x field, handled
-//     as the wrapped interpretation).
+//   * src reads  - (row, x) against the CURRENT or PREVIOUS draw
+//     descriptor: row must be sy0 -/+ r (mod 4096, r < rows), x within
+//     [sx_lo-3, sx_hi] (the -3 covers the flip-mode 4-px beat base adjust;
+//     a base 0..2 px below the row start appears as x >= 8189 in the
+//     PREVIOUS row's x field, handled as the wrapped interpretation).
+//     prv is needed since H7a: an i_rd_vld stall can hold an op's LAST
+//     beat un-requested in B1 while the BACK setup already commits the
+//     next descriptor - exactly one slip, bounded by the engine's own
+//     bank_clear gate (H0-H6 behavior, rd_vld tied 1, never stalls reads
+//     so beats always matched cur).
 //   * writes (per enabled lane) - lane address against the current draw,
 //     the two PREVIOUS draws (pipe depth: stalled beats of up to two older
 //     ops may retire after the next descriptor strobes), or the last
@@ -94,16 +99,20 @@ module blit_dsc_check (
         end
     end
 
-    // one (row, x) interpretation of a src beat against the current draw.
+    // one (row, x) interpretation of a src beat against one draw descriptor.
     // x may be NEGATIVE (wrapped interpretation: a flip-mode beat base up
     // to 3 px below the row start), so the lower bound sx_lo-3 is unclamped.
-    function automatic logic f_src_ok(input int y, input int x);
+    function automatic logic f_src_ok_d(input dsc_t d, input int y, input int x);
         int dy;
-        if (!cur.valid) return 1'b0;
-        dy = cur.flipy ? ((int'(cur.sy0) - y) & 4095)
-                       : ((y - int'(cur.sy0)) & 4095);
-        return (dy < int'(cur.rows)) &&
-               (x >= int'(cur.sx_lo) - 3) && (x <= int'(cur.sx_hi));
+        if (!d.valid) return 1'b0;
+        dy = d.flipy ? ((int'(d.sy0) - y) & 4095)
+                     : ((y - int'(d.sy0)) & 4095);
+        return (dy < int'(d.rows)) &&
+               (x >= int'(d.sx_lo) - 3) && (x <= int'(d.sx_hi));
+    endfunction
+
+    function automatic logic f_src_ok(input int y, input int x);
+        return f_src_ok_d(cur, y, x) || f_src_ok_d(prv, y, x);
     endfunction
 
     // one write-lane flat index against one draw descriptor

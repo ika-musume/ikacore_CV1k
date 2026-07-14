@@ -499,6 +499,18 @@ module blit_draw (
                                (b2_v && (b2_bk == bk_sel)) ||
                                (b3_v && (b3_bk == bk_sel)) ||
                                (b4_v && (b4_bk == bk_sel)));
+    // S3 writes the mode bank the op is ABOUT to take (~bk_sel): it must
+    // not fire while any pipe beat still carries that bank.  Latent since
+    // H3 (two fast ops can decode through S3 while an older op's tail
+    // beats sit in a stalled pipe - reachable via wr-stall/steal, and
+    // readily via H7a rd_vld stalls); B_ROW's bank_clear gate is too late,
+    // the programming itself is the clobber.  With an unstalled pipe the
+    // target bank drains before any S3 can reach it, so H0-H6 behavior is
+    // bit-identical (re-proven by the H6/FASTBOOT reruns).
+    wire        s3_bank_clear = !((b1_v && (b1_bk == ~bk_sel)) ||
+                                  (b2_v && (b2_bk == ~bk_sel)) ||
+                                  (b3_v && (b3_bk == ~bk_sel)) ||
+                                  (b4_v && (b4_bk == ~bk_sel)));
     wire [2:0]  lane_cnt  = q_px1 ? 3'd1 :
                             (px_left >= 16'sd4) ? 3'd4 : px_left[2:0];
 
@@ -604,9 +616,10 @@ module blit_draw (
             end
 
             // S3: extents, bases, hazard rects; program the mode bank
+            // (held until the target bank's pipe beats have drained)
             B_S3: begin
                 if ((starty >= dimy_e) || (startx >= dimx_e)) bst <= B_IDLE;
-                else begin
+                else if (s3_bank_clear) begin
                     automatic logic signed [17:0] npx    = dimx_e - startx;
                     automatic logic        [12:0] sxb    =
                         q_flipx ? 13'(sx0 - 15'(startx)) : 13'(sx0 + 15'(startx));
