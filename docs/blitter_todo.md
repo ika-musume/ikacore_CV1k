@@ -28,7 +28,7 @@ measurement or another item · `N/A`.
 | Area | State |
 |---|---|
 | Board-level sim (SH-3 HS3 core + U4 NOR + U1 SDRAM + U2 NAND + U13 CPLD, shared bus, Verilator) | **DONE** — boots Ibara U4, executes from flash, CKIO/BSC verified vs SH7709S manual; **H0 done: CPU now clears the VBLANK loop, runs the attract sequencer, and issues double-buffered blitter EXECs** |
-| Blitter RTL | **H0+H2+H3+H4+H5+H6 done** — CS6 register file `sim/CV1k_blit/blit_regs.sv` (I-1.1) + BREQ/BACK fetch unit `sim/CV1k_blit/blit_fetch.sv` (I-4.1, 40 KB attribute FIFO, fifo_study-frozen depths, runtime-paced) + draw engine `sim/CV1k_blit/blit_draw.sv` (I-1.5/6/7, 4 px/clk native speed, pixel-exact vs golden over all 8 attract traces end-to-end) + timing governor `sim/CV1k_blit/blit_gov.sv` (I-2.1/2.2/2.3/2.5: runtime-loadable cost tables, governed BUSY + IRQ1, 512-chunk fetch window, steal phase anchored on the real scanline; anchors 93/189/12,090 VCLK + 17.5 µs + 58.77 µs + 163.91 µs incl. 3 steals all hit in the board sim) + video scanout `sim/CV1k_blit/blit_video.sv` (I-3.1/2/3: 60.0184 Hz sync gen, per-line scroll latch, real line-fetch steal, vsync IRQ2, 240p capture pixel-exact vs the golden crop) live; **H6 conformance DONE 2026-07-14** (`sim/run_h6_conformance.sh`, NO RTL change — RTL trace-equivalent to the P-stage C++ engine over all 8 traces / 80,859 execs: pixel+cost+timeline-binding, and the governor timeline proven BIT-IDENTICAL under execution-plane feed jitter); **H7 steps 1+2 DONE 2026-07-15** — core repackaged into `sim/CV1k_blit/` behind ONE instance `blit_top.sv` (pure code motion; video px stream + gov table port now real boundary ports) and `blit_draw` grew the OUTPUT-ONLY descriptor sideband + `i_rd_vld` read-stall port (tied 1 = bit-identical; full-H6 + FASTBOOT-22M re-accepted, footprint checker `tb/blit_dsc_check.sv` clean over 9.13 G src beats / 26.1 G wr lanes); **H7 steps 3+4 DONE 2026-07-15** — NEW `sim/CV1k_blit/blit_batch.sv` (K=8-objline train batcher: strictly serial R/W train port exactly as the DES charges, single-buffered 16 KB pixel-lane staging, ONE drain-writes-before-any-read rule = waitpipe/strict/W→R ordering, descriptor-counted serve with one parked read = the whole `i_rd_vld` protocol, strict/oversize fallback) proven TRANSPARENT — all 8 FULL traces pixel/cost/bind-exact with gold/vram/gov hashes BIT-IDENTICAL to the frozen H6 logs incl. seeded port jitter (`sim/run_h7a_step3.sh`); NEW `sim/CV1k_blit/ddr3_harness.sv` (train arbiter video>batch>NAND-stub on the MiSTer DDRAM face) + `blit_video` PREFETCH param (1-hline line-train prefetch, timing outputs untouched, board default bit-identical) + `tb/tb_h7` stat-timed stack (ddr3_stat.h DDRAM slave @ target clocks, paced feed, per-op lateness monitor): 8 traces × 2 HPS-tail seeds × 300 execs pixel-exact, ZERO ops > 1 hline (worst +19.8 µs = study's +9.83 µs + documented BURSTCNT=1 write cost; others ≤ +1.7 µs), final frames through prefetch+arbitration PIXEL-EXACT (`sim/run_h7a_step4.sh`); latent H3 `blit_draw` S3 mode-bank clobber found & fixed (inert unstalled — every frozen hash unchanged, FASTBOOT 22M re-accepted); NEXT = step 5 NAND-through-harness boot (H7a accept 5), then H7b on-target |
+| Blitter RTL | **H0+H2+H3+H4+H5+H6 done** — CS6 register file `sim/CV1k_blit/blit_regs.sv` (I-1.1) + BREQ/BACK fetch unit `sim/CV1k_blit/blit_fetch.sv` (I-4.1, 40 KB attribute FIFO, fifo_study-frozen depths, runtime-paced) + draw engine `sim/CV1k_blit/blit_draw.sv` (I-1.5/6/7, 4 px/clk native speed, pixel-exact vs golden over all 8 attract traces end-to-end) + timing governor `sim/CV1k_blit/blit_gov.sv` (I-2.1/2.2/2.3/2.5: runtime-loadable cost tables, governed BUSY + IRQ1, 512-chunk fetch window, steal phase anchored on the real scanline; anchors 93/189/12,090 VCLK + 17.5 µs + 58.77 µs + 163.91 µs incl. 3 steals all hit in the board sim) + video scanout `sim/CV1k_blit/blit_video.sv` (I-3.1/2/3: 60.0184 Hz sync gen, per-line scroll latch, real line-fetch steal, vsync IRQ2, 240p capture pixel-exact vs the golden crop) live; **H6 conformance DONE 2026-07-14** (`sim/run_h6_conformance.sh`, NO RTL change — RTL trace-equivalent to the P-stage C++ engine over all 8 traces / 80,859 execs: pixel+cost+timeline-binding, and the governor timeline proven BIT-IDENTICAL under execution-plane feed jitter); **H7 steps 1+2 DONE 2026-07-15** — core repackaged into `sim/CV1k_blit/` behind ONE instance `blit_top.sv` (pure code motion; video px stream + gov table port now real boundary ports) and `blit_draw` grew the OUTPUT-ONLY descriptor sideband + `i_rd_vld` read-stall port (tied 1 = bit-identical; full-H6 + FASTBOOT-22M re-accepted, footprint checker `tb/blit_dsc_check.sv` clean over 9.13 G src beats / 26.1 G wr lanes); **H7 steps 3+4 DONE 2026-07-15** — NEW `sim/CV1k_blit/blit_batch.sv` (K=8-objline train batcher: strictly serial R/W train port exactly as the DES charges, single-buffered 16 KB pixel-lane staging, ONE drain-writes-before-any-read rule = waitpipe/strict/W→R ordering, descriptor-counted serve with one parked read = the whole `i_rd_vld` protocol, strict/oversize fallback) proven TRANSPARENT — all 8 FULL traces pixel/cost/bind-exact with gold/vram/gov hashes BIT-IDENTICAL to the frozen H6 logs incl. seeded port jitter (`sim/run_h7a_step3.sh`); NEW `sim/CV1k_blit/ddr3_harness.sv` (train arbiter video>batch>NAND-stub on the MiSTer DDRAM face) + `blit_video` PREFETCH param (1-hline line-train prefetch, timing outputs untouched, board default bit-identical) + `tb/tb_h7` stat-timed stack (ddr3_stat.h DDRAM slave @ target clocks, paced feed, per-op lateness monitor): 8 traces × 2 HPS-tail seeds × 300 execs pixel-exact, ZERO ops > 1 hline (worst +19.8 µs = study's +9.83 µs + documented BURSTCNT=1 write cost; others ≤ +1.7 µs), final frames through prefetch+arbitration PIXEL-EXACT (`sim/run_h7a_step4.sh`); latent H3 `blit_draw` S3 mode-bank clobber found & fixed (inert unstalled — every frozen hash unchanged, FASTBOOT 22M re-accepted); **H7 step 5 DONE 2026-07-15** — NEW `sim/CV1k_nand.sv` (synthesizable NAND read-path frontend, drop-in for the vendor pin roles, serves the DDR3-resident U2 image via the harness `i_nd_*` client) + board `+define+CV1K_NAND` swap (`CV1k_nand` + `CV1k_ddr3_harness` + `sim/ddr3_beh.sv`): unit accept 19,589 bytes byte-exact vs the raw dump, and the FASTBOOT boot's NAND read stream BYTE-IDENTICAL between the vendor `nand_model` and CV1k_nand (H7a accept 5); sim renamed to a `CV1k_*` board layer (`CV1k_cpld`/`CV1k_sdram_control`/`CV1k_ddr3_harness`/`CV1k_nand`); NEXT = **H7b sim-first plan of record agreed 2026-07-16** (Part 0b §"H7b build order"); **H7b.1 file split DONE 2026-07-16** (`ikacore_CV1k.sv` portable top + `ikacore_CV1k_emu.sv` module emu + RTL reset sequencer; all three board configs byte-identical to pre-refactor baselines, emu lint + port parity green); **H7b.D diag ROMs sim-side DONE 2026-07-17** (`sim/diag/` — diag-mini 788 B boot smoke + diag-1k 1,568 B 1,024-gradient-circle/wave soak, PIXEL-EXACT vs blitgold and vram_hash-identical across vendor/MISTER arms; the H7b.2+ default smoke workload); **H7b.2 stack+clocks DONE 2026-07-17** (blit domain @153.6 with the 2-FF PCEN3 enable + `[pcen23]` same-instant checker; blit_top→blit_batch→ONE shared CV1k_ddr3_harness→DDRAM face in every arm, blit_vram_beh out; vendor+MISTER FASTBOOT CPU traces BYTE-IDENTICAL to the pre-change datum, EXEC streams/IRQ2 instants identical, diag VRAM byte-identical via the DDR3 write-back overlay, NAND stream byte-identical, anchors ALL PASS on the FASTBOOT build; IRQ1 1–6 CKIO early = the governor's documented pop-per-clock quantization shrinking at 153.6); **H7b.3 MiSTer TB DONE 2026-07-17** (`tb/ikacore_CV1k_tb.sv` + C++ main on the exact 614.4 MHz grid + region-mapped stat DdrSlave — fastboot ibara boots the full final stack incl. CV1k_nand-from-DDR3, VRAM AND the scanout-frame capture PIXEL-EXACT vs blitgold at stat timing seed 1; findings: harness needs 1 idle cycle between read bursts [H7b.8 f2sdram check], diag-mini's clear src wrapped into dst = strict-path 9 ms/frame at real latency — ROM fixed to src row 3776) → next H7b.4 ioctl → H7b.5 YMZ client → H7b.6 video face → H7b.7 regression → H7b.8 on-target |
 | VRAM (MT46V16M16 DDR) model in sim | **behavioral backend live (H3)** — `sim/blit_vram_beh.sv` (64 MB flat-pixel, 3 channels, per-pixel write lanes) serves the draw engine in board sim + trace TB; the vendor DDR model `sim/models/mt46v16m16.v` stays for I-4.2, the MiSTer DDR3 adapter (I-4.3) respins the same channels to ready/valid |
 | Golden pixel model (MAME port) | **DONE 2026-07-13 (H1+H1b)** — `sim/blitgold/` C++ port of MAME `cv1k_v`; 7 unit vectors pass + pixel-correct attract frames from ibarao/futaribl/ddpdfk `.blit` traces (3 games). H1b closed the loop: a `+blitdump` testbench emitter backdoor-walks the op list from the U1 SDRAM on each EXEC; replaying **our own** board-sim output renders a coherent Ibara boot/loading frame |
 | PCB measurements | **none taken** — flex PCB probe plan frozen Rev A (`docs/pcb_probe_plan.md`); **long-lead** (sourcing + PCB design), will arrive late — plan is to finish the RTL prototype (H0–H6) before the rig exists; board data later lands in the runtime-loadable governor tables |
@@ -251,6 +251,161 @@ not implementation. Sim uses pseudo-CDC (phase offset) between CKIO and
     (port config == the M-DDR3 benchmarked config); HPS loads the
     U4/U2 images.  Accept: on-target frame capture matches sim.
 
+### H7b build order (plan of record, agreed 2026-07-16)
+
+Supersedes the one-line "H7b — on-target" split above: H7b is now
+**sim-first** (MiSTer emu integration completed and accepted entirely in
+`sim/`), then the Quartus/on-target pass.  `srcs/` (latest MiSTer
+framework drop) is read-only reference until H7b.8.
+
+Facts pinned 2026-07-16 (do not re-derive):
+- **Port authority** = `srcs/sys/emu_ports.vh` (`Template.sv` is just an
+  include of it).  `benchmarks/MiSTerDDR3Test-CV1k/DDR3Test.sv` differs
+  (HPS_BUS [48:0] vs [45:0], no HDMI_BLACKOUT/HDMI_BOB_DEINT) — srcs
+  wins; DDR3Test stays the DDRAM/SDRAM usage reference.
+- **`hps_io` ioctl_addr is [26:0] = 128 MiB**; the u2 image alone is
+  132 MiB (0x840_0000 incl. spare), so ioctl_addr WRAPS mid-NAND — the
+  ioctl decoder keys on its own byte counter, never on ioctl_addr.
+- **Two-file split** (the Arcade-Psychic5 pattern, user-specified):
+  `sim/ikacore_CV1k_emu.sv` = `module emu` — framework ports, hps_io
+  (WIDE=0, 8-bit ioctl), PLL, CONF_STR (DIP S2 / key map / OSD), reset
+  policy, video output stage; Quartus-only, lint-stubbed in sim.
+  `sim/ikacore_CV1k.sv` = **portable core top** — clocks, resets, JAMMA
+  inputs, DSW, video/sound, ioctl group, SDRAM pins, DDRAM face.  The
+  MiSTer TB instantiates the portable top DIRECTLY (no sim-only `ifdef`
+  ports anywhere).
+- **Clocks**: CPU domain 102.4 MHz (CKIO PCEN ÷2; double-pump SDRAM
+  lives here); blit domain 153.6 MHz (blit_top + blit_batch +
+  CV1k_ddr3_harness + CV1k_nand, CKIO PCEN ÷3 — the tb_h7-proven
+  config; gov half-VCLK base = every 153.6 clock).  ONE fractional PLL
+  VCO on target (1228.8 MHz = 153.6×8 = 102.4×12; static fracn — the
+  DDR3Test runtime-reconfig trick was benchmark-only).  The domains are
+  RELATED clocks with coincident edges on the 51.2 MHz CKIO grid: each
+  domain regenerates its OWN CKIO enable (÷2 / ÷3), phase-anchored once
+  at reset; every crossing surface (CS6 face, BREQ/BACK + bf_* pin mux,
+  D-bus fetch data, IRQ1/2, CPLD↔CV1k_nand strobes) changes on grid
+  edge k and is consumed at k+1 by SH7709 bus protocol →
+  set_multicycle_path to the next grid edge; the hold check at the
+  coincident edge captures OLD data = Verilator same-timestep NBA
+  semantics, so sim == silicon by construction.  Fallback if hold
+  closure fights: small fixed phase nudge on the 153.6 output.
+- **Memory models**: the DDR3 statistical model STAYS C++ (tb_h7_main's
+  `DdrSlave` + `ddr3_stat.h`), extended with a region map — VRAM 64 MB
+  RAM-backed; NAND/YMZ served from the dumps via fseek/pread (one-shot
+  fread acceptable); writes allowed in all regions (ioctl).  The SDRAM
+  chip model STAYS SV (`models/mister_128mb.sv`, the validated
+  double-pump datum with the AS4C32M16SB checkers), instantiated by the
+  TB.  NO SV port of the stat model: Verilator compiles SV to C++
+  anyway, and a port re-validates a second implementation of calibrated
+  timing for zero speed gain.  `ddr3_beh.sv` remains for the SV-only
+  unit TBs (tb_nand).
+- **DDR3 byte map** (inside the core-owned 256 MB window): VRAM 64 MB @
+  0x3000_0000 (= VRAM_BASE_W 0x0600_0000 words, unchanged) · NAND u2
+  132 MB @ 0x3400_0000 · YMZ 16 MB @ 0x3D00_0000 as fixed 8 MB chip
+  slots (u23 @ +0, u24 @ +0x80_0000 = the PCB chip-select decode).
+- **ioctl stream, fixed game-agnostic layout** (MRA zero-pads short
+  parts): NAND u2 [0, 0x840_0000) → DDR3 · YMZ [0x840_0000,
+  0x940_0000) → DDR3 · u4 ×2 [0x940_0000, 0x980_0000) → pump NOR
+  window, address rebased to 0.  Byte order: pump `NOR_BSWAP=0`
+  assembles {odd,even} halfwords (stream `3d,df` → 0xdf3d = MX29LV160
+  lanes, even byte on DQ[7:0]); the decoder preserves byte-pair parity;
+  accept probes NOR halfword[0] == 0xdf3d.  DDR3 lane rule: byte c →
+  64-bit lane c%8 little-endian (= CV1k_nand page layout).
+- **Reset policy (MiSTer compliance)**: hard = RESET | ~pll_locked |
+  ioctl_download → full chain (pump re-init + CPU POR); soft = OSD
+  status[0] | buttons[1] → CPU/blitter reboot only, pump init state and
+  SDRAM/DDR3 contents preserved.  tb_cv1k's `#2_000`/`#205_000` ordering
+  becomes an RTL sequencer in the portable top: INITRST → pump →
+  `o_INIT_DONE` gates CPU POR, download holds the CPU.
+- **Screen rotation: ignored for now** (user 2026-07-16 — pivot
+  monitor; most users rotate).  Post-YMZ idea recorded: a test core
+  permanently overlaying DDR3 bandwidth measurements on screen once all
+  cores boot.
+- **Cost-model decoupling contingency** (user 2026-07-16): PCB
+  measurements (M-3/M-4/M-5) may show BREQ / cadence quantization on
+  the VRAM DDR clock grid rather than CKIO; asserted values must follow
+  the original timing.  The governor's runtime-loadable tables + the
+  153.6 domain (exactly 2 ticks per VCLK) make that a tick-unit/table
+  re-base, not a structural change.  The MAME+Buffi golden model is
+  unaffected as-is.
+- **blitgold/blitstudy per-unit refactor** for the MiSTer TB = a
+  separate post-H7b session (user 2026-07-16); their interfaces stay
+  frozen through H7b so accepts keep diffing against them.
+- Open decisions locked 2026-07-16: byte-counter ioctl decode · fixed
+  padded MRA layout · tb_cv1k vendor-model build kept as frozen
+  regression datum · fastboot is sim-only (real boot at target speed is
+  a few seconds).
+
+Steps (accepts in parentheses):
+- **H7b.1 — file split + portable top**: `ikacore_CV1k_emu.sv` (module
+  emu; pll/hps_io lint stubs; port-parity script vs emu_ports.vh) +
+  `ikacore_CV1k.sv` portable ports (two clocks in — 153.6 consumed at
+  H7b.2; INITRST/SOFTRST + reset sequencer + pump `o_INIT_DONE`; JAMMA
+  inputs per MAME cv1k.cpp PORT_C/D/F/L; blit DSW_S2 param → port;
+  SDRAM pins + DDRAM face + video/sound taps out; mister_128mb +
+  ddr3_beh move to the TB).  (Accept: all three board configs rebuild;
+  FASTBOOT smokes byte-identical to pre-refactor baselines; lint +
+  port-parity pass.)
+- **H7b.D — diag ROMs** (parallel track; sh-elf binutils or a minimal
+  in-repo assembler): `diag-mini` — vectors → NOR→SDRAM copy → UPLOAD
+  tile → DRAW rects → STATUS poll → IRQ2 loop; every boot-path leg in
+  ~1–2 M CKIO.  `diag-1k` — 1,024 B/W circles, LFSR motion,
+  double-buffered per-frame lists; C++ mirrors the LFSR, blitgold
+  renders golden frames.  Validated on the vendor-model board sim
+  first, then the default smoke workload for all later steps; later
+  reused for on-target bring-up (distributable, no game ROMs), OSD
+  SDRAM-phase tuning, and NOR-injection-rig LA payloads (M-3/M-5/M-8).
+- **H7b.2 — full DDR3 stack in-system + two-clock shell** — **DONE
+  2026-07-17** (accepts EXCEEDED: vendor + MISTER FASTBOOT CPU traces
+  byte-identical, not just cadence-matched; see the Part V entry):
+  blit_vram_beh out of the portable top; blit_top beat channels →
+  blit_batch → ONE shared CV1k_ddr3_harness (video lf + batch prd/pwr +
+  NAND nd) → DDRAM face; blit domain to 153.6 with its ÷3 enable; CDC
+  audit per the scheme above.  (Accept: FASTBOOT + diag-mini vs the
+  behavioral-VRAM datum — EXEC stream/IRQ2 cadence match; C++ render of
+  the DDR3 VRAM region = 0 bad px; NAND stream byte-identical;
+  PCEN2/PCEN3 same-instant assertion clean.)
+- **H7b.3 — `ikacore_CV1k_tb.sv` + C++ main** — **DONE 2026-07-17**
+  (fastboot ibara boot pixel-exact incl. the scanout-frame accept; two
+  findings: harness read-burst gap contract + diag-mini strict-clear —
+  Part V entry): the MiSTer top-level TB
+  (portable top + mister_128mb + extended DdrSlave; dual-clock C++
+  scheduler on the 1/614.4 MHz half-period grid — 153.6 toggles every
+  2 units, 102.4 every 3, coincident every 12); fastboot preloads
+  (SDRAM work-RAM banks + u4_fastboot NOR window; DDR3 file-backed).
+  (Accept: fastboot ibara boots the full final stack; frame captured
+  off the video face == the `sim/blitgold` board goldens.)
+- **H7b.4 — ioctl option + decoder**: `CV1k_ioctl.sv` byte-counter
+  region decode per the fixed layout; DDR3 8-byte packer behind a
+  download-gated DDRAM mux (core in reset ⇒ arbiter untouched); u4
+  rebased into the pump loader; ioctl_sim streams the concatenated set
+  under `+ioctl`.  (Accept: ioctl-loaded DDR3/SDRAM checksums == the
+  fastboot preload; boot-to-first-frame hash identical in both load
+  modes; NOR halfword[0]==0xdf3d probe; truncated `+ioctl_bytes` smoke
+  for CI, the full 152 MB stream once.)
+- **H7b.5 — YMZ client**: harness client 3 (lowest priority,
+  single-train — the reserved slot) + TB stub reader.  (Accept: u23/u24
+  byte-exact readback through the port under diag-1k load.)
+- **H7b.6 — video face**: ARGB1555 → 5→8 VGA_R/G/B, CE_PIXEL = 6.4 MHz
+  CE, CLK_VIDEO = 153.6; explicit o_hsync + porch split in blit_video
+  (widths provisional until M-1; timing anchors untouched).  (Accept:
+  video-face capture pixel-exact vs golden crop; rates = the H5
+  60.0184 Hz numbers.)
+- **H7b.7 — full regression + wall-clock snapshot**: `run_h7b.sh` —
+  {fastboot, ioctl} × {ibara boot→N attract frames, diag-1k soak} with
+  stat timing live.  (Accept: 0 ops > 1 hline; frame hashes vs
+  blitgold; NAND stream; FIFO depths hold; walltime recorded — the
+  data for ever revisiting the SDRAM-model-language question.)
+- **H7b.8 — on-target**: `srcs/` drop-in of emu + `CV1k_*`/`blit_*`;
+  PLL (1228.8 MHz VCO; SDRAM_CLK output starting ≈ +7,800 ps ≈ −72°
+  lead — scaled from Psychic5 +13,889 ps/−60°@60 MHz and BubSys
+  +11,249 ps/−61.4°@73.74 MHz; OSD dynamic-phase nudge via the PLL
+  reconfig MGMT port kept as a PERMANENT feature — module variance);
+  SDC (CKIO-grid multicycles + SDRAM_CLK phase sweep — closes the
+  double-pump leftover); Quartus hygiene pass; real hps_io + MRA per
+  the fixed layout.  (Accept: on-target frame capture matches sim,
+  H7a lateness/underrun checks re-run on target.)
+
 Trace-driven vs board-sim: H3/H4/H6 testbenches are `.blit`-trace-driven;
 board sim is reserved for H2/H5/integration accepts — so H2 RTL can be
 *built* immediately and H0 only gates its *acceptance*. Pre-H2 punch
@@ -312,7 +467,7 @@ Order = agreed build order (function first → timing layer → video → board)
 |---|---|---|---|---|---|
 | I-4.1 | Wire blitter into `ikacore_CV1k.sv` CS6 + BREQ/BACK on HS3 (**pulled forward to prototype stage H2** — HS3 bsc.sv already implements BREQ/BACK) | [BD §2, §5] | I-1.1 | **DONE** (2026-07-13, H2) | game writes op lists, blitter fetches via bus mastering in board sim — PASSED: `+blitfifo` == `+blitdump` byte-identical, 5 EXECs / 84 k lines, real Ibara boot |
 | I-4.2 | MT46V16M16 vendor model (or DDR-faithful behavioral) in sim | [BD §6] | I-2.6 | TODO | model passes init/LMR sequence of I-2.6 |
-| I-4.3 | **= H7** MiSTer platform integration, three layers: `blit_draw` + output-only descriptor sideband (core otherwise frozen) → NEW platform-agnostic `blit_batch` (K=8-objline trains, ~24 KB ping-pong staging, hazard fallback) → ONE swappable `ddr3_harness` train-level arbiter (video > draw > NAND/NOR flash > YMZ) to HPS-DDR3; sim-first with the `ddr3_stat.h` statistical port model (H7a), then on-target f2sdram (H7b); Agilex 5 (or other) port swaps only the harness | [BD §13] | H6 | **H7a steps 1–4 DONE 2026-07-15** (accepts 1–4 met); step 5 NAND boot + H7b on-target remain | H7a: pixel-exact across latency seeds, no scanout underrun, governor timeline bit-identical w/ and w/o DDR3 model, FIFO depths hold, boot w/ harness-served NAND; H7b: on-target frame capture matches sim |
+| I-4.3 | **= H7** MiSTer platform integration, three layers: `blit_draw` + output-only descriptor sideband (core otherwise frozen) → NEW platform-agnostic `blit_batch` (K=8-objline trains, ~24 KB ping-pong staging, hazard fallback) → ONE swappable `CV1k_ddr3_harness` train-level arbiter (video > draw > NAND/NOR flash > YMZ) to HPS-DDR3; sim-first with the `ddr3_stat.h` statistical port model (H7a), then on-target f2sdram (H7b); Agilex 5 (or other) port swaps only the harness | [BD §13] | H6 | **H7a steps 1–5 DONE 2026-07-15** (all H7a accepts met, incl. boot w/ harness-served NAND byte-identical to the physical chip via `CV1k_nand`); H7b on-target remains | H7a: pixel-exact across latency seeds, no scanout underrun, governor timeline bit-identical w/ and w/o DDR3 model, FIFO depths hold, boot w/ harness-served NAND ✓; H7b: on-target frame capture matches sim |
 
 ---
 
@@ -344,7 +499,7 @@ One row per tunable. `Conf` = confirmed by: `[C]` cross-verified source,
 | ID | Param | Value | Level | Source | Conf | Notes |
 |---|---|---|---|---|---|---|
 | P-20 | `T_CHUNK_IDLE` clipped-op chunk cadence | 700 | B | [MAME] fit of [CLIP] 17.5 µs | | M-5 |
-| P-21 | `T_CHUNK_UPLD` upload chunk gap | 1130 | B | [PDF] | | M-5; why ≠ P-20? |
+| P-21 | `T_CHUNK_UPLD` upload chunk gap | 1130 | B | [PDF] | | M-5; why ≠ P-20? (candidates: BACK-ack under CPU load vs upload↔VRAM-insert drain coupling — BD §7.5; M-5 should vary VRAM load) |
 | P-22 | EXEC write → BREQ# (CKIO cycles) | **?** | A | none | | M-3 |
 | P-23 | BREQ→BACK grant latency distribution | **?** | A | none | | M-4 (histogram) |
 | P-24 | chunk burst beats | 16 × 32 bit | C | [PDF] | [C] | |
@@ -421,6 +576,312 @@ Params updated: P-xx old→new (Part II row edited, Conf set to [M-nn])
 ---
 
 ## Part V — Update log (newest first)
+
+- 2026-07-17  [claude]  **H7b.2 + H7b.3 DONE — full DDR3 stack in-system on
+  the two-clock shell, and the MiSTer top-level TB (ikacore_CV1k_tb) boots
+  the final stack against the region-mapped C++ stat slave.**
+
+  **H7b.2 (stack + clocks).**  `ikacore_CV1k.sv`: blit domain =
+  `i_EMU_CLK153M` for blit_top + blit_batch + CV1k_ddr3_harness +
+  CV1k_nand; blit_vram_beh REMOVED from the top (H6 unit rigs keep it);
+  blit_top grew `parameter PREFETCH` (=1 on the board: blit_video's
+  1-hline line-train face exported as o_lf_*; default 0 keeps H6 rigs
+  bit-identical); ONE shared harness arbitrates video lf > batch prd/pwr >
+  NAND nd onto the DDRAM face (o_DDRAM_CLK = 153.6); CV1k_nand's image
+  base moved to the plan-of-record map (word 0x0680_0000 = byte
+  0x3400_0000).  The ÷3 enable is a 2-FF sampler of the CPU domain's
+  registered CKIO_PCEN (`pcen3 <= q & ~qq`): it fires at EXACTLY the same
+  $time instants as PCEN — including the very first CKIO rise after POR
+  (PCEN's own half-period is the observable) — so the blit domain's
+  CKIO-grid phase is identical to the single-clock datum by construction.
+  A sim-only `[pcen23]` same-instant checker (the accept assertion)
+  records both sides' last qualified-edge times and fails on divergence —
+  it caught the first TB clock-phase attempt: HS3's ckio_ph starts
+  toggling IN the release timestep (tb blocking assign), so CKIO rises at
+  t = 15 mod 20 ns, not 5 — tb_cv1k's 153.6 generator is phased
+  accordingly (rises 15.000/21.667/28.333 +20k; the ±0.33 ps ps-grid
+  rounding sits on mid-grid edges nothing samples, coincident edges are
+  exact).  CDC audit table lives at the blitter section of
+  ikacore_CV1k.sv; H7b.8 SDC notes: the PCEN sample path is a mid-grid
+  102.4→153.6 launch with a 2/12-grid (3.26 ns) window; the CS6 o_D
+  STATUS draw-floor term and the NAND dq/rb_n outputs move mid-grid
+  (max-delay paths; CKIO-visible values unchanged since the governed
+  window ≥ the datapath).  `ddr3_beh` (the TB-level slave) grew a
+  write-back overlay (assoc array, BE-merged over the file/zero
+  background, peek()/poke() for the TB) = the VRAM region; tb_cv1k
+  instantiates it UNCONDITIONALLY (IMAGE="" outside CV1K_NAND) at the
+  153.6 clock, and +blitvram / the +blitframe self-check read the DDR3
+  VRAM region.  tb_cv1k's blit-side taps (blitdump/fifo/busy/irq1/anchor
+  dbg/frame + dsc_check) moved to the blit clock.  NEW `+irq2log=<f>`:
+  IRQ1/IRQ2 pin-fall $times observed from the CPU side (both shapers
+  update at CKIO-rise instants → exactly comparable across the clock
+  move; added to the datum build first — all three FASTBOOT traces stayed
+  sha-identical to the H7b.1 baselines, proving the monitor inert).
+  ACCEPT (vs the pre-change behavioral-VRAM datum; `[pcen23]` 0 misphase
+  in every run): vendor FASTBOOT 2M AND 8M CPU traces BYTE-IDENTICAL (8M
+  includes 4 real game EXECs — the whole clock move + stack swap is
+  invisible to the CPU); MISTER 2M trace byte-identical; EXEC streams +
+  IRQ2 fall instants identical everywhere; diag-mini + diag-1k EXEC
+  streams and 64 MB VRAM dumps BYTE-IDENTICAL to datum with blitgold
+  PIXEL-EXACT (VRAM sourced from the DDR3 region); +nandbytes stream
+  byte-identical (CV1k_nand at 153.6; NOTE the stream legitimately starts
+  with the ID bytes EC F1 … — it is not a prefix of the dump); the
+  +blitanchor suite ALL PASS **on the FASTBOOT build** (on the plain
+  build the boot never leaves the copy loop, the bus never goes quiet,
+  and anchor B times the BSC, not the governor — mis-invocation, not a
+  regression); emu lint + port parity + tb_nand PASS.  One visible
+  timing delta, understood and accepted: IRQ1 falls land 1–6 CKIO EARLY
+  vs datum — the governor pops at most one queued op per CLOCK (its
+  header-documented few-tick non-cumulative error), so at 153.6 the END
+  pop lands CLOSER to the pure cost model; EXEC/IRQ2/STATUS-at-CKIO
+  semantics are unchanged.
+
+  **H7b.3 (MiSTer top-level TB).**  NEW `sim/tb/ikacore_CV1k_tb.sv`
+  (portable top in the final MISTER_SDRAM+CV1K_NAND config +
+  mister_128mb + pad tristate + NOR/fastboot preloads + +norhex +
+  blitdump/irq2log/dsc_check/face-census taps; no vendor NDA models
+  compile in) + `sim/tb/ikacore_CV1k_tb_main.cpp` (clocks on the exact
+  dual-clock grid: unit U = 1/614.4 MHz, 153.6 toggles every 2 U, 102.4
+  every 3 U, coincident every 12 U, EXTAL2 every 9375 U = exact
+  32768 Hz; sim-time scale matches tb_cv1k, ps rendering per 12-U block;
+  --timing --cc build for the mt48 model's residual delays with the
+  standard eventsPending/nextTimeSlot drain) + `sim/build_cv1k_tb.sh`
+  ([FASTBOOT=1], separate obj dirs).  DdrSlave extended with the
+  plan-of-record region map: VRAM 64 MB RAM-backed @ word 0x0600_0000 ·
+  NAND file-backed roms/ibara/u2 @ 0x0680_0000 · YMZ u23/u24 8 MB slots
+  @ 0x07A0_0000 (zero-filled past the 4 MiB files) · non-VRAM writes into
+  a BE-merged overlay (the H7b.4 loader path); reads outside the map are
+  fatal.  Timing = tb_h7's calibrated slave verbatim (latency bookkeeping
+  in REAL ns so the calibration is timescale-free; --seed 0 perfect port,
+  seed≠0 stat + HPS tails) + a 1-dead-cycle gate between read bursts:
+  the harness reloads its return-queue head in that bubble — tb_h7's
+  G_CMD spacing sat 0.03 tick on the safe side of the float boundary and
+  seed 0's exact-2-tick spacing crossed it (stray-word $fatal).
+  **H7b.8 item: confirm f2sdram never returns read bursts gaplessly
+  back-to-back, or give the harness oq head a skid register.**
+  FINDING (why diag-mini first failed at stat timing): diag_mini.c's
+  draw_clear read src at (0,3968) with 240 rows → the source WRAPS mod
+  4096 into the destination rows, the engine correctly flags
+  self-overlap STRICT and beat-serializes → at real DDR3 latency every
+  8-px beat pays a fresh-train latency (~0.4 µs) and the clear alone
+  takes ~9 ms/frame (fixed-latency VRAM and ddr3_beh's GAP=4 hid this
+  completely; the tail of the last exec was still draining at $finish =
+  5,120 missing square px).  Games never wrap a big source into its
+  destination; the ROM now clears from src row 3776 (no wrap; diag-mini
+  788 B, vram_hash now 73efacbdb8c44383 — the H7b.D-logged mini hash is
+  stale; diag-1k unchanged).  Strict-path lesson recorded: strict ops
+  are latency-bound PER BEAT on the target stack (fine for the small
+  strict ops games use; `+prdlog` in the new TB prints train shapes — a
+  stream of len=2 requests means an op fell into the strict path).
+  ACCEPT: diag-mini seeds 0 + 1 — blitgold PIXEL-EXACT, EXEC stream AND
+  full 64 MB VRAM byte-identical to the tb_cv1k vendor-arm run
+  (cross-arm, cross-slave, cross-timing identity; read bursts 5,741 vs
+  the strict-path 175k); diag-1k seed-1 soak blitgold PIXEL-EXACT;
+  FASTBOOT ibara boots the FULL final stack (pump NOR window + work-RAM
+  preloads + CV1k_nand serving 750 page-fetch bursts from the C++ NAND
+  region), 8 M insns @ seed 1 = 9 EXECs / 17 scanned frames:
+  blitgold --raw PIXEL-EXACT (vram_hash 2c820e4c743ef273) AND the frame
+  captured off the video face vs blitgold --frame PIXEL-EXACT — the
+  H7b.3 board-golden accept; `[pcen23]` clean in every run.
+  NEXT = H7b.4 (CV1k_ioctl byte-counter decoder + DDR3 packer behind a
+  download-gated DDRAM mux; ioctl_sim streams the fixed MRA layout).
+
+- 2026-07-17  [claude]  **H7b.D DONE (sim side) — SH-3 diagnostic ROMs
+  boot the board and draw pixel-exactly on BOTH memory arms.**
+  Toolchain (no source build needed): `binutils-sh-elf` (apt) assembles/
+  links big-endian bare-metal; `sh4-linux-gnu-gcc -m4-nofpu -mb
+  -ffreestanding` is used as a COMPILE-ONLY stage (-S) — its LE-Linux
+  binutils/libgcc are never touched, `sh-elf-as -isa=sh3` gates any
+  SH-4-only opcode, and NO division/modulo is allowed in ROM code (no
+  big-endian libgcc).  NEW `sim/diag/`: `crt0.s` (the ibara U4 reset
+  block VERBATIM from disasm — WDT keys, FRQCR=0x0112, ICR1=0x8000, BSC
+  block incl. WCR2=0xFDD7/MCR=0x543C, SDMR3 poke @0xFFFFE880 = mode
+  0x220, PFC AAAA/1944/A544/0009/0000 + PEDR|=0x10 — then the boot's own
+  NOR→SDRAM copy-loop pattern), `diag.ld` (whole image linked at
+  0xAC000000 = P2 uncached work RAM: no cache management anywhere),
+  `mkhex.py` (pair-swapped byte-per-line 4 MiB U4 hex = MAME dump order),
+  `diag.h` (blit_regs map, op-word builders per golden.h, IRR0-polled
+  vsync: ICR1 falling-edge + SR-masked poll of the write-0-clear IRR0.2
+  latch — no vectors needed), `run_diag.sh` (accept driver, ARM=mister).
+  TB grew `+norhex=<hex>` (both arms, plusarg-gated — baselines
+  untouched): vendor arm reloads `u_u4_nor.ARRAY`, MISTER arm redirects
+  the NOR-window preload.
+  ROMs: **diag-mini** (748 bytes) — full boot-path smoke: CS0 fetch →
+  BSC init → self-copy → CS6 regs → UPLOAD+DRAW (4 corner squares +
+  sweeping square on black) → STATUS poll → IRR0 vsync pacing;
+  **diag-1k** (1,568 bytes + 14 KB bss) — 1,024 gradient circles, each
+  uniquely colored via per-draw TINT and randomized s/d ALPHA from ONE
+  8×8 gray radial sprite (A=1 inside), over a waving background built
+  from ONE 32×8 banded stripe tile (triangle-wave x offsets, tinted
+  blue), xorshift32-seeded positions/velocities/tints, double-buffered
+  lists, EXEC per vblank — 1,354 draws/frame ≈ 209k VCLK ≈ 2.82 ms
+  modeled busy at 60 Hz.
+  ACCEPTS: vendor arm — diag-mini 9 execs (draws=6/frame priced) and
+  diag-1k 26 execs (draws=1354/frame), both `+blitdump` streams replayed
+  by blitgold vs `+blitvram` = **PIXEL-EXACT (0 bad pixels)**; MISTER
+  arm — BOTH ROMs vram_hash-IDENTICAL to the vendor runs (mini
+  c63e2b5678c44383, 1k 53d953fd010f16ab): the CKIO-grid A/B equivalence
+  extends to the diag workloads.  Frame PNGs under
+  `sim/build/diag_*_frames/`.
+  TWO FINDINGS: (1) op lists are PLAIN stores the blitter DMA reads
+  behind the compiler's back — gcc legally sank them past the volatile
+  EXEC write (first EXEC fetched a stale END); `barrier()` compiler
+  fences now sit in blit_exec/ready_wait/vsync_wait (`diag.h`) —
+  precedent for ALL future CV1k-side code.  (2) a clip origin < 32 puts
+  the GOVERNOR's u16 clip window into wraparound (0−32 = 0xFFE0): the
+  engine draws but zero ops get priced (busy collapses to the fetch
+  floor) — no game ever does this (pages at 32/416), it is exactly the
+  M-9 clip-margin-edge unmeasured corner; diag ROMs use the game
+  convention (origin ≥ 32).  REMAINING for H7b.D: reuse as the H7b.2+
+  default smoke workload; on-target bring-up payload + OSD-phase tuning
+  visual + NOR-injection-rig LA payloads when those steps arrive.
+
+- 2026-07-16  [claude]  **H7b.1 DONE — two-file split landed; every board
+  config byte-identical to its pre-refactor baseline.**
+  `sim/ikacore_CV1k.sv` reshaped into the PORTABLE CORE TOP: fixed
+  unconditional port list (2 clocks — `i_EMU_CLK153M` parked until H7b.2;
+  `i_EMU_INITRST_n`/`i_EMU_SOFTRST_n`; JAMMA inputs wired to the SH-3 port
+  pads per MAME cv1k.cpp — PORT_C→PTC `{2'b11,i_SYS_n}`, PORT_D→PTD p1,
+  PORT_L→PTL p2, PORT_F.1→PTF S3 button, all active-low PCB truth, TB idles
+  = the old 8'hFF so traces are unaffected; `i_DSW_S2` runtime port —
+  blit_top/blit_regs DSW_S2 parameter RETIRED for the OSD path; video taps
+  o_PX/o_PX_DE/o_VSYNC/o_HLINE now boundary ports; o_SND_L/R parked; ioctl
+  group unconditional; SDRAM pins exported SPLIT-DQ — pad tristate one
+  level up; DDRAM face exported; `o_INIT_DONE`).  NEW RTL reset sequencer
+  replaces the TB's `#` ordering: cpu_go = INITRST & SOFTRST &
+  pump_init_done (`CV1k_sdram_control` grew `o_INIT_DONE`) & ~download;
+  POR combinational on cpu_go, RESETM +8 clocks — the EXACT old TB stagger;
+  pump resets on INITRST only (soft reset preserves memory).  TB byte-exact
+  trick: MISTER arm INITRST at 2 µs (old mem_rst_n point), SOFTRST at
+  205 µs (old POR edge) — so the CPU release lands on the identical cycle.
+  `mister_128mb` + `ddr3_beh` moved out of the top into tb_cv1k on the new
+  pins (preload/backdoor hierarchies retargeted dut.u_sdram→u_sdram).
+  NEW `sim/ikacore_CV1k_emu.sv` = `module emu` (`include
+  srcs/sys/emu_ports.vh` — the include IS the port-list guarantee):
+  hps_io (WIDE=0) + CONF_STR (DIP S2 P1 page, J1
+  B1..B4/Start/Coin/Test/Service), pll (153.6/102.4/SDRAM_CLK outclk
+  stubs), CLK_AUDIO/750 = exact 32,768 Hz EXTAL2, reset policy
+  (hard=RESET|~locked|download, soft=status[0]|buttons[1]),
+  active-low JAMMA mapping, SDRAM pad tristate, AUDIO_S=1, video stage =
+  documented black placeholder until H7b.6.  NEW `tb/stubs/sys_stubs.sv`
+  (+build_id.v) lint-only pll/hps_io shapes; NEW `build_emu_lint.sh`
+  (Verilator --lint-only of module emu at MISTER_SDRAM+CV1K_NAND — the
+  full-hierarchy elaboration also proves that define combo) + NEW
+  `scripts/check_emu_ports.py` (include-line + every-active-port-referenced
+  gate; 90 ports, 23 in undefined `ifdef groups).
+  ACCEPT (all three arms, FASTBOOT, vs pre-refactor baselines): vendor
+  2 M-insn trace sha256 IDENTICAL; MISTER 2 M-insn trace sha256 IDENTICAL
+  (and = vendor, the standing A/B property); CV1K_NAND 8 M-cap run — trace
+  sha256 IDENTICAL, 65,536-byte `+nandbytes` capture cmp-IDENTICAL, EXEC
+  stream identical, DMA totals identical to the cycle (29,937,038 i_CLK).
+  `+ioctl_test` PASS on the new reset scheme (32,768 halfwords verified,
+  CPU held by SOFTRST+download gate).  emu lint + port parity PASS.
+  NEXT: H7b.D diag ROMs (parallel) / H7b.2 full DDR3 stack + two-clock
+  shell.
+
+- 2026-07-16  [claude]  **H7b plan of record recorded (Part 0b §"H7b build
+  order"); supersedes the one-line on-target split.**  Agreed with user:
+  sim-first MiSTer integration in `sim/`, then Quartus.  Two-file split per
+  the Arcade-Psychic5 pattern (`ikacore_CV1k_emu.sv` = `module emu`
+  framework wrapper w/ hps_io+PLL+CONF_STR+reset policy, Quartus-only;
+  `ikacore_CV1k.sv` = portable core top; the MiSTer TB drives the portable
+  top directly).  Port authority = `srcs/sys/emu_ports.vh` (DDR3Test.sv
+  deltas noted).  Pinned: hps_io ioctl_addr [26:0] < 132 MiB u2 ⇒
+  byte-counter ioctl decode; fixed padded MRA stream layout (NAND | YMZ
+  8 MB slots | u4×2) with the 0xdf3d halfword-assembly probe; DDR3 map
+  VRAM@0x3000_0000 / NAND@0x3400_0000 / YMZ@0x3D00_0000; DDR3 stat model
+  stays C++ (file-backed fseek/pread regions), SDRAM chip model stays SV
+  in the TB (no SV port of calibrated timing); one fractional VCO 1228.8
+  ⇒ related 102.4/153.6 clocks, per-domain CKIO enables (÷2/÷3) +
+  next-grid-edge multicycle SDC (coincident-edge hold = old data =
+  Verilator NBA semantics); MiSTer reset compliance (hard = RESET/PLL
+  lock/download, soft = OSD → CPU+blit only); reset sequencing moves from
+  tb waits into an RTL sequencer (pump grows `o_INIT_DONE`).  SDRAM_CLK
+  phase: start ≈ +7,800 ps (≈ −72°; scaled from Psychic5 −60°@60 MHz,
+  BubSys −61.4°@73.74 MHz), OSD dynamic-phase nudge kept permanently.
+  NEW parallel step H7b.D: `diag-mini` + `diag-1k` (1,024 LFSR circles)
+  SH-3 diagnostic ROMs — sim smoke workloads, on-target bring-up payload,
+  and future NOR-injection-rig LA payloads.  User decisions logged:
+  screen rotation ignored for now (pivot monitor; post-YMZ DDR3-bandwidth
+  on-screen overlay test core idea recorded); cost-model VCLK-grid
+  decoupling contingency noted (BREQ may quantize on the DDR clock —
+  runtime tables + 153.6 domain make it a tick-unit re-base, MAME+Buffi
+  golden unaffected); blitgold/blitstudy per-unit refactor deferred to a
+  separate post-H7b session (interfaces frozen until then).
+
+- 2026-07-15  [claude]  **Double-pump SDRAM: hidden refresh row-maintenance
+  scheduler + D-board 12-bit grid row DONE** (doc double_pump_sdram.md §6.2).
+  `CV1k_sdram_control` now walks every used row (bank 0: 0x000–0x17FF incl.
+  the NOR window; banks 1–3: 0x000–0xFFF — ONE uniform B=D sweep domain)
+  inside 64 ms with hidden ACT+PRE pairs on leftover slot-B edges, TWO
+  provably-safe window classes only: blit tenures (NEW `blit_fetch.o_REF_WIN`
+  sideband — S_RCD/S_RD ∧ run_left ≥ 5 ⇒ ≥ 5 CKIO w/o PALL/ACT; RA[12:11]=00
+  rows only, the A[12:11]-DQM alias masks a live beat otherwise) and ordinary
+  CS0/CS4/5/6 cycles (`bsc.sv` freezes its SDRAM engine on `ord_busy` —
+  structural; WCR2 0xFDD7 ⇒ every access ≥ 8 CKIO; ANY row).  CPU-transaction
+  lead-ins and REF shadows left unused per the bsc.sv facts (zero-warning
+  dispatch, "no NOP between ops" ⇒ ~3 fast edges of tail margin at best;
+  REF lockout 4 CKIO ≤ tRFC+1).  NB MCR 0x543C is RASD=0 (auto-precharge
+  mode, bit 7) — every CPU op is ACT…CAS(AP), no row-hit chains.
+  Per-bank per-region deficit counters capped at one full region pass,
+  initialized full, ticking at 90% of the demand period (all three shape
+  choices bought with measured `+refage` failures: saturation forgot drought
+  backlog, a zero start put the first pass at exactly t=64 ms, and
+  exact-demand ticks made steady-state re-visits exactly 64 ms — jitter alone
+  gave 64.000–64.003 ms ages).  D-board: `i_G_A` widened to the full
+  12-bit muxed row, PRE forwards drop bit 11 (DQM quiet), B top ties bit
+  11 = 0.  CS0 flash writes closed as won't-do (saves live in the RTC-9701).
+  Verified: FASTBOOT A/B byte-identical with the scheduler live, 10/10
+  anchors PASS, NEW `+refage` TB age oracle PASSES over the 847 ms ddpsdoj
+  slowdown replay — worst row age 57.616 ms (= the designed 57.6 ms pass),
+  288 683 pairs, zero protocol/tripwire errors.  Remaining on this workstream: Quartus SDC +
+  SDRAM_CLK phase sweep → folds into H7b.
+
+- 2026-07-15  [claude]  **H7 step 5 — harness-served NAND boots the board
+  byte-identically to the physical chip; sim modules renamed to a CV1k_*
+  board-integration layer.**
+  RENAMES (git mv; every reference, manifest and build script updated; board
+  default + MISTER + tb_h7 all re-elaborate clean): `ikacore_CV1k_cpld` →
+  `sim/CV1k_cpld.v`/`CV1k_cpld`; `u1_pump` → `sim/CV1k_sdram_control.sv`/
+  `CV1k_sdram_control`; `ddr3_harness` → `sim/CV1k_ddr3_harness.sv`/
+  `CV1k_ddr3_harness`, MOVED out of `CV1k_blit/` into `sim/` (it is the ONLY
+  per-platform module — the convention is now: platform-agnostic core in
+  `sim/CV1k_blit/` (`blit_*`), board/platform integration in `sim/CV1k_*`).
+  NEW `sim/CV1k_nand.sv` — a synthesizable NAND read-path FRONTEND, drop-in for
+  the vendor `nand_model` pin roles (split DQ i_Dq/o_Dq/o_Dq_oe, CLE=A0, ALE=A1,
+  CE/RE/WE, R/B#), serving the DDR3-resident U2 image via the `CV1k_ddr3_harness`
+  NAND client (`i_nd_*`).  NOT embedded in the harness (harness moves trains
+  only; NAND command/page/RE#-stream protocol lives here).  Decodes FFh/90h/
+  00h+4addr/30h/70h/05h+E0h; on 30h fetches the whole 264-word (2112 B) page as
+  ONE lowest-priority train, drops R/B# until filled, streams bytes on RE#.
+  Read-only (boot only reads); ID = K9F1G08U0M `EC F1 00 95 40` (chip constants,
+  not image data).  DDR3 layout: page N byte c at word `NAND_BASE_W + N*264 +
+  c/8` lane `c%8` (little-endian) = identical to the vendor on-demand loader.
+  ONE BUG the unit test missed but the board caught: the DQ output-hold must
+  DECAY — the first cut latched drive high until the next WE# strobe, so with
+  CE# left asserted across non-NAND cycles CV1k_nand kept driving `D[7:0]` onto
+  the shared bus and corrupted every CPU read → boot stalled burning wait-states
+  (12.7 M i_CLK for 100 k insns, only the 2-byte manufacturer-ID read done).
+  Fix: drive only during RE# low + a 2-cycle tRHOH hold (covers the reader's
+  RE#-rise sample), then float.  Diagnosed with a new `+ndtrace` (plusarg-gated
+  cmd/fetch trace in CV1k_nand) alongside the existing `DMA_MON` `+nandbytes`
+  capture.
+  ACCEPT (1) — UNIT (`sim/tb/tb_nand.sv`, `build_nand_tb.sh`): CV1k_nand +
+  CV1k_ddr3_harness + a behavioural DDR3 slave (256-page preload) driven through
+  reset / read-ID / full-page / column-offset / spare reads → 19,589 bytes
+  BYTE-EXACT vs `roms/ibara/u2` and ID exact.
+  ACCEPT (2) — BOARD BOOT REGRESSION = **H7a accept (5)**: new `+define+CV1K_NAND`
+  (`CV1K_NAND=1 ./build_sim.sh`) swaps `nand_model` → `CV1k_nand` +
+  `CV1k_ddr3_harness` + NEW `sim/ddr3_beh.sv` (on-demand `$fseek`/`$fgetc` DDRAM
+  slave over the raw dump).  FASTBOOT boot reads the ID then DMA-copies rows
+  0,1,2,… at the documented ~29,668 CKIO/page (page bases 0x000/0x108/0x210/… =
+  row×264 ✓); the DMA_MON `+nandbytes` capture is BYTE-IDENTICAL between the
+  vendor `nand_model` and `CV1k_nand` (8192 bytes, `cmp`-clean, including the
+  interleaved ID and 0xE0 status bytes).  Driver `scratchpad/nand_regress.sh`.
+  REMAINING: step 6 = H7b on-target (MiSTer `emu` top + clocking shell + PLL
+  fractional reconfig to 153.6 MHz, HPS staging of the U2 image into DDR3,
+  Quartus hygiene on `CV1k_blit/` + the `CV1k_*` board layer; write-burst
+  formation in `CV1k_ddr3_harness` to reclaim the +19.8 µs BURSTCNT=1 cost).
 
 - 2026-07-15  [claude]  **H7 steps 3+4 — blit_batch train batcher proven
   transparent on all 8 full traces; ddr3_harness + video prefetch + the

@@ -37,9 +37,9 @@
 // 0x10, so it falls through exactly as it does on silicon / in MAME.  Modeling
 // ready on bit4 with bit1 pinned 0 therefore satisfies both consumers.
 //============================================================================
-module blit_regs #(
-    parameter [3:0] DSW_S2 = 4'h0        // DIP switch S2 read at 0x50 (provisional)
-)(
+module blit_regs (
+    input  wire [3:0]  i_DSW_S2,          // DIP switch S2 read at 0x50 (H7b: runtime
+                                          // input - MiSTer OSD; was a parameter)
     input  wire        i_CLK,
     input  wire        i_CKIO_PCEN,       // pulses the i_CLK cycle CKIO rises
     input  wire        i_RST_n,
@@ -179,7 +179,7 @@ module blit_regs #(
     always_comb begin
         case (i_A)
             OFS_STATUS: rdata = {27'b0, ~busy, 4'b0};  // bit4 = ready
-            OFS_DSW   : rdata = {28'b0, DSW_S2};       // 0x50
+            OFS_DSW   : rdata = {28'b0, i_DSW_S2};     // 0x50
             default   : rdata = 32'hFFFF_FFFF;         // 0x24/0x28 observed value
         endcase
     end

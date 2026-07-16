@@ -2,7 +2,7 @@
 # ============================================================================
 # H7a step-4 accept  (docs/blitter_todo.md, H-stage H7).
 #
-# The full execution-plane stack - blit_draw -> blit_batch -> ddr3_harness ->
+# The full execution-plane stack - blit_draw -> blit_batch -> CV1k_ddr3_harness ->
 # DDRAM stat slave, with blit_video PREFETCH line trains arbitrated on the
 # same port - at target clock ratios (153.6 MHz / CKIO enable /3), fed at
 # the modeled fetch cadence.  Per (trace x seed), tb_h7 itself enforces:

@@ -93,7 +93,7 @@ module blit_video #(
     output reg  [24:0] o_vrd_addr,
     input  wire [63:0] i_vrd_data,
 
-    // PREFETCH=1 line-train face (ddr3_harness video client; idle otherwise)
+    // PREFETCH=1 line-train face (CV1k_ddr3_harness video client; idle otherwise)
     output reg         o_lf_req,        // 1-cycle pulse: fetch one line window
     output reg  [11:0] o_lf_y,          // VRAM row
     output reg  [12:0] o_lf_x0,         // window start (32-px aligned)

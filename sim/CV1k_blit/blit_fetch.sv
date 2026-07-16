@@ -91,7 +91,14 @@ module blit_fetch #(
 
     // status
     output reg         o_busy,           // EXEC latched .. END chunk done
-    output reg         o_done            // 1-cycle pulse when the fetch retires
+    output reg         o_done,           // 1-cycle pulse when the fetch retires
+
+    // refresh-scheduler sideband (CV1k_sdram_control hidden row maintenance,
+    // docs/double_pump_sdram.md section 6.2): while high at a CKIO edge, this
+    // unit guarantees it will issue no PALL and no ACT for >= 5 more CKIO
+    // cycles (only CAS reads to its already-open bank).  Derived from the
+    // train position, so the guarantee holds for short remainder trains too.
+    output wire        o_REF_WIN
 );
 
     //------------------------------------------------------------------
@@ -130,6 +137,14 @@ module blit_fetch #(
 
     wire        more_chunks = !end_seen && !walk_fault;
     wire        pace_ok     = pace_cnt >= pace_tgt;
+
+    // refresh-window contract (o_REF_WIN header note): with run_left >= 5 the
+    // earliest PALL is 4 more S_RD + >= 2 S_DRAIN = 6 CKIO away, and no ACT
+    // can precede that PALL.  S_ACTV is deliberately EXCLUDED: the window
+    // must not open before the scheduler has parsed this train's ACT (and so
+    // knows which bank is ours) off the grid pins.  All state here advances
+    // on CKIO_PCEN, so the value is stable across the CKIO cycle.
+    assign o_REF_WIN = ((st == S_RCD) || (st == S_RD)) && (run_left >= 5'd5);
 
     always_ff @(posedge i_CLK or negedge i_RST_n) begin
         if (!i_RST_n) begin
@@ -200,8 +215,15 @@ module blit_fetch #(
                     // common pace/gap state: wait pace_tgt, then request a chunk
                     // (governor hold gates attribute chunks only; upload-fill
                     // chunks stream through the window, fifo_study drainB)
+                    // back_z gate: BACK deasserts ~2 CKIO after our release;
+                    // re-requesting inside that lag reads the STALE grant in
+                    // S_REQ and starts a tenure the BSC never gave us - two
+                    // masters drive at once (CPU flash fetch vs our chunk;
+                    // caught as "Bank already activated" by the ddpsdoj
+                    // +blitreplay census, 2026-07-15).  Request only once the
+                    // bus has visibly returned to the CPU.
                     S_GAP: if (pace_ok) begin
-                        if (more_chunks && fifo_room && (upl_fill || !i_hold)) begin
+                        if (more_chunks && fifo_room && back_z && (upl_fill || !i_hold)) begin
                             o_BREQ_n <= 1'b0;
                             pace_cnt <= 8'd1;    // cadence = BREQ-to-BREQ, exactly
                                                  // pace_tgt CKIO (reset-to-0 was a

@@ -1,6 +1,6 @@
 `default_nettype none
 //============================================================================
-// ddr3_harness.sv - shared-DDR3 train arbiter + MiSTer DDRAM face  [H7a/I-4.3]
+// CV1k_ddr3_harness.sv - shared-DDR3 train arbiter + MiSTer DDRAM face [H7a/I-4.3]
 //
 // The swappable memory backend of the three-layer stack (blit_top ->
 // blit_batch -> HERE).  Multiplexes the port's tenants onto the single
@@ -36,7 +36,7 @@
 // NAND client passes a pre-mapped word address (its image lives elsewhere
 // in DDR3).  All addresses are 64-bit-word units on DDRAM_ADDR.
 //============================================================================
-module ddr3_harness #(
+module CV1k_ddr3_harness #(
     parameter [28:0] VRAM_BASE_W = 29'h0600_0000  // byte 0x3000_0000 >> 3
 )(
     input  wire        i_CLK,

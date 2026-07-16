@@ -2,7 +2,7 @@
 //============================================================================
 // tb_h7.sv - H7a step-4 testbench top: the full execution-plane stack
 //
-//   blit_draw -> blit_batch -> ddr3_harness -> DDRAM pins (C++ stat slave)
+//   blit_draw -> blit_batch -> CV1k_ddr3_harness -> DDRAM pins (C++ stat slave)
 //                blit_video (PREFETCH=1) ----^   (video line trains)
 //
 // vs tb_blit: no behavioral VRAM - memory lives behind the MiSTer DDRAM
@@ -257,7 +257,7 @@ module tb_h7 (
     // ------------------------------------------------------------------
     // harness (NAND client tied off until step 5)
     // ------------------------------------------------------------------
-    ddr3_harness u_harness (
+    CV1k_ddr3_harness u_harness (
         .i_CLK        (i_CLK),
         .i_RST_n      (i_RST_n),
         .i_lf_req     (lf_req),

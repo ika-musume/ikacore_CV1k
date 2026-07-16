@@ -36,7 +36,7 @@
     "assign D[3:0] = o_D_OE ? o_D : 4'hz".
 */
 
-module ikacore_CV1k_cpld (
+module CV1k_cpld (
     /* CLOCK AND RESET - CKIO domain via i_CLK + i_CKIO_PCEN, POR-held */
     input   wire            i_CLK,          //board architectural clock
     input   wire            i_CKIO_PCEN,    //pulses the i_CLK cycle CKIO rises

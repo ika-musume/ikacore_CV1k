@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build + run the H7a step-4 stack testbench (tb_h7) with Verilator 5:
-# blit_draw + blit_batch + blit_video[PREFETCH] + ddr3_harness against the
+# blit_draw + blit_batch + blit_video[PREFETCH] + CV1k_ddr3_harness against the
 # C++ DDRAM stat slave (ddr3_stat.h timing) at target clock ratios.
 #
 #   ./build_h7_tb.sh --trace blitstudy/traces/ibarao_attract.blit --execs 40 --seed 0
@@ -18,7 +18,7 @@ verilator --cc -j 0 -O3 --sv \
     --Mdir "$MDIR" \
     --top-module $TOP \
     CV1k_blit/blit_draw.sv CV1k_blit/blit_batch.sv CV1k_blit/blit_video.sv \
-    CV1k_blit/ddr3_harness.sv \
+    CV1k_ddr3_harness.sv \
     tb/blit_dsc_check.sv tb/tb_h7.sv \
     --exe ../../tb/tb_h7_main.cpp \
     -CFLAGS "-O2 -std=c++17 -I$(pwd)" \

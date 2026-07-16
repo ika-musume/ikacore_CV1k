@@ -1,26 +1,41 @@
 `default_nettype none
 //============================================================================
-// ikacore_CV1k.sv - Cave CV1000-B PCB-level implementation
+// ikacore_CV1k.sv - Cave CV1000-B portable core top  [H7b.1]
 //
-// Board-level netlist for the SH-3 execution-flow bring-up: the SH7709S (HS3
-// core, ip_cores/HS3) wired to its two shared-bus memories as on the CV1000-B
-// PCB, using the real vendor (NDA) device models patched only where Verilator
-// 5 requires it (sim/models/*.verilator.patch):
+// The PLATFORM-AGNOSTIC game top (the `Psychic5_emu.v` role of the two-file
+// split, plan of record 2026-07-16): everything CV1000 lives below this
+// boundary; everything MiSTer (framework ports, hps_io, PLL, CONF_STR, OSD)
+// lives in the wrapper `ikacore_CV1k_emu.sv` (module emu), which is the only
+// file that touches `srcs/`.  Simulation drives THIS module directly
+// (tb_cv1k today, ikacore_CV1k_tb at H7b.3) - no sim-only ports exist.
 //
-//   U4 program NOR flash  - Macronix MX29LV320E (area 0 / CS0, word mode)
-//   U1 work-RAM SDRAM     - Micron  MT48LC2M32B2 (area 3 / CS3, 8 MB)
+// Board-level netlist: the SH7709S (HS3 core, ip_cores/HS3) wired to its two
+// shared-bus memories as on the CV1000-B PCB.  Two build arms:
 //
-// Both devices ride the SAME physical address/data bus (SH7709S HW manual
-// Table 10.3) selected by CSn - the "shared bus" the task verifies against the
-// datasheet.  The data bus is a true bidirectional net with tristate
-// resolution; because Verilator cannot read an inout back inside a module, each
-// vendor model takes an explicit *_in write-data input (Dq_in / Q_in) fed from
-// the SH-3 o_D_O, per the model patch recipe.
+//   default (vendor datum): the real NDA device models patched for Verilator
+//     - U4 program NOR flash  - Macronix MX29LV320E (area 0 / CS0, word mode)
+//     - U1 work-RAM SDRAM     - Micron  MT48LC2M32B2 (area 3 / CS3, 8 MB)
+//     kept alive as the frozen regression reference (decision 2026-07-16).
+//   +define+MISTER_SDRAM: CV1k_sdram_control (double-pump at 2xCKIO +
+//     SDRAM-served NOR window) replaces BOTH; the 128 MB module chip model
+//     (models/mister_128mb.sv) attaches OUTSIDE on the o_SDRAM_* pins.
 //
-// The blitter lives in sim/CV1k_blit/ behind ONE instance (blit_top): the
-// frozen H0-H6 core (regs/fetch/gov/draw/video + IRQ shapers).  This top
-// contributes only board glue: bus tristates, the U1 pin mux during fetch
-// tenures, and the behavioral VRAM backend on the exported beat channels.
+// Both device arms ride the SAME physical address/data bus (SH7709S HW manual
+// Table 10.3) selected by CSn.  The data bus is a true bidirectional net with
+// tristate resolution; vendor models take explicit *_in write-data inputs
+// (Dq_in / Q_in) fed from the SH-3 o_D_O, per the model patch recipe.  The
+// module's own DQ pins are exported SPLIT (o_SDRAM_DQ_O/OE + i_SDRAM_DQ_I) -
+// the wrapper/TB owns the pad tristate, same recipe one level up.
+//
+// Reset policy (H7b.1, MiSTer compliance):
+//   i_EMU_INITRST_n  hard reset (RESET | ~pll_locked | ioctl download start):
+//                    memory subsystem re-inits, then the sequencer below
+//                    releases the CPU (POR, then RESETM 8 clocks later - the
+//                    exact ordering tb_cv1k used to fake with # delays).
+//                    MISTER arm: CPU held until pump JEDEC init done and no
+//                    ioctl download in flight.
+//   i_EMU_SOFTRST_n  soft reset (OSD): CPU + blitter reboot only; pump init
+//                    state and SDRAM/DDR3 contents are preserved.
 //
 // ---------------------------------------------------------------------------
 // Verified address map (SH7709S HW manual Table 10.3 / MAME cv1k.cpp):
@@ -32,34 +47,210 @@
 //     Addr[10:0] = o_A[12:2],  BA[1:0] = o_A[14:13],  DQM[3:0] = o_WE_n[3:0]
 //     Cs=CS3_n, Ras=RAS3L_n, Cas=CASL_n, We=RD_WR, Clk=CKIO, Cke=CKE
 //
-// NOTE on the flash part: the physical CV1000-B U4 is a 2 MB MX29LV160D; this
-// board uses its 4 MB Macronix sibling MX29LV320E (the proven-patched model)
-// with the 2 MB image mirrored to 4 MB - identical to MAME's ROM_RELOAD - which
-// the area-0 (ordinary-memory) controller treats identically. MX29LV160D is a
-// drop-in via the same sibling patch recipe if the exact part is wanted.
+// JAMMA / cabinet inputs (MAME cv1k.cpp port map, all ACTIVE LOW at this
+// boundary = PCB pin truth; the wrapper inverts MiSTer's active-high joys):
+//   PORT_C (SH-3 port C) = i_SYS_n : bit0 service coin, bit1 test (JAMMA
+//     edge), bit2 coin1, bit3 coin2, bit4 start1, bit5 start2
+//   PORT_D (port D) = i_P1_n : bit0 up, 1 down, 2 left, 3 right, 4-7 btn1-4
+//   PORT_L (port L) = i_P2_n : same layout, player 2
+//   PORT_F bit1     = i_S3_TEST_n : S3 test push button on the PCB
+//   DSW (blitter regfile 0x50) = i_DSW_S2
+//
+// NOTE on the flash part: the physical CV1000-B U4 is a 2 MB MX29LV160D; the
+// vendor arm uses its 4 MB Macronix sibling MX29LV320E (the proven-patched
+// model) with the 2 MB image mirrored to 4 MB - identical to MAME's
+// ROM_RELOAD - which the area-0 (ordinary-memory) controller treats
+// identically.
 //============================================================================
 module ikacore_CV1k #(
-    parameter ROM_FILE = "roms/ibara_patched/ibara_u4_4M.hex"
+    parameter ROM_FILE = "roms/ibara_patched/ibara_u4_4M.hex"  // vendor arm only
 ) (
-    input  wire i_CLK,      // SH-3 architectural clock (board = 102.4 MHz domain)
-    input  wire i_CEN,      // architectural clock enable (1 in sim)
-    input  wire i_POR_n,    // power-on reset  (RESETP)
-    input  wire i_RST_n,    // manual reset    (RESETM)
-    input  wire i_EXTAL2    // RTC 32.768 kHz crystal input
-`ifdef MISTER_SDRAM
-    ,
-    // MiSTer memory subsystem (u1_pump + 128MB SDRAM module): the pump gets
-    // its own reset (released before the CPU POR so init + ioctl download
-    // happen while the SH-3 is held), plus the HPS ioctl download port.
-    input  wire         i_MEM_RST_n,
+    //------------------------------------------------------------------
+    // clocks (both from ONE fractional PLL VCO on target - related clocks)
+    //------------------------------------------------------------------
+    input  wire         i_EMU_CLK102M,   // CPU/board/SDRAM domain (102.4 MHz = 2xCKIO)
+    input  wire         i_EMU_CLK153M,   // blit/DDR3 domain (153.6 MHz; consumed at H7b.2)
+    input  wire         i_EXTAL2,        // RTC 32.768 kHz (wrapper: CLK_AUDIO / 750)
+
+    //------------------------------------------------------------------
+    // resets (see policy above)
+    //------------------------------------------------------------------
+    input  wire         i_EMU_INITRST_n, // hard: full chain incl. memory subsystem
+    input  wire         i_EMU_SOFTRST_n, // soft: CPU/blitter reboot, contents kept
+
+    //------------------------------------------------------------------
+    // JAMMA / cabinet inputs (active low) + DIP
+    //------------------------------------------------------------------
+    input  wire [5:0]   i_SYS_n,         // {start2,start1,coin2,coin1,test,service}
+    input  wire [7:0]   i_P1_n,          // {b4,b3,b2,b1,right,left,down,up}
+    input  wire [7:0]   i_P2_n,
+    input  wire         i_S3_TEST_n,     // PCB S3 push button (PORT_F bit1)
+    input  wire [3:0]   i_DSW_S2,        // DIP S2 (blitter regfile 0x50)
+
+    //------------------------------------------------------------------
+    // video taps (H7b.6 grows the full face: hsync/porches/CE)
+    //------------------------------------------------------------------
+    output wire [15:0]  o_PX,            // ARGB1555 pixel stream
+    output wire         o_PX_DE,
+    output wire         o_VSYNC,
+    output wire         o_HLINE,
+
+    //------------------------------------------------------------------
+    // sound (YMZ770 - later phase; tied silent)
+    //------------------------------------------------------------------
+    output wire [15:0]  o_SND_L,
+    output wire [15:0]  o_SND_R,
+
+    //------------------------------------------------------------------
+    // HPS ioctl download (CPU is held while i_IOCTL_DOWNLOAD=1)
+    //------------------------------------------------------------------
     input  wire         i_IOCTL_DOWNLOAD,
     input  wire         i_IOCTL_WR,
-    input  wire [26:0]  i_IOCTL_ADDR,
-    input  wire [7:0]   i_IOCTL_DATA,
+    input  wire [26:0]  i_IOCTL_ADDR,    // NOTE: wraps at 128 MiB - the H7b.4
+    input  wire [7:0]   i_IOCTL_DATA,    // decoder keys on its own byte counter
     input  wire [15:0]  i_IOCTL_INDEX,
-    output wire         o_IOCTL_WAIT
-`endif
+    output wire         o_IOCTL_WAIT,
+
+    //------------------------------------------------------------------
+    // MiSTer SDRAM module pins (MISTER_SDRAM arm; SDRAM_CLK is a PLL
+    // output in the wrapper - phase-tunable - not driven from here)
+    //------------------------------------------------------------------
+    output wire [12:0]  o_SDRAM_A,
+    output wire [1:0]   o_SDRAM_BA,
+    output wire         o_SDRAM_nCS,
+    output wire         o_SDRAM_nRAS,
+    output wire         o_SDRAM_nCAS,
+    output wire         o_SDRAM_nWE,
+    output wire [1:0]   o_SDRAM_DQM,     // connector DQML/H (unrouted on 128MB boards)
+    output wire         o_SDRAM_CKE,
+    output wire [15:0]  o_SDRAM_DQ_O,    // split DQ: wrapper/TB owns the tristate
+    output wire         o_SDRAM_DQ_OE,
+    input  wire [15:0]  i_SDRAM_DQ_I,
+
+    //------------------------------------------------------------------
+    // MiSTer DDRAM face (H7b.2: the whole blit stack lives behind it -
+    // VRAM trains + NAND, arbitrated by the shared CV1k_ddr3_harness;
+    // o_DDRAM_CLK = the 153.6 MHz blit domain clock)
+    //------------------------------------------------------------------
+    output wire         o_DDRAM_CLK,
+    input  wire         i_DDRAM_BUSY,
+    output wire [7:0]   o_DDRAM_BURSTCNT,
+    output wire [28:0]  o_DDRAM_ADDR,
+    input  wire [63:0]  i_DDRAM_DOUT,
+    input  wire         i_DDRAM_DOUT_READY,
+    output wire         o_DDRAM_RD,
+    output wire [63:0]  o_DDRAM_DIN,
+    output wire [7:0]   o_DDRAM_BE,
+    output wire         o_DDRAM_WE,
+
+    //------------------------------------------------------------------
+    // status
+    //------------------------------------------------------------------
+    output wire         o_INIT_DONE      // memory subsystem ready (wrapper LED)
 );
+
+//------------------------------------------------------------------
+// internal legacy names: the board netlist below predates the H7b.1
+// port reshape and is UNCHANGED - it keeps addressing the clock and
+// resets by their original names.
+//------------------------------------------------------------------
+wire i_CLK   = i_EMU_CLK102M;
+wire i_CEN   = 1'b1;                         // architectural clock enable (never gated)
+wire i_POR_n;                                // CPU power-on reset   (sequencer below)
+wire i_RST_n;                                // CPU manual reset     (sequencer below)
+
+// H7b.2: the blit/DDR3 domain clock (blit_top + blit_batch +
+// CV1k_ddr3_harness + CV1k_nand live here; enable generation below)
+wire blit_clk = i_EMU_CLK153M;
+
+//------------------------------------------------------------------
+// H7b.1 reset sequencer (replaces tb_cv1k's ad-hoc `#` ordering, which
+// cannot exist on target).  Release order on a hard reset:
+//   i_EMU_INITRST_n rises -> memory subsystem runs (pump JEDEC init /
+//   vendor-flash Tvcs is the TB's affair) -> cpu_go -> CPU POR released
+//   on that edge, RESETM released 8 clocks later (the exact stagger the
+//   old TB applied).  A soft reset or an ioctl download drops cpu_go
+//   and re-runs only the CPU stagger.
+//------------------------------------------------------------------
+wire pump_init_done;                         // MISTER arm (tied 1 otherwise)
+wire dl_hold;
+`ifdef MISTER_SDRAM
+assign dl_hold = i_IOCTL_DOWNLOAD;
+`else
+assign dl_hold = 1'b0;
+`endif
+
+wire cpu_go = i_EMU_INITRST_n & i_EMU_SOFTRST_n & pump_init_done & ~dl_hold;
+
+reg [3:0] rst_cnt = 4'd0;
+always @(posedge i_EMU_CLK102M) begin
+    if (!cpu_go)             rst_cnt <= 4'd0;
+    else if (rst_cnt != 4'd9) rst_cnt <= rst_cnt + 4'd1;
+end
+assign i_POR_n = cpu_go;                     // combinational: same release edge the TB drove
+assign i_RST_n = cpu_go & (rst_cnt >= 4'd8); // 8-clock stagger (old tb repeat(8))
+
+assign o_INIT_DONE = pump_init_done;
+
+//------------------------------------------------------------------
+// H7b.2 blit-domain CKIO enable (the ÷3 of the two-clock scheme).
+//
+// 102.4 and 153.6 are RELATED clocks off one PLL VCO with coincident
+// rising edges on the 51.2 MHz CKIO grid.  The blit domain regenerates
+// its own "CKIO rises at the end of this cycle" enable by sampling the
+// CPU domain's registered CKIO_PCEN (= HS3's ckio_ph flop, which is
+// high for exactly the one CKIO-half-period ending at each rise):
+//
+//   blit edges per grid period:   E-13.3ns   E-6.7ns    E (coincident)
+//   CKIO_PCEN sampled (pre-edge):    0          1       (1, falls AT E)
+//   p3_q & ~p3_qq             :               ----- high -----> update @E
+//
+// so blit_pcen3-qualified registers update at EXACTLY the same $time
+// instants as the CPU domain's PCEN-qualified ones - including the very
+// first CKIO rise after POR (PCEN's first half-period gives the one
+// observable sample needed), which keeps the video/IRQ2 phase identical
+// to the single-clock datum.  Silicon note (H7b.8 SDC): the sample path
+// is a 102.4->153.6 mid-grid launch with a 2/12-grid (3.26 ns) setup
+// window - one enable bit, constrain explicitly.
+//------------------------------------------------------------------
+reg p3_q, p3_qq;
+always @(posedge blit_clk or negedge i_EMU_INITRST_n) begin
+    if (!i_EMU_INITRST_n) begin
+        p3_q  <= 1'b0;
+        p3_qq <= 1'b0;
+    end
+    else begin
+        p3_q  <= CKIO_PCEN;
+        p3_qq <= p3_q;
+    end
+end
+wire blit_pcen3 = p3_q & ~p3_qq;
+
+`ifndef SYNTHESIS
+// H7b.2 accept: PCEN2/PCEN3 same-instant assertion.  Each side records
+// the $realtime of its last qualified update edge; when the blit side
+// fires, the PREVIOUS pair (visible race-free through the NBA old-value
+// read) must be equal.  Any grid misphase between the TB's two clocks
+// or a mislocked enable trips this on the second fire.
+real p23_t2 = -1.0, p23_t3 = -1.0;
+integer p23_err = 0, p23_n = 0;
+always @(posedge i_CLK) if (CKIO_PCEN) p23_t2 <= $realtime;
+always @(posedge blit_clk) if (blit_pcen3) begin
+    if (p23_t3 >= 0.0 && p23_t3 != p23_t2) begin
+        p23_err <= p23_err + 1;
+        if (p23_err < 5)
+            $display("[pcen23] MISPHASE: last PCEN2 @%0t vs PCEN3 @%0t (now %0t)",
+                     p23_t2, p23_t3, $realtime);
+    end
+    p23_t3 <= $realtime;
+    p23_n  <= p23_n + 1;
+end
+final begin
+    if (p23_n > 0)
+        $display("[pcen23] %0d PCEN3 grid edges, %0d misphase errors%s",
+                 p23_n, p23_err, (p23_err == 0) ? " - PASS" : " - FAIL");
+end
+`endif
 
 //------------------------------------------------------------------
 // Shared external bus nets (SH7709S BSC pins)
@@ -89,19 +280,39 @@ wire        pth_irq1_n;                      // blitter-done IRQ1 on PTH[1] (gov
 
 // blitter bus-mastering nets (H2: BREQ/BACK tenure, fig 10.41)
 wire        blit_breq_n, blit_own;
+wire        blit_ref_win;                    // blit_fetch refresh-window sideband
 wire [25:0] bf_A;
 wire        bf_CS_n, bf_RAS_n, bf_CAS_n, bf_WE;
 wire [3:0]  bf_DQM;
 
-// blitter VRAM beat channels (blit_top <-> behavioral VRAM backend)
-wire        bv_srd_req, bv_drd_req, bv_wr_req, bv_wr_rdy;
+// blitter VRAM beat channels (blit_top <-> blit_batch, H7b.2)
+wire        bv_srd_req, bv_drd_req, bv_wr_req, bv_wr_rdy, bv_rd_vld;
 wire [24:0] bv_srd_addr, bv_drd_addr, bv_wr_addr;
 wire [63:0] bv_srd_data, bv_drd_data, bv_wr_data;
 wire [3:0]  bv_wr_mask;
-wire        bv_vrd_req;
-wire [24:0] bv_vrd_addr;
-wire [63:0] bv_vrd_data;
 wire        blit_steal;                      // scanout-owns-memory tap (debug)
+
+// H7 descriptor sideband (blit_top -> blit_batch train formation)
+wire        dsc_vld, dsc_flipy, dsc_blend, dsc_strict, dsc_px1, dsc_wait;
+wire [12:0] dsc_sx_lo, dsc_rows;
+wire [11:0] dsc_sy0;
+wire [13:0] dsc_npx;
+wire [31:0] dsc_dst0;
+
+// blit_batch <-> harness train port + blit_video line-train client
+wire        prd_req, prd_rdy, prd_dvld;
+wire [22:0] prd_addr;
+wire [10:0] prd_len;
+wire [63:0] prd_data;
+wire        pwr_req, pwr_rdy;
+wire [22:0] pwr_addr;
+wire [63:0] pwr_data;
+wire [3:0]  pwr_be;
+wire        rd_train, wr_train;
+wire        lf_req, lf_dvld;
+wire [11:0] lf_y;
+wire [12:0] lf_x0;
+wire [63:0] lf_data;
 
 // the true bidirectional board data bus (shared A/D bus, Table 10.1)
 wire [31:0] D;
@@ -112,6 +323,10 @@ assign D   = blit_D_OE ? blit_D : 32'hzzzz_zzzz;  // blitter drives on CS6 reads
 
 // area-0 bus width strap = 16 bit (Table 10.4: MD4=1, MD3=0)
 localparam MD4 = 1'b1, MD3 = 1'b0;
+
+// sound: YMZ770C-F is a later phase (DDR3 map + loader slots reserved)
+assign o_SND_L = 16'h0000;
+assign o_SND_R = 16'h0000;
 
 //==================================================================
 //  SH7709S  (HS3 subset core, read-only IP)
@@ -152,24 +367,29 @@ HS3 #(
 
     .i_NMI(1'b1),                          // NMI idle high (edge triggered)
 
-    // I/O port pads - inputs tied to benign idle, outputs open
+    // I/O port pads - JAMMA inputs per the MAME cv1k.cpp map (header),
+    // everything else tied to benign idle, outputs open
     .i_PTA_I(8'hFF), .o_PTA_O(), .o_PTA_OE(), .o_PTA_PU(),
     .i_PTB_I(8'hFF), .o_PTB_O(), .o_PTB_OE(), .o_PTB_PU(),
-    .i_PTC_I(8'hFF), .o_PTC_O(), .o_PTC_OE(), .o_PTC_PU(),
-    .i_PTD_I(8'hFF), .o_PTD_O(), .o_PTD_OE(), .o_PTD_PU(),
+    .i_PTC_I({2'b11, i_SYS_n}),                             // PORT_C: system inputs
+    .o_PTC_O(), .o_PTC_OE(), .o_PTC_PU(),
+    .i_PTD_I(i_P1_n), .o_PTD_O(), .o_PTD_OE(), .o_PTD_PU(), // PORT_D: player 1
     .i_PTE_I({2'b11, nand_rb_n, 5'b11111}),                 // bit5 = U2 NAND ready/busy
     .o_PTE_O(), .o_PTE_OE(), .o_PTE_PU(),
-    .i_PTF_I(8'hFF), .o_PTF_PU(),
+    .i_PTF_I({6'b111111, i_S3_TEST_n, 1'b1}),               // PORT_F bit1: S3 test button
+    .o_PTF_PU(),
     .i_PTG_I(8'hFF), .o_PTG_PU(),
-    .i_PTH_I({5'b11111, pth_irq2_n, pth_irq1_n, 1'b1}),      // PTH[2]=IRQ2 vblank (H0), PTH[1]=IRQ1 blit done (H3 provisional)
+    .i_PTH_I({5'b11111, pth_irq2_n | ~irq2_en, pth_irq1_n, 1'b1}),   // PTH[2]=IRQ2 vblank (H0), PTH[1]=IRQ1 blit done (H3 provisional)
     .o_PTH_O(), .o_PTH_OE(), .o_PTH_PU(),
     .i_PTJ_I(8'hFF), .o_PTJ_O(), .o_PTJ_OE(), .o_PTJ_PU(),
     .i_PTK_I(8'hFF), .o_PTK_O(), .o_PTK_OE(), .o_PTK_PU(),
-    .i_PTL_I(8'hFF),
+    .i_PTL_I(i_P2_n),                                       // PORT_L: player 2
     .i_SCPT_I(8'hFF), .o_SCPT_O(), .o_SCPT_OE(), .o_SCPT_PU()
 );
 
 `ifndef MISTER_SDRAM
+//==================================================================
+//  Vendor-datum arm (frozen regression reference, decision 2026-07-16)
 //==================================================================
 //  U4 - program NOR flash (Macronix MX29LV320E, word mode)
 //       area 0 / CS0, 16-bit port on D[15:0]
@@ -210,19 +430,31 @@ mt48lc2m32b2 u_u1_sdram (
     .Dqm  (blit_own ? bf_DQM      : WE_n)
 );
 
+// no memory subsystem to wait for; MiSTer-facing pins parked inactive
+assign pump_init_done = 1'b1;
+assign o_IOCTL_WAIT   = 1'b0;
+assign o_SDRAM_A      = 13'd0;
+assign o_SDRAM_BA     = 2'd0;
+assign o_SDRAM_nCS    = 1'b1;
+assign o_SDRAM_nRAS   = 1'b1;
+assign o_SDRAM_nCAS   = 1'b1;
+assign o_SDRAM_nWE    = 1'b1;
+assign o_SDRAM_DQM    = 2'b11;
+assign o_SDRAM_CKE    = 1'b0;
+assign o_SDRAM_DQ_O   = 16'h0000;
+assign o_SDRAM_DQ_OE  = 1'b0;
+wire _unused_vendor = &{1'b0, i_IOCTL_DOWNLOAD, i_IOCTL_WR, i_IOCTL_ADDR,
+                        i_IOCTL_DATA, i_IOCTL_INDEX, i_SDRAM_DQ_I, 1'b0};
+
 `else  // MISTER_SDRAM
 //==================================================================
-//  MiSTer variant: u1_pump + 128 MB dual-chip SDRAM module replace
+//  MiSTer variant: CV1k_sdram_control + 128 MB dual-chip SDRAM module replace
 //  BOTH U4 (NOR served from the SDRAM window, rows 0x1000-0x17FF of
-//  chip0 bank0) and U1 (double-pumped at 2xCKIO).  See u1_pump.sv and
-//  docs/double_pump_sdram.md.
+//  chip0 bank0) and U1 (double-pumped at 2xCKIO).  See CV1k_sdram_control.sv and
+//  docs/double_pump_sdram.md.  H7b.1: the chip model (models/mister_128mb.sv)
+//  moved OUT to the TB/wrapper on the o_SDRAM_* pins; the pad tristate is
+//  owned there (split-DQ recipe).
 //==================================================================
-wire [15:0] s_dq;                            // module DQ (board-level tristate)
-wire [15:0] pump_dq_o;
-wire        pump_dq_oe;
-wire [12:0] s_a;
-wire [1:0]  s_ba, s_dqm;
-wire        s_ncs, s_nras, s_ncas, s_nwe, s_cke;
 wire [31:0] pump_g_rdata;
 wire        pump_g_oe;
 wire [15:0] pump_n_rdata;
@@ -230,14 +462,15 @@ wire        pump_n_oe;
 
 assign D        = pump_g_oe ? pump_g_rdata : 32'hzzzz_zzzz;  // CS3 read beats
 assign D[15:0]  = pump_n_oe ? pump_n_rdata : 16'hzzzz;       // CS0 (NOR) reads
-assign s_dq     = pump_dq_oe ? pump_dq_o   : 16'hzzzz;       // write beats
 
-u1_pump u_pump (
+CV1k_sdram_control u_pump (
     .i_CLK        (i_CLK),
-    .i_RST_n      (i_MEM_RST_n),
+    .i_RST_n      (i_EMU_INITRST_n),         // memory subsystem resets on HARD only
     .i_CKIO_PCEN  (CKIO_PCEN),
-    // grid: identical mux expressions the U1 model saw (pin-true handover)
-    .i_G_A        (blit_own ? bf_A[12:2]  : A[12:2]),
+    // grid: identical mux expressions the U1 model saw (pin-true handover);
+    // row bit 11 is tied 0 on this B board (the CV1000-D top feeds A[13:2]
+    // of its 12-bit-row part here instead)
+    .i_G_A        (blit_own ? {1'b0, bf_A[12:2]} : {1'b0, A[12:2]}),
     .i_G_BA       (blit_own ? bf_A[14:13] : A[14:13]),
     .i_G_CS_n     (blit_own ? bf_CS_n     : CS3_n),
     .i_G_RAS_n    (blit_own ? bf_RAS_n    : RAS3L_n),
@@ -249,12 +482,23 @@ u1_pump u_pump (
     .o_G_RDATA    (pump_g_rdata),
     .o_G_RDATA_OE (pump_g_oe),
     // NOR: same pins the MX29LV320E saw
-    .i_N_CS_n     (CS0_n),
+    // CS0 qualified by the pad enable: with the bus granted away the SH-3's
+    // strobe outputs are meaningless (hi-Z + pull-up on the PCB - the old
+    // flash model only ever saw harmless phantom reads, but here a phantom
+    // NOR request becomes SDRAM commands colliding with the blitter's open
+    // row: "Bank already activated", found by the ddpsdoj +blitreplay census)
+    .i_N_CS_n     (CS0_n | ~BUS_OE),
     .i_N_RD_n     (RD_n),
     .i_N_A        (A[21:1]),
     .i_N_WR_n     (WE_n[1] & WE_n[0]),
     .o_N_RDATA    (pump_n_rdata),
     .o_N_RDATA_OE (pump_n_oe),
+    // refresh-scheduler windows (doc section 6.2): blit tenures via the
+    // fetch sideband, ordinary CS4/5/6 cycles via the strobes.  Same
+    // BUS_OE phantom-strobe qualification as CS0 above.
+    .i_BACK_n     (BACK_n),
+    .i_BLIT_WIN   (blit_ref_win),
+    .i_ORD_CS_n   ((CS4_n & CS5_n & CS6_n) | ~BUS_OE),
     // HPS ioctl
     .i_IOCTL_DOWNLOAD (i_IOCTL_DOWNLOAD),
     .i_IOCTL_WR       (i_IOCTL_WR),
@@ -262,21 +506,13 @@ u1_pump u_pump (
     .i_IOCTL_DATA     (i_IOCTL_DATA),
     .i_IOCTL_INDEX    (i_IOCTL_INDEX),
     .o_IOCTL_WAIT     (o_IOCTL_WAIT),
-    // module pins
-    .o_S_A(s_a), .o_S_BA(s_ba), .o_S_nCS(s_ncs),
-    .o_S_nRAS(s_nras), .o_S_nCAS(s_ncas), .o_S_nWE(s_nwe),
-    .o_S_DQM(s_dqm), .o_S_CKE(s_cke),
-    .o_S_DQ_O(pump_dq_o), .o_S_DQ_OE(pump_dq_oe), .i_S_DQ_I(s_dq)
-);
-
-mister_128mb u_sdram (
-    .clk  (i_CLK),                           // sim: same clock as the SH-3 (2xCKIO);
-    .dq   (s_dq),                            // HW: dedicated PLL output, phase-tuned
-    .dq_in(pump_dq_o),
-    .a(s_a), .ba(s_ba), .ncs(s_ncs),
-    .nras(s_nras), .ncas(s_ncas), .nwe(s_nwe),
-    .dqml(s_dqm[0]), .dqmh(s_dqm[1]),
-    .cke(s_cke)
+    // status
+    .o_INIT_DONE  (pump_init_done),
+    // module pins (pad tristate + SDRAM_CLK live in the wrapper/TB)
+    .o_S_A(o_SDRAM_A), .o_S_BA(o_SDRAM_BA), .o_S_nCS(o_SDRAM_nCS),
+    .o_S_nRAS(o_SDRAM_nRAS), .o_S_nCAS(o_SDRAM_nCAS), .o_S_nWE(o_SDRAM_nWE),
+    .o_S_DQM(o_SDRAM_DQM), .o_S_CKE(o_SDRAM_CKE),
+    .o_S_DQ_O(o_SDRAM_DQ_O), .o_S_DQ_OE(o_SDRAM_DQ_OE), .i_S_DQ_I(i_SDRAM_DQ_I)
 );
 `endif // MISTER_SDRAM
 
@@ -288,7 +524,7 @@ mister_128mb u_sdram (
 //        derived clocks). Only the U2 NAND path is wired downstream
 //        here; audio + EEPROM/RTC strobes are carried but left open.
 //==================================================================
-ikacore_CV1k_cpld u_u13_cpld (
+CV1k_cpld u_u13_cpld (
     .i_CLK        (i_CLK),
     .i_CKIO_PCEN  (CKIO_PCEN),
     .i_RST_n      (i_POR_n),
@@ -333,6 +569,44 @@ ikacore_CV1k_cpld u_u13_cpld (
 //==================================================================
 `ifdef NO_NAND
 assign nand_rb_n = 1'b1;                // +define+NO_NAND: omit U2 (R/B tied ready) - compare boot paths
+`elsif CV1K_NAND
+//==================================================================
+//  MiSTer harness-served NAND (+define+CV1K_NAND): the physical U2
+//  chip is replaced by CV1k_nand, which serves the DDR3-resident U2
+//  image through the SHARED CV1k_ddr3_harness below (H7b.2: it is the
+//  nd client of the one full-stack arbiter; H7a step 5 gave it a
+//  private harness instance).  The SH-3/CPLD side is wired
+//  bit-identically to the vendor model (CLE=A0, ALE=A1, CE/RE/WE from
+//  U13, DQ on D[7:0], R/B -> PTE5); those strobes change only on CKIO
+//  protocol edges, so the 153.6 MHz edge-detect samples them exactly
+//  as the 102.4 one did.  Image base = the H7b DDR3 byte map: NAND u2
+//  at byte 0x3400_0000 = DDRAM word 0x0680_0000.
+//==================================================================
+wire [7:0]  nd_dq_o;
+wire        nd_dq_oe;
+assign D[7:0] = nd_dq_oe ? nd_dq_o : 8'hzz;     // U2 drives the low byte on reads
+
+wire        nd_req, nd_rdy, nd_dvld;
+wire [28:0] nd_addr;
+wire [10:0] nd_len;
+wire [63:0] nd_data;
+
+CV1k_nand #(.NAND_BASE_W(29'h0680_0000)) u_u2_nand (
+    .i_CLK    (blit_clk),               // H7b.2: harness-client domain
+    .i_RST_n  (i_POR_n),
+    .i_Dq     (D_O[7:0]),               // SH-3 write-data view (cmd/addr in)
+    .o_Dq     (nd_dq_o),
+    .o_Dq_oe  (nd_dq_oe),
+    .i_Cle    (A[0]),                   // CLE
+    .i_Ale    (A[1]),                   // ALE
+    .i_Ce_n   (u2_ce_n),                // CE#  (from U13)
+    .i_We_n   (u2_we_n),                // WE#
+    .i_Re_n   (u2_re_n),                // RE#
+    .i_Wp_n   (1'b1),                   // WP# off
+    .o_Rb_n   (nand_rb_n),              // R/B# -> PTE5
+    .o_nd_req (nd_req), .o_nd_addr(nd_addr), .o_nd_len(nd_len),
+    .i_nd_rdy (nd_rdy), .i_nd_dvld(nd_dvld), .i_nd_data(nd_data)
+);
 `else
 `ifdef NAND_ONDEMAND
 localparam NAND_BIN_FILE  = "roms/ibara/u2";                        // pristine dump, never written
@@ -366,21 +640,56 @@ nand_model #(
 );
 `endif
 
+`ifndef CV1K_NAND
+// no CV1k_nand in this arm (vendor chip model / NO_NAND): the shared
+// harness's NAND client idles
+wire        nd_req  = 1'b0;
+wire [28:0] nd_addr = 29'd0;
+wire [10:0] nd_len  = 11'd0;
+wire        nd_rdy, nd_dvld;
+wire [63:0] nd_data;
+wire _unused_nd = &{1'b0, nd_rdy, nd_dvld, nd_data, 1'b0};
+`endif
+
 //==================================================================
 //  Blitter core (sim/CV1k_blit/blit_top.sv) [H0-H6 frozen; H7 refactor]
 //  regs + fetch + gov + draw + video + IRQ shapers behind one boundary.
-//  Board glue here: CS6 tristate drive (above), the U1 command-pin mux
-//  during fetch tenures (blit_own, above), and the behavioral VRAM on
-//  the exported beat channels (the I-4.3 DDR3 stack replaces only that).
+//  H7b.2: the FULL DDR3 stack is in-system - blit_top's beat channels
+//  feed blit_batch (K=8-objline trains), blit_video prefetches line
+//  trains (PREFETCH=1), and ONE shared CV1k_ddr3_harness arbitrates
+//  video > batch > NAND onto the MiSTer DDRAM face.  The whole stack
+//  runs in the 153.6 MHz blit domain on blit_pcen3 (the tb_h7-proven
+//  configuration).  Board glue here: CS6 tristate drive (above) and
+//  the U1 command-pin mux during fetch tenures (blit_own, above).
+//
+//  CDC audit (H7b.2, the two-clock scheme of the plan of record) - every
+//  crossing surface changes only on CKIO protocol edges and is consumed
+//  at the next grid edge (multicycle in the H7b.8 SDC; the coincident-
+//  edge hold captures old data = Verilator same-timestep NBA semantics):
+//    CPU -> blit: CS6 strobes/addr/data (blit_regs samples @pcen3),
+//      BACK_n + D bus fetch data (blit_fetch @pcen3), CPLD u2 strobes +
+//      D_O[7:0] (CV1k_nand edge-detects CKIO-rate strobes), DSW (static).
+//    blit -> CPU: BREQ_n/bf_*/blit_own/REF_WIN (blit_fetch, @pcen3),
+//      IRQ1_n/IRQ2_n (shapers update @pcen3 instants), CS6 o_D/o_D_OE
+//      (comb off CPU strobes + regs; the STATUS busy bit's draw-floor
+//      term can move mid-grid - SDC max-delay note, CKIO-visible value
+//      unchanged since the governed window >= the datapath), NAND
+//      dq/rb_n (protocol gives whole wait-state windows; SDC note).
 //==================================================================
 reg          irq1_en   = 1'b1;         // +noirq1 A/B knob (sim-only plusarg)
+reg          irq2_en   = 1'b1;         // +noirq2: hold vblank IRQ2 off so a
+                                       // parked game never wakes (+blitreplay)
+`ifndef SYNTHESIS
 initial if ($test$plusargs("noirq1")) irq1_en = 1'b0;
+initial if ($test$plusargs("noirq2")) irq2_en = 1'b0;
+`endif
 
 blit_top #(
-    .DSW_S2 (4'h0)                     // DIP S2 (provisional; not a boot gate)
+    .PREFETCH    (1'b1)                // H7b.2: 1-hline line-train prefetch
 ) u_blit (
-    .i_CLK       (i_CLK),
-    .i_CKIO_PCEN (CKIO_PCEN),
+    .i_DSW_S2    (i_DSW_S2),           // DIP S2 (H7b.1: OSD-fed runtime input)
+    .i_CLK       (blit_clk),           // H7b.2: 153.6 MHz domain
+    .i_CKIO_PCEN (blit_pcen3),
     .i_RST_n     (i_POR_n),
 
     // CS6 slave
@@ -404,6 +713,7 @@ blit_top #(
     .o_BF_WE     (bf_WE),
     .o_BF_DQM    (bf_DQM),
     .i_D_BUS     (D),                  // resolved shared bus (fetch reads)
+    .o_REF_WIN   (blit_ref_win),       // CV1k_sdram_control hidden-refresh window
 
     // interrupts
     .i_IRQ1_EN   (irq1_en),
@@ -416,7 +726,7 @@ blit_top #(
     .i_tbl_idx   (4'd0),
     .i_tbl_data  (32'd0),
 
-    // VRAM beat channels -> behavioral backend below
+    // VRAM beat channels -> blit_batch (H7b.2)
     .o_srd_req   (bv_srd_req),
     .o_srd_addr  (bv_srd_addr),
     .i_srd_data  (bv_srd_data),
@@ -428,52 +738,131 @@ blit_top #(
     .o_wr_data   (bv_wr_data),
     .o_wr_mask   (bv_wr_mask),
     .i_wr_rdy    (bv_wr_rdy),
-    .i_rd_vld    (1'b1),               // behavioral VRAM: fixed-latency, never stalls
-    .o_vrd_req   (bv_vrd_req),
-    .o_vrd_addr  (bv_vrd_addr),
-    .i_vrd_data  (bv_vrd_data),
+    .i_rd_vld    (bv_rd_vld),          // batch read-stall protocol
+    .o_vrd_req   (),                   // beat-wise video channel idle
+    .o_vrd_addr  (),                   //   (PREFETCH=1)
+    .i_vrd_data  (64'd0),
+    .o_lf_req    (lf_req),             // line-train client -> harness
+    .o_lf_y      (lf_y),
+    .o_lf_x0     (lf_x0),
+    .i_lf_dvld   (lf_dvld),
+    .i_lf_data   (lf_data),
     .o_steal     (blit_steal),
 
-    // H7 descriptor sideband: unused on the fixed-latency backend (the TB
-    // footprint checker taps it hierarchically; blit_batch consumes it)
-    .o_dsc_vld   (), .o_dsc_sx_lo (), .o_dsc_sx_hi (), .o_dsc_sy0 (),
-    .o_dsc_rows  (), .o_dsc_npx   (), .o_dsc_dst0  (), .o_dsc_flipx (),
-    .o_dsc_flipy (), .o_dsc_blend (), .o_dsc_strict(), .o_dsc_px1 (),
-    .o_dsc_wait  (), .o_dsc_upl   (), .o_dsc_upl_addr (),
+    // H7 descriptor sideband -> blit_batch train formation (the TB
+    // footprint checker taps the full set hierarchically)
+    .o_dsc_vld   (dsc_vld),      .o_dsc_sx_lo (dsc_sx_lo),
+    .o_dsc_sx_hi (),             .o_dsc_sy0   (dsc_sy0),
+    .o_dsc_rows  (dsc_rows),     .o_dsc_npx   (dsc_npx),
+    .o_dsc_dst0  (dsc_dst0),     .o_dsc_flipx (),
+    .o_dsc_flipy (dsc_flipy),    .o_dsc_blend (dsc_blend),
+    .o_dsc_strict(dsc_strict),   .o_dsc_px1   (dsc_px1),
+    .o_dsc_wait  (dsc_wait),     .o_dsc_upl   (), .o_dsc_upl_addr (),
     .o_dsc_upl_dimx (), .o_dsc_upl_dimy (),
 
-    // video timing + pixel stream (TB taps px hierarchically; the JAMMA
-    // DAC / MiSTer video pipeline hangs off these at platform integration)
-    .o_hline     (),
-    .o_vsync     (),
-    .o_px_de     (),
-    .o_px        ()
+    // video timing + pixel stream (H7b.1: exported at the module boundary;
+    // H7b.6 grows the full hsync/porch face for the MiSTer video pipeline)
+    .o_hline     (o_HLINE),
+    .o_vsync     (o_VSYNC),
+    .o_px_de     (o_PX_DE),
+    .o_px        (o_PX)
 );
 
 //==================================================================
-//  Behavioral blitter VRAM (H3 / I-1.3) - the ideal memory backend on
-//  blit_top's beat channels (stand-in for the U6/U7 DDR pair; the real
-//  MiSTer DDR3 stack, blit_batch + ddr3_harness, is I-4.3/H7 behind
-//  the same channels).  Write gating vs the scanout steal window is
-//  inside blit_top; this backend never backpressures.
+//  Train batcher (H7a step 3): strictly serial R/W trains exactly as
+//  the DES charges, single-buffered pixel-lane staging, the whole
+//  i_rd_vld read-stall protocol.  Replaces blit_vram_beh (H3) as the
+//  beat-channel backend - the behavioral VRAM now lives only in the
+//  H6 unit rigs.
 //==================================================================
-blit_vram_beh u_blit_vram (
-    .i_CLK      (i_CLK),
-    .i_srd_req  (bv_srd_req),
-    .i_srd_addr (bv_srd_addr),
-    .o_srd_data (bv_srd_data),
-    .i_drd_req  (bv_drd_req),
-    .i_drd_addr (bv_drd_addr),
-    .o_drd_data (bv_drd_data),
-    .i_vrd_req  (bv_vrd_req),
-    .i_vrd_addr (bv_vrd_addr),
-    .o_vrd_data (bv_vrd_data),
-    .i_wr_req   (bv_wr_req),
-    .i_wr_addr  (bv_wr_addr),
-    .i_wr_data  (bv_wr_data),
-    .i_wr_mask  (bv_wr_mask),
-    .o_wr_rdy   (bv_wr_rdy)
+blit_batch u_batch (
+    .i_CLK        (blit_clk),
+    .i_RST_n      (i_POR_n),
+    .i_srd_req    (bv_srd_req),
+    .i_srd_addr   (bv_srd_addr),
+    .o_srd_data   (bv_srd_data),
+    .i_drd_req    (bv_drd_req),
+    .i_drd_addr   (bv_drd_addr),
+    .o_drd_data   (bv_drd_data),
+    .o_rd_vld     (bv_rd_vld),
+    .i_wr_req     (bv_wr_req),
+    .i_wr_addr    (bv_wr_addr),
+    .i_wr_data    (bv_wr_data),
+    .i_wr_mask    (bv_wr_mask),
+    .o_wr_rdy     (bv_wr_rdy),
+    .i_dsc_vld    (dsc_vld),
+    .i_dsc_sx_lo  (dsc_sx_lo),
+    .i_dsc_sy0    (dsc_sy0),
+    .i_dsc_rows   (dsc_rows),
+    .i_dsc_npx    (dsc_npx),
+    .i_dsc_dst0   (dsc_dst0),
+    .i_dsc_flipy  (dsc_flipy),
+    .i_dsc_blend  (dsc_blend),
+    .i_dsc_strict (dsc_strict),
+    .i_dsc_px1    (dsc_px1),
+    .i_dsc_wait   (dsc_wait),
+    .o_prd_req    (prd_req),
+    .o_prd_addr   (prd_addr),
+    .o_prd_len    (prd_len),
+    .i_prd_rdy    (prd_rdy),
+    .i_prd_dvld   (prd_dvld),
+    .i_prd_data   (prd_data),
+    .o_pwr_req    (pwr_req),
+    .o_pwr_addr   (pwr_addr),
+    .o_pwr_data   (pwr_data),
+    .o_pwr_be     (pwr_be),
+    .i_pwr_rdy    (pwr_rdy),
+    .o_rd_train   (rd_train),
+    .o_wr_train   (wr_train),
+    .o_idle       (),
+    .o_op_srv     (),
+    .o_wr_idle    ()
+);
+
+//==================================================================
+//  The ONE shared DDR3 harness (H7a step 4): train-level arbiter,
+//  video line fetch > batch reads/writes > NAND, onto the MiSTer
+//  DDRAM face (served by ddr3_beh in tb_cv1k, the C++ stat slave in
+//  ikacore_CV1k_tb, the real f2sdram on target).
+//==================================================================
+CV1k_ddr3_harness u_harness (
+    .i_CLK        (blit_clk),
+    .i_RST_n      (i_POR_n),
+    .i_lf_req     (lf_req),
+    .i_lf_y       (lf_y),
+    .i_lf_x0      (lf_x0),
+    .o_lf_dvld    (lf_dvld),
+    .o_lf_data    (lf_data),
+    .i_prd_req    (prd_req),
+    .i_prd_addr   (prd_addr),
+    .i_prd_len    (prd_len),
+    .o_prd_rdy    (prd_rdy),
+    .o_prd_dvld   (prd_dvld),
+    .o_prd_data   (prd_data),
+    .i_pwr_req    (pwr_req),
+    .i_pwr_addr   (pwr_addr),
+    .i_pwr_data   (pwr_data),
+    .i_pwr_be     (pwr_be),
+    .o_pwr_rdy    (pwr_rdy),
+    .i_rd_train   (rd_train),
+    .i_wr_train   (wr_train),
+    .i_nd_req     (nd_req),
+    .i_nd_addr    (nd_addr),
+    .i_nd_len     (nd_len),
+    .o_nd_rdy     (nd_rdy),
+    .o_nd_dvld    (nd_dvld),
+    .o_nd_data    (nd_data),
+    .DDRAM_CLK    (o_DDRAM_CLK),
+    .DDRAM_BUSY   (i_DDRAM_BUSY),
+    .DDRAM_BURSTCNT (o_DDRAM_BURSTCNT),
+    .DDRAM_ADDR   (o_DDRAM_ADDR),
+    .DDRAM_DOUT   (i_DDRAM_DOUT),
+    .DDRAM_DOUT_READY (i_DDRAM_DOUT_READY),
+    .DDRAM_RD     (o_DDRAM_RD),
+    .DDRAM_DIN    (o_DDRAM_DIN),
+    .DDRAM_BE     (o_DDRAM_BE),
+    .DDRAM_WE     (o_DDRAM_WE)
 );
 
 endmodule
-`default_nettype none
+`default_nettype wire

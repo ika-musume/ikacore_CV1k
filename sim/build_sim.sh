@@ -22,8 +22,8 @@ if [ "${FASTBOOT:-0}" = "1" ]; then
     echo "== FASTBOOT enabled (patched ROM + SDRAM preload) =="
 fi
 
-# MISTER=1: replace U4 NOR + U1 SDRAM with u1_pump + the 128MB MiSTer SDRAM
-# module (double-pump at 2xCKIO + SDRAM-served NOR window; see u1_pump.sv and
+# MISTER=1: replace U4 NOR + U1 SDRAM with CV1k_sdram_control + the 128MB MiSTer SDRAM
+# module (double-pump at 2xCKIO + SDRAM-served NOR window; see CV1k_sdram_control.sv and
 # docs/double_pump_sdram.md).  Separate obj dir so A/B binaries coexist.
 #   MISTER=1 ./build_sim.sh
 #   MISTER=1 ./build_sim.sh +ioctl_test +ioctl_bytes=65536   # loader smoke test
@@ -31,7 +31,7 @@ MSDEF=""
 if [ "${MISTER:-0}" = "1" ]; then
     MSDEF="+define+MISTER_SDRAM"
     MDIR=build/obj_dir_mister
-    echo "== MISTER SDRAM variant (u1_pump + mister_128mb) =="
+    echo "== MISTER SDRAM variant (CV1k_sdram_control + mister_128mb) =="
 fi
 
 # U2 NAND model config (Micron MT29F1G08, x8, 3.3 V, short power-on reset).
@@ -66,12 +66,28 @@ else
     NANDDEF="$NANDDEF +define+MODEL_SV +define+NAND_ONDEMAND +define+NAND_ROWS=65536"
 fi
 
+# CV1K_NAND=1: replace the physical U2 nand_model with the MiSTer harness-served
+# path (CV1k_nand + CV1k_ddr3_harness + ddr3_beh, U2 image resident in DDR3).
+# The vendor NAND defines above are unused in this mode.  Pair with DMA_MON=1
+# +nandbytes=<n> to capture the boot's NAND reads for the byte-exact regression.
+#   FASTBOOT=1 CV1K_NAND=1 DMA_MON=1 ./build_sim.sh +maxinsn=8000000 +nandbytes=65536
+if [ "${CV1K_NAND:-0}" = "1" ]; then
+    NANDDEF="$NANDDEF +define+CV1K_NAND"
+    echo "== CV1k_nand: harness-served NAND (DDR3-resident U2 image) =="
+fi
+DMDEF=""
+if [ "${DMA_MON:-0}" = "1" ]; then
+    DMDEF="+define+DMA_MON"
+    echo "== DMA_MON: NAND read/burst probe enabled =="
+fi
+
 echo "== Verilating (Verilator $(verilator --version | awk '{print $2}')) =="
 verilator --binary --timing -j 0 -O3 --sv \
     -Wno-fatal \
     $FBDEF \
     $MSDEF \
     $NANDDEF \
+    $DMDEF \
     verilator_waivers.vlt \
     --Mdir "$MDIR" \
     -f filelist.f \

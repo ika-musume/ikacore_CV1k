@@ -12,13 +12,35 @@
 module tb_cv1k;
 
     reg i_CLK   = 1'b0;
-    reg i_CEN   = 1'b1;
-    reg i_POR_n = 1'b0;
-    reg i_RST_n = 1'b0;
+    reg i_EMU_INITRST_n = 1'b0;      // hard reset (memory subsystem + CPU chain)
+    reg i_EMU_SOFTRST_n = 1'b0;      // soft reset (CPU/blitter only; H7b.1 sequencer)
     reg i_EXTAL2= 1'b0;
 
     // ~102.4 MHz architectural clock (period scaled to 10 ns sim units)
     always #5 i_CLK = ~i_CLK;
+
+    // H7b.2: the 153.6 MHz blit/DDR3 domain clock - exact 3:2 vs i_CLK in
+    // the same scaled units (period 20/3 ns), rendered on the ps grid as a
+    // 3-cycle pattern whose RISING edges hit 15.000/21.667/28.333 (+20k):
+    // the +-0.33 ps mid-grid rounding is sampled by nothing; the edges
+    // that matter - the coincident ones - land exactly on the i_CLK-rise
+    // parity HS3's CKIO divider produces from the #205_000 POR release
+    // (measured: CKIO rises at t = 15 mod 20 - the TB's blocking reset
+    // release propagates in the release timestep, so ckio_ph starts
+    // toggling one edge earlier than a pre-edge sample would).  The DUT's
+    // pcen23 checker fails the run if this phase relation ever moves.
+    reg i_CLK153 = 1'b0;
+    initial begin
+        #15;
+        forever begin
+            i_CLK153 = 1'b1; #3.333;    // rise at 15.000 + 20k
+            i_CLK153 = 1'b0; #3.334;
+            i_CLK153 = 1'b1; #3.333;    // rise at 21.667 + 20k
+            i_CLK153 = 1'b0; #3.333;
+            i_CLK153 = 1'b1; #3.333;    // rise at 28.333 + 20k
+            i_CLK153 = 1'b0; #3.334;
+        end
+    end
 
     // RTC 32.768 kHz crystal - slow, asynchronous; divide the main clock down
     integer rtc_div = 0;
@@ -29,16 +51,29 @@ module tb_cv1k;
 
     // reset release: the MX29LV320E model gates reads until its Tvcs=200us Vcc
     // setup elapses (the board's MAX690S supervisor holds the SH-3 in reset the
-    // same way), so keep the CPU in reset until the flash is powered up.
+    // same way), so keep the CPU held until the flash is powered up.  H7b.1:
+    // the POR -> RESETM stagger moved into the DUT's reset sequencer; the TB
+    // only plays the MAX690 / MiSTer-framework roles:
+    //   MISTER arm: INITRST_n at 2 us (the old mem_rst_n point - pump JEDEC
+    //     init runs while the CPU is still soft-held), SOFTRST_n at 205 us
+    //     = the exact CPU release edge of the pre-H7b.1 TB (byte-exact A/B).
+    //   vendor arm: both at 205 us (flash Tvcs), same release edge as before.
+    //   +ioctl_test: SOFTRST_n stays low - the CPU never runs.
+`ifdef MISTER_SDRAM
     initial begin
-        i_POR_n = 1'b0; i_RST_n = 1'b0;
+        #2_000;
+        @(posedge i_CLK) i_EMU_INITRST_n = 1'b1;
+    end
+`endif
+    initial begin
         #205_000;                          // > Tvcs (200 us) so the flash answers fetch 0
         if ($test$plusargs("ioctl_test")) begin
             $display("[tb] ioctl_test: CPU held in reset for the download");
         end else begin
-            @(posedge i_CLK) i_POR_n = 1'b1;
-            repeat (8) @(posedge i_CLK);
-            i_RST_n = 1'b1;
+            @(posedge i_CLK) begin
+                i_EMU_INITRST_n = 1'b1;    // vendor-arm release (already high on MISTER)
+                i_EMU_SOFTRST_n = 1'b1;    // -> cpu_go: the sequencer staggers POR/RESETM
+            end
             $display("[tb] reset released @ %0t (flash powered up)", $time);
         end
     end
@@ -57,7 +92,30 @@ module tb_cv1k;
         end
     end
 
-    // DUT: the CV1000-B PCB
+    //------------------------------------------------------------------
+    // DUT port nets (unconditional - the H7b.1 portable top has a fixed
+    // interface; build arms that don't drive a group park it below)
+    //------------------------------------------------------------------
+    wire        ioctl_download, ioctl_wr, ioctl_wait;
+    wire [26:0] ioctl_addr;
+    wire [7:0]  ioctl_data;
+    wire [15:0] ioctl_index;
+
+    wire [12:0] sdram_a;
+    wire [1:0]  sdram_ba, sdram_dqm;
+    wire        sdram_ncs, sdram_nras, sdram_ncas, sdram_nwe, sdram_cke;
+    wire [15:0] sdram_dq_o;
+    wire        sdram_dq_oe;
+    wire [15:0] sdram_dq_i;
+
+    wire        ddram_clk, ddram_rd, ddram_we;
+    wire [7:0]  ddram_burstcnt, ddram_be;
+    wire [28:0] ddram_addr;
+    wire [63:0] ddram_din, ddram_dout;
+    wire        ddram_busy, ddram_dout_ready;
+
+    // DUT: the CV1000-B portable core top (H7b.1 two-file split: the MiSTer
+    // framework wrapper ikacore_CV1k_emu.sv is Quartus-only; this TB plays it)
     ikacore_CV1k #(
 `ifdef IBARA_FASTBOOT
         .ROM_FILE("roms/ibara_patched/ibara_u4_4M_fastboot.hex")   // copy/FPGA/delay loops NOP'd; SDRAM preloaded
@@ -65,33 +123,116 @@ module tb_cv1k;
         .ROM_FILE("roms/ibara_patched/ibara_u4_4M.hex")
 `endif
     ) dut (
-        .i_CLK   (i_CLK),
-        .i_CEN   (i_CEN),
-        .i_POR_n (i_POR_n),
-        .i_RST_n (i_RST_n),
-        .i_EXTAL2(i_EXTAL2)
-`ifdef MISTER_SDRAM
-        ,
-        .i_MEM_RST_n     (mem_rst_n),
+        .i_EMU_CLK102M   (i_CLK),
+        .i_EMU_CLK153M   (i_CLK153),       // blit/DDR3 domain (H7b.2)
+        .i_EXTAL2        (i_EXTAL2),
+        .i_EMU_INITRST_n (i_EMU_INITRST_n),
+        .i_EMU_SOFTRST_n (i_EMU_SOFTRST_n),
+        .i_SYS_n         (6'h3F),          // active low: nothing pressed
+        .i_P1_n          (8'hFF),
+        .i_P2_n          (8'hFF),
+        .i_S3_TEST_n     (1'b1),
+        .i_DSW_S2        (4'h0),           // = the retired blit_top parameter default
+        .o_PX            (),
+        .o_PX_DE         (),
+        .o_VSYNC         (),
+        .o_HLINE         (),
+        .o_SND_L         (),
+        .o_SND_R         (),
         .i_IOCTL_DOWNLOAD(ioctl_download),
         .i_IOCTL_WR      (ioctl_wr),
         .i_IOCTL_ADDR    (ioctl_addr),
         .i_IOCTL_DATA    (ioctl_data),
         .i_IOCTL_INDEX   (ioctl_index),
-        .o_IOCTL_WAIT    (ioctl_wait)
-`endif
+        .o_IOCTL_WAIT    (ioctl_wait),
+        .o_SDRAM_A       (sdram_a),
+        .o_SDRAM_BA      (sdram_ba),
+        .o_SDRAM_nCS     (sdram_ncs),
+        .o_SDRAM_nRAS    (sdram_nras),
+        .o_SDRAM_nCAS    (sdram_ncas),
+        .o_SDRAM_nWE     (sdram_nwe),
+        .o_SDRAM_DQM     (sdram_dqm),
+        .o_SDRAM_CKE     (sdram_cke),
+        .o_SDRAM_DQ_O    (sdram_dq_o),
+        .o_SDRAM_DQ_OE   (sdram_dq_oe),
+        .i_SDRAM_DQ_I    (sdram_dq_i),
+        .o_DDRAM_CLK     (ddram_clk),
+        .i_DDRAM_BUSY    (ddram_busy),
+        .o_DDRAM_BURSTCNT(ddram_burstcnt),
+        .o_DDRAM_ADDR    (ddram_addr),
+        .i_DDRAM_DOUT    (ddram_dout),
+        .i_DDRAM_DOUT_READY(ddram_dout_ready),
+        .o_DDRAM_RD      (ddram_rd),
+        .o_DDRAM_DIN     (ddram_din),
+        .o_DDRAM_BE      (ddram_be),
+        .o_DDRAM_WE      (ddram_we),
+        .o_INIT_DONE     ()
     );
+
+    //------------------------------------------------------------------
+    // DDRAM slave: serves the whole in-system DDR3 stack (H7b.2) - the
+    // VRAM write-back overlay in every arm, plus the U2 NAND image file
+    // plane at word 0x0680_0000 (byte 0x3400_0000) under CV1K_NAND.
+    // Clocked by the DDRAM face clock = the 153.6 MHz blit domain; resets
+    // with the memory subsystem (INITRST).  The C++ stat slave takes this
+    // seat in ikacore_CV1k_tb (H7b.3).
+    //------------------------------------------------------------------
+`ifdef CV1K_NAND
+    localparam DDR3_IMAGE = "roms/ibara/u2";
+`else
+    localparam DDR3_IMAGE = "";
+`endif
+    ddr3_beh #(.IMAGE(DDR3_IMAGE), .BASE_W(29'h0680_0000)) u_ddr3 (
+        .clk(i_CLK153), .rst_n(i_EMU_INITRST_n),
+        .rd(ddram_rd), .addr(ddram_addr), .burstcnt(ddram_burstcnt),
+        .we(ddram_we), .din(ddram_din), .be(ddram_be),
+        .busy(ddram_busy), .dout_ready(ddram_dout_ready), .dout(ddram_dout)
+    );
+    wire _unused_ddram_o = &{1'b0, ddram_clk, 1'b0};
+
+    // 16-bit pixel at flat VRAM px address (8192x4096 row-major), read out
+    // of the DDR3 slave's overlay - the +blitvram / +blitframe source
+    function automatic [15:0] ddr3_vram_px(input [24:0] pxa);
+        reg [63:0] w;
+        begin
+            w = u_ddr3.peek(29'h0600_0000 + {6'd0, pxa[24:2]});
+            ddr3_vram_px = w[{2'(pxa[1:0]), 4'b0000} +: 16];
+        end
+    endfunction
+
+`ifndef MISTER_SDRAM
+    // vendor arm: no HPS ioctl and no MiSTer module - park the DUT inputs
+    assign ioctl_download = 1'b0;
+    assign ioctl_wr       = 1'b0;
+    assign ioctl_addr     = 27'd0;
+    assign ioctl_data     = 8'd0;
+    assign ioctl_index    = 16'd0;
+    assign sdram_dq_i     = 16'h0000;
+    wire _unused_sdram_o = &{1'b0, sdram_a, sdram_ba, sdram_ncs, sdram_nras,
+                             sdram_ncas, sdram_nwe, sdram_dqm, sdram_cke,
+                             sdram_dq_o, sdram_dq_oe, ioctl_wait, 1'b0};
+
+    // +norhex=<hex>: override the U4 NOR image without a rebuild (H7b.D
+    // diag ROMs) - reload the vendor flash array over its Init_File
+    // contents (same byte-per-line, pair-swapped 4 MiB format).
+    initial begin
+        string norhex_path;
+        if ($value$plusargs("norhex=%s", norhex_path)) begin
+            #1000;                       // after the model's own $readmemh
+            $readmemh(norhex_path, dut.u_u4_nor.ARRAY);
+            $display("[tb] +norhex: U4 ARRAY <- %s", norhex_path);
+        end
+    end
+`endif
 
 `ifdef MISTER_SDRAM
     //------------------------------------------------------------------
-    // MiSTer memory subsystem: pump reset, HPS ioctl emulator, preloads
+    // MiSTer memory subsystem: HPS ioctl emulator + the 128 MB SDRAM
+    // module chip model (H7b.1: moved out of the top onto the o_SDRAM_*
+    // pins; the TB owns the pad tristate - split-DQ recipe, one level up)
     //------------------------------------------------------------------
-    reg  mem_rst_n   = 1'b0;
     reg  ioctl_start = 1'b0;
-    wire ioctl_download, ioctl_wr, ioctl_wait, ioctl_done;
-    wire [26:0] ioctl_addr;
-    wire [7:0]  ioctl_data;
-    wire [15:0] ioctl_index;
+    wire ioctl_done;
 
     ioctl_sim u_ioctl (
         .i_CLK(i_CLK), .i_START(ioctl_start),
@@ -100,11 +241,248 @@ module tb_cv1k;
         .i_WAIT(ioctl_wait), .o_DONE(ioctl_done)
     );
 
-    // release the memory subsystem well before the CPU POR (205 us): the
-    // pump's JEDEC init takes ~3 us and must finish before the first fetch
+    wire [15:0] s_dq;
+    assign s_dq       = sdram_dq_oe ? sdram_dq_o : 16'hzzzz;  // controller drive
+    assign sdram_dq_i = s_dq;                                 // resolved pad back in
+
+    mister_128mb u_sdram (
+        .clk  (i_CLK),                           // sim: same clock as the SH-3 (2xCKIO);
+        .dq   (s_dq),                            // HW: dedicated PLL output, phase-tuned
+        .dq_in(sdram_dq_o),
+        .a(sdram_a), .ba(sdram_ba), .ncs(sdram_ncs),
+        .nras(sdram_nras), .ncas(sdram_ncas), .nwe(sdram_nwe),
+        .dqml(sdram_dqm[0]), .dqmh(sdram_dqm[1]),
+        .cke(sdram_cke)
+    );
+
+    //------------------------------------------------------------------
+    // +refstat - refresh-scheduler census (doc section 6 sizing data).
+    // Oracle statistics on the pump's chip pins:
+    //   supply : chip-idle gaps that could hide REFs (window >= tRFC),
+    //            per-64ms capacity, worst drought between usable windows
+    //   demand : per-(bank,row) ACT touch ages - rows that self-refresh
+    //   plus BSC REF-slot cadence and BREQ tenure/gap distribution
+    //------------------------------------------------------------------
+    localparam int RS_TRFC = 7;                    // tRFC 63 ns = 6.5 fast, ceil
+    bit rs_on;
+    initial rs_on = $test$plusargs("refstat");
+
+    longint rs_now, rs_busy_until, rs_gap_start, rs_lastq_end;
+    longint rs_hist [0:7];                         // gap-length buckets
+    longint rs_nq, rs_cap, rs_drought, rs_refslots, rs_lastref, rs_refspace;
+    longint rs_ncmd, rs_touch [0:3][0:8191];
+    longint rs_breq_t0, rs_breq_n, rs_breq_sum, rs_gapb_sum, rs_breq_t1;
     initial begin
-        #2_000;
-        @(posedge i_CLK) mem_rst_n = 1'b1;
+        for (int b = 0; b < 4; b++)
+            for (int r = 0; r < 8192; r++) rs_touch[b][r] = -1;
+        rs_gap_start = -1; rs_lastq_end = -1; rs_lastref = -1; rs_breq_t1 = -1;
+    end
+
+    function automatic int rs_bucket(longint g);
+        if      (g <  RS_TRFC) rs_bucket = 0;      // too short for one REF
+        else if (g <  16)      rs_bucket = 1;
+        else if (g <  32)      rs_bucket = 2;
+        else if (g <  64)      rs_bucket = 3;
+        else if (g <  256)     rs_bucket = 4;
+        else if (g <  1024)    rs_bucket = 5;
+        else if (g <  8192)    rs_bucket = 6;
+        else                   rs_bucket = 7;
+    endfunction
+
+    wire [2:0] rs_cmd = {dut.u_pump.o_S_nRAS, dut.u_pump.o_S_nCAS, dut.u_pump.o_S_nWE};
+    wire       rs_nop = (rs_cmd == 3'b111);
+
+    // +cmdlog_from/+cmdlog_to (ns): dump every non-NOP chip command in the
+    // window with bus-ownership context - protocol-violation forensics
+    longint cl_from = -1, cl_to = -1;
+    initial begin
+        void'($value$plusargs("cmdlog_from=%d", cl_from));
+        void'($value$plusargs("cmdlog_to=%d",   cl_to));
+    end
+    reg [4:0] cl_sig_d;
+    always @(posedge i_CLK) if (cl_from >= 0
+                                && longint'($time) >= cl_from && longint'($time) <= cl_to) begin
+        if (cl_sig_d !== {dut.blit_breq_n, dut.BACK_n, dut.BUS_OE, dut.CS0_n, dut.blit_own})
+            $display("[siglog] %0t breq_n=%b back_n=%b bus_oe=%b cs0_n=%b own=%b",
+                     $time, dut.blit_breq_n, dut.BACK_n, dut.BUS_OE, dut.CS0_n, dut.blit_own);
+        cl_sig_d <= {dut.blit_breq_n, dut.BACK_n, dut.BUS_OE, dut.CS0_n, dut.blit_own};
+    end
+    always @(posedge i_CLK) if (cl_from >= 0 && !rs_nop
+                                && longint'($time) >= cl_from && longint'($time) <= cl_to)
+        $display("[cmdlog] %0t cmd=%s BA=%0d A=%04x breq_n=%b back_n=%b own=%b cs0_n=%b cs3_n=%b gcs_n=%b nor=%0d",
+                 $time,
+                 rs_cmd == 3'b011 ? "ACT" : rs_cmd == 3'b101 ? "RD " :
+                 rs_cmd == 3'b100 ? "WR " : rs_cmd == 3'b010 ? "PRE" :
+                 rs_cmd == 3'b001 ? "REF" : "MRS",
+                 dut.u_pump.o_S_BA, dut.u_pump.o_S_A,
+                 dut.blit_breq_n, dut.BACK_n, dut.blit_own,
+                 dut.CS0_n, dut.CS3_n, dut.u_pump.i_G_CS_n, dut.u_pump.nst);
+
+    always @(posedge i_CLK) if (rs_on && dut.u_pump.init_done) begin
+        rs_now = rs_now + 1;
+        // idle-gap bookkeeping (occupancy model: cmd + data/beat/precharge tail)
+        if (!rs_nop) begin
+            rs_ncmd = rs_ncmd + 1;
+            if (rs_gap_start >= 0) begin : close_gap
+                longint g;
+                g = rs_now - rs_gap_start;
+                rs_hist[rs_bucket(g)] = rs_hist[rs_bucket(g)] + 1;
+                if (g >= RS_TRFC) begin
+                    rs_nq  = rs_nq + 1;
+                    rs_cap = rs_cap + g / RS_TRFC;
+                    if (rs_lastq_end >= 0 && (rs_gap_start - rs_lastq_end) > rs_drought)
+                        rs_drought = rs_gap_start - rs_lastq_end;
+                    rs_lastq_end = rs_now;
+                end
+                rs_gap_start = -1;
+            end
+            case (rs_cmd)
+                3'b011: begin                                  // ACT: row touch + open
+                    rs_touch[dut.u_pump.o_S_BA][dut.u_pump.o_S_A] = rs_now;
+                    rs_busy_until = rs_now + 8;
+                end
+                3'b101: rs_busy_until = rs_now + 7;           // RD: CL+beats+tRP
+                3'b100: rs_busy_until = rs_now + 7;           // WR: beats+tWR+tRP
+                3'b010: rs_busy_until = rs_now + 3;           // PRE
+                3'b001: begin                                  // REF (BSC slot)
+                    rs_busy_until = rs_now + RS_TRFC;
+                    rs_refslots   = rs_refslots + 1;
+                    if (rs_lastref >= 0 && (rs_now - rs_lastref) > rs_refspace)
+                        rs_refspace = rs_now - rs_lastref;
+                    rs_lastref = rs_now;
+                end
+                default: ;
+            endcase
+        end
+        else if (rs_gap_start < 0 && rs_now >= rs_busy_until)
+            rs_gap_start = rs_now;
+
+        // BREQ tenure/gap census
+        if (!dut.blit_breq_n && rs_breq_t0 == 0) begin
+            rs_breq_t0 = rs_now;
+            if (rs_breq_t1 > 0) rs_gapb_sum = rs_gapb_sum + (rs_now - rs_breq_t1);
+        end
+        if (dut.blit_breq_n && rs_breq_t0 != 0) begin
+            rs_breq_n   = rs_breq_n + 1;
+            rs_breq_sum = rs_breq_sum + (rs_now - rs_breq_t0);
+            rs_breq_t1  = rs_now;
+            rs_breq_t0  = 0;
+        end
+    end
+
+    final if (rs_on) begin
+        longint touched, stale1ms, oldest; real ms, per64;
+        ms = real'(rs_now) / 102_400.0;            // fast cycles -> ms (102.4 MHz)
+        touched = 0; stale1ms = 0; oldest = -1;
+        for (int b = 0; b < 4; b++)
+            for (int r = 0; r < 8192; r++)
+                if (rs_touch[b][r] >= 0) begin
+                    touched++;
+                    if (rs_now - rs_touch[b][r] > 102_400) stale1ms++;
+                    if (oldest < 0 || rs_touch[b][r] < oldest) oldest = rs_touch[b][r];
+                end
+        per64 = ms > 0.0 ? real'(rs_cap) * 64.0 / ms : 0.0;
+        $display("\n[refstat] ==== refresh census: %.3f ms observed, %0d chip cmds ====", ms, rs_ncmd);
+        $display("[refstat] gap histogram (fast cycles): <%0d:%0d  7-15:%0d  16-31:%0d  32-63:%0d  64-255:%0d  256-1k:%0d  1k-8k:%0d  >=8k:%0d",
+                 RS_TRFC, rs_hist[0], rs_hist[1], rs_hist[2], rs_hist[3], rs_hist[4], rs_hist[5], rs_hist[6], rs_hist[7]);
+        $display("[refstat] qualifying windows: %0d   hidden-REF capacity: %0d (= %.0f per 64 ms; demand 8192)",
+                 rs_nq, rs_cap, per64);
+        $display("[refstat] worst drought between usable windows: %0d fast = %.2f us",
+                 rs_drought, real'(rs_drought) / 102.4);
+        $display("[refstat] BSC REF slots forwarded: %0d (worst spacing %.2f us)",
+                 rs_refslots, real'(rs_refspace) / 102.4);
+        $display("[refstat] rows ACT-touched: %0d of 32768 (bank,row) pairs; >1 ms since last touch: %0d",
+                 touched, stale1ms);
+        if (rs_breq_n > 0)
+            $display("[refstat] BREQ tenures: %0d, mean %.2f us; mean gap %.2f us",
+                     rs_breq_n, real'(rs_breq_sum) / real'(rs_breq_n) / 102.4,
+                     real'(rs_gapb_sum) / real'(rs_breq_n) / 102.4);
+    end
+
+    //------------------------------------------------------------------
+    // +refage - refresh AGE monitor: the acceptance oracle for the hidden
+    // row-maintenance scheduler (doc section 6.2).  Mirrors every refresh
+    // event on the chip pins and asserts that no row of the sweep domain
+    // (bank 0: rows 0x0000-0x17FF incl. the NOR window; banks 1-3:
+    // 0x0000-0x0FFF) goes 64 ms without one:
+    //   * ACT to (bank,row)  - grid, NOR engine, loader, or maintenance pair
+    //   * CBR REF            - internal counter row, all four banks (the
+    //     mirror counter's phase is arbitrary; real-chip coverage is the
+    //     same pattern rotated, so the age bound is phase-independent)
+    // Sim models don't decay, so this monitor IS the proof of correctness;
+    // non-interference is proven separately by the A/B trace equality.
+    // All-blocking assignments (NBA-to-array Verilator limitation).
+    //------------------------------------------------------------------
+    bit ra_on;
+    initial ra_on = $test$plusargs("refage");
+    localparam longint RA_64MS = 64 * 102_400;     // 64 ms in fast edges
+
+    longint ra_now, ra_last [0:3][0:8191];
+    longint ra_worst, ra_viol, ra_pairs, ra_scan_next;
+    int     ra_refctr, ra_defworst;
+    bit     ra_mopen_d, ra_init_d;
+
+    function automatic int ra_top(int b);          // sweep-domain top row + 1
+        ra_top = (b == 0) ? 'h1800 : 'h1000;
+    endfunction
+
+    always @(posedge i_CLK) if (ra_on && dut.u_pump.init_done) begin
+        if (!ra_init_d) begin                      // domain starts fresh at init
+            ra_init_d = 1'b1;
+            ra_scan_next = 102_400;
+            for (int b = 0; b < 4; b++)
+                for (int r = 0; r < 8192; r++) ra_last[b][r] = 0;
+        end
+        ra_now = ra_now + 1;
+
+        if (rs_cmd == 3'b011)                      // ACT refreshes its row
+            ra_last[dut.u_pump.o_S_BA][dut.u_pump.o_S_A[12:0]] = ra_now;
+        if (rs_cmd == 3'b001) begin                // REF: counter row, all banks
+            for (int b = 0; b < 4; b++) ra_last[b][ra_refctr] = ra_now;
+            ra_refctr = (ra_refctr + 1) & 13'h1FFF;
+        end
+
+        if (dut.u_pump.m_open && !ra_mopen_d) ra_pairs = ra_pairs + 1;
+        ra_mopen_d = dut.u_pump.m_open;
+        for (int b = 0; b < 4; b++) begin
+            if (int'(dut.u_pump.def_lo[b]) > ra_defworst) ra_defworst = int'(dut.u_pump.def_lo[b]);
+            if (int'(dut.u_pump.def_hi[b]) > ra_defworst) ra_defworst = int'(dut.u_pump.def_hi[b]);
+        end
+
+        if (ra_now >= ra_scan_next) begin          // 1 ms age sweep
+            ra_scan_next = ra_now + 102_400;
+            for (int b = 0; b < 4; b++)
+                for (int r = 0; r < ra_top(b); r++) begin
+                    if (ra_now - ra_last[b][r] > ra_worst)
+                        ra_worst = ra_now - ra_last[b][r];
+                    if (ra_now - ra_last[b][r] > RA_64MS) begin
+                        ra_viol = ra_viol + 1;
+                        if (ra_viol <= 10)
+                            $display("[refage] VIOLATION: bank %0d row %04x age %.2f ms @%0t",
+                                     b, r, real'(ra_now - ra_last[b][r]) / 102_400.0, $time);
+                    end
+                end
+        end
+    end
+
+    final if (ra_on) begin
+        longint w; int wb, wr;
+        w = 0; wb = 0; wr = 0;                     // final worst incl. run tail
+        for (int b = 0; b < 4; b++)
+            for (int r = 0; r < ra_top(b); r++)
+                if (ra_now - ra_last[b][r] > w) begin
+                    w = ra_now - ra_last[b][r]; wb = b; wr = r;
+                end
+        if (w > ra_worst) ra_worst = w;
+        $display("\n[refage] ==== refresh age: %.3f ms observed ====",
+                 real'(ra_now) / 102_400.0);
+        $display("[refage] maintenance pairs issued: %0d (%.0f per 64 ms; sweep demand 18432)",
+                 ra_pairs, real'(ra_now) > 0 ? real'(ra_pairs) * real'(RA_64MS) / real'(ra_now) : 0.0);
+        $display("[refage] worst row age: %.3f ms (bound 64.000; last worst bank %0d row %04x)",
+                 real'(ra_worst) / 102_400.0, wb, wr);
+        $display("[refage] worst deficit backlog: %0d (cap = region size, 4096 max)", ra_defworst);
+        if (ra_viol == 0) $display("[refage] PASS: no row exceeded 64 ms");
+        else              $display("[refage] FAIL: %0d row-age violations", ra_viol);
     end
 
     // Default mode: zero-time NOR-window preload with the same image the
@@ -114,16 +492,24 @@ module tb_cv1k;
     reg [7:0] nor_bytes [0:4194303];
     initial if (!$test$plusargs("ioctl_test")) begin
         integer pk;
+        string norhex_path;
+        if ($value$plusargs("norhex=%s", norhex_path)) begin
+            // H7b.D diag ROMs: same image override as the vendor arm
+            $readmemh(norhex_path, nor_bytes);
+            $display("[tb] MISTER: +norhex NOR window <- %s", norhex_path);
+        end
+        else begin
 `ifdef IBARA_FASTBOOT
         $readmemh("roms/ibara_patched/ibara_u4_4M_fastboot.hex", nor_bytes);
 `else
         $readmemh("roms/ibara_patched/ibara_u4_4M.hex", nor_bytes);
 `endif
+        end
         for (pk = 0; pk < 2097152; pk = pk + 1)
-            dut.u_sdram.chip0.Bank0[23'h40_0000 + pk] =
+            u_sdram.chip0.Bank0[23'h40_0000 + pk] =
                 {nor_bytes[2*pk+1], nor_bytes[2*pk]};
         $display("[tb] MISTER: NOR window preloaded (2M halfwords), [0]=%04x (expect df3d)",
-                 dut.u_sdram.chip0.Bank0[23'h40_0000]);
+                 u_sdram.chip0.Bank0[23'h40_0000]);
     end
 
 `ifdef IBARA_FASTBOOT
@@ -137,15 +523,15 @@ module tb_cv1k;
         $readmemh("roms/ibara_patched/ibara_sdram_bank1.hex", wram1);
         for (wk = 0; wk < 524288; wk = wk + 1) begin
             ix = ((wk >> 8) << 10) | ((wk & 255) << 1);
-            dut.u_sdram.chip0.Bank0[ix]   = wram0[wk][31:16];
-            dut.u_sdram.chip0.Bank0[ix+1] = wram0[wk][15:0];
-            dut.u_sdram.chip0.Bank1[ix]   = wram1[wk][31:16];
-            dut.u_sdram.chip0.Bank1[ix+1] = wram1[wk][15:0];
+            u_sdram.chip0.Bank0[ix]   = wram0[wk][31:16];
+            u_sdram.chip0.Bank0[ix+1] = wram0[wk][15:0];
+            u_sdram.chip0.Bank1[ix]   = wram1[wk][31:16];
+            u_sdram.chip0.Bank1[ix+1] = wram1[wk][15:0];
         end
         $display("[tb] MISTER: fastboot work-RAM preloaded (grid banks 0/1)");
         $display("[tb] fb check: wram0[0xA8C]=%08x Bank0[0x2918..9]=%04x %04x (expect 4f030002 / 4f03 0002)",
                  wram0[19'h0A8C],
-                 dut.u_sdram.chip0.Bank0[23'h02918], dut.u_sdram.chip0.Bank0[23'h02919]);
+                 u_sdram.chip0.Bank0[23'h02918], u_sdram.chip0.Bank0[23'h02919]);
     end
 `endif
 
@@ -171,7 +557,7 @@ module tb_cv1k;
             bb = $fgetc(f); lo8 = bb[7:0];
             bb = $fgetc(f);
             expd = {bb[7:0], lo8};
-            got  = dut.u_sdram.chip0.Bank0[23'h40_0000 + k[22:0]];
+            got  = u_sdram.chip0.Bank0[23'h40_0000 + k[22:0]];
             if (got !== expd) begin
                 errs = errs + 1;
                 if (errs <= 10)
@@ -190,7 +576,7 @@ module tb_cv1k;
     integer dbg_bus = 0;
     integer nprobe  = 0;
     initial void'($value$plusargs("dbg=%d", dbg_bus));
-    always @(posedge i_CLK) if ((dbg_bus != 0) && i_RST_n && nprobe < 80) begin
+    always @(posedge i_CLK) if ((dbg_bus != 0) && dut.i_RST_n && nprobe < 80) begin
         if (dut.CS0_n === 1'b0 || dut.CS3_n === 1'b0) begin
             $display("[bus] t=%0t CKIO=%b A=%07x CS0=%b CS3=%b RD=%b RDWR=%b WEn=%b D=%08x D_OE=%b",
                      $time, dut.CKIO, dut.A, dut.CS0_n, dut.CS3_n, dut.RD_n,
@@ -295,10 +681,10 @@ module tb_cv1k;
         begin
             ix = (a[20:10] * 1024) + (a[9:2] * 2) + a[1];
             case (a[22:21])
-                2'd0: bd_word = dut.u_sdram.chip0.Bank0[ix];
-                2'd1: bd_word = dut.u_sdram.chip0.Bank1[ix];
-                2'd2: bd_word = dut.u_sdram.chip0.Bank2[ix];
-                2'd3: bd_word = dut.u_sdram.chip0.Bank3[ix];
+                2'd0: bd_word = u_sdram.chip0.Bank0[ix];
+                2'd1: bd_word = u_sdram.chip0.Bank1[ix];
+                2'd2: bd_word = u_sdram.chip0.Bank2[ix];
+                2'd3: bd_word = u_sdram.chip0.Bank3[ix];
             endcase
         end
 `else
@@ -356,7 +742,8 @@ module tb_cv1k;
         end
     endtask
 
-    always @(posedge i_CLK) begin
+    // (blit domain: o_exec is a 1-cycle 153.6 MHz pulse since H7b.2)
+    always @(posedge i_CLK153) begin
         bd_exec_d <= dut.u_blit.u_blit_regs.o_exec;
         if (bd_on && dut.u_blit.u_blit_regs.o_exec && !bd_exec_d) begin
             bd_dump_exec();
@@ -393,7 +780,7 @@ module tb_cv1k;
         end
     end
 
-    always @(posedge i_CLK) begin
+    always @(posedge i_CLK153) begin
         if (bf_on && dut.u_blit.u_blit_regs.o_exec && !bd_exec_d) begin
             $fdisplay(bf_fd, "EXEC frame=%0d addr=%07x clip=%0d,%0d scroll=%0d,%0d",
                       bf_done, {3'b000, dut.u_blit.u_blit_regs.o_list_addr},
@@ -417,7 +804,7 @@ module tb_cv1k;
     reg       bb_on = 1'b0;
     reg [1:0] bb_d  = 2'b00;
     initial if ($test$plusargs("blitbusy")) bb_on = 1'b1;
-    always @(posedge i_CLK) begin
+    always @(posedge i_CLK153) begin
         if (bb_on && ({dut.u_blit.u_blit_fetch.o_busy, dut.u_blit.u_blit_draw.o_busy} != bb_d)) begin
             $display("[blitbusy] t=%0t fetch=%b draw=%b fst=%0d bst=%0d fifo_v=%b ob_v=%b",
                      $time, dut.u_blit.u_blit_fetch.o_busy, dut.u_blit.u_blit_draw.o_busy,
@@ -435,13 +822,13 @@ module tb_cv1k;
     reg bi_on = 1'b0;
     reg bi_d  = 1'b1;
     initial if ($test$plusargs("blitirq1")) bi_on = 1'b1;
-    always @(posedge i_CLK) begin
+    always @(posedge i_CLK153) begin
         if (bi_on) begin
             if (bi_d && !dut.pth_irq1_n)
 `ifdef MISTER_SDRAM
                 $display("[blitirq1] t=%0t IRQ1 fall, callback@0c002224=%08x",
-                         $time, {dut.u_sdram.chip0.Bank0[23'h02112],
-                                 dut.u_sdram.chip0.Bank0[23'h02113]});
+                         $time, {u_sdram.chip0.Bank0[23'h02112],
+                                 u_sdram.chip0.Bank0[23'h02113]});
 `else
                 $display("[blitirq1] t=%0t IRQ1 fall, callback@0c002224=%08x",
                          $time, dut.u_u1_sdram.Bank0[19'h00889]);
@@ -490,7 +877,7 @@ module tb_cv1k;
 
     always @(posedge i_CLK) if (dut.CKIO_PCEN) ba_ckio = ba_ckio + 1;
 
-    always @(posedge i_CLK) if (ba_on != 0 && dut.u_blit.u_blit_gov.o_dbg_vld) begin
+    always @(posedge i_CLK153) if (ba_on != 0 && dut.u_blit.u_blit_gov.o_dbg_vld) begin
         ba_kind.push_back(int'(dut.u_blit.u_blit_gov.o_dbg_kind));
         ba_cost.push_back(int'(dut.u_blit.u_blit_gov.o_dbg_cost));
     end
@@ -530,10 +917,10 @@ module tb_cv1k;
         begin
             ix = (a[20:10] * 1024) + (a[9:2] * 2) + a[1];
             case (a[22:21])
-                2'd0: dut.u_sdram.chip0.Bank0[ix] = w;
-                2'd1: dut.u_sdram.chip0.Bank1[ix] = w;
-                2'd2: dut.u_sdram.chip0.Bank2[ix] = w;
-                2'd3: dut.u_sdram.chip0.Bank3[ix] = w;
+                2'd0: u_sdram.chip0.Bank0[ix] = w;
+                2'd1: u_sdram.chip0.Bank1[ix] = w;
+                2'd2: u_sdram.chip0.Bank2[ix] = w;
+                2'd3: u_sdram.chip0.Bank3[ix] = w;
             endcase
         end
 `else
@@ -824,6 +1211,29 @@ module tb_cv1k;
     end
 
     //========================================================================
+    // H7b.2 - IRQ pin-fall log: +irq2log=<file> records the $time of every
+    // IRQ2 (vblank) and IRQ1 (governed blit done) pin fall, observed from the
+    // CPU side of the boundary.  Both shapers update their pin registers only
+    // at CKIO-rise instants, so these times are EXACTLY comparable between
+    // the single-clock datum build and the H7b.2 two-clock build - the
+    // "IRQ2 cadence match" accept is a byte-diff of this file.  Pure
+    // monitor: adding it must keep the trace sha256 at the H7b.1 baseline.
+    //========================================================================
+    integer i2l_fd = 0;
+    reg     i2l_irq2_d = 1'b1, i2l_irq1_d = 1'b1;
+    initial begin
+        string i2l_file;
+        if ($value$plusargs("irq2log=%s", i2l_file))
+            i2l_fd = $fopen(i2l_file, "w");
+    end
+    always @(posedge i_CLK) if (i2l_fd != 0) begin
+        if (i2l_irq2_d && !dut.pth_irq2_n) $fdisplay(i2l_fd, "IRQ2 %0t", $time);
+        if (i2l_irq1_d && !dut.pth_irq1_n) $fdisplay(i2l_fd, "IRQ1 %0t", $time);
+        i2l_irq2_d <= dut.pth_irq2_n;
+        i2l_irq1_d <= dut.pth_irq1_n;
+    end
+
+    //========================================================================
     // H5 - scanout frame capture: +blitframe=<file> taps blit_video's pixel
     // stream continuously and keeps the most recent COMPLETE 320x240 frame
     // (vsync-to-vsync with all 76,800 px_de strobes); at end of sim it is
@@ -841,7 +1251,7 @@ module tb_cv1k;
     // exported sideband + beat channels hierarchically.
     //========================================================================
     blit_dsc_check u_dsc_check (
-        .i_CLK          (i_CLK),
+        .i_CLK          (i_CLK153),
         .i_RST_n        (dut.i_POR_n),
         .i_dsc_vld      (dut.u_blit.o_dsc_vld),
         .i_dsc_sx_lo    (dut.u_blit.o_dsc_sx_lo),
@@ -871,7 +1281,8 @@ module tb_cv1k;
 
     initial if ($value$plusargs("blitframe=%s", bfr_file)) bfr_on = 1;
 
-    always @(posedge i_CLK) if (bfr_on != 0) begin
+    // (blit domain: vsync/px_de are 1-cycle 153.6 MHz pulses since H7b.2)
+    always @(posedge i_CLK153) if (bfr_on != 0) begin
         if (dut.u_blit.blit_vsync) begin
             if (bfr_idx == 76800) begin
                 for (int i = 0; i < 76800; i++) bfr_last[i] = bfr_cur[i];
@@ -905,8 +1316,8 @@ module tb_cv1k;
                 end
                 for (int y = 0; y < 240; y++)
                     for (int x = 0; x < 320; x++) begin
-                        automatic logic [15:0] want = dut.u_blit_vram.mem[
-                            {(12'(bfr_sy_l) + 12'(y)), (13'(bfr_sx_l) + 13'(x))}];
+                        automatic logic [15:0] want = ddr3_vram_px(
+                            {(12'(bfr_sy_l) + 12'(y)), (13'(bfr_sx_l) + 13'(x))});
                         if (bfr_last[y * 320 + x] !== want) bad = bad + 1;
                     end
                 $display("[blitframe] wrote %s (frame %0d, scroll=(%0d,%0d)); VRAM self-check: %s (%0d bad px)",
@@ -917,24 +1328,96 @@ module tb_cv1k;
     end
 
     //========================================================================
-    // H3 - blitter VRAM dump: +blitvram=<file> writes the draw engine's
-    // 64 MB behavioral VRAM as raw little-endian ARGB1555 (one u16 per px,
-    // 8192x4096 row-major) at end of sim.  Diff against the golden model
-    // with `blitgold --boardtrace build/board_blit.txt --raw <file>` - the
-    // in-system half of the H3 accept.
+    // H3 - blitter VRAM dump: +blitvram=<file> writes the 64 MB VRAM as raw
+    // little-endian ARGB1555 (one u16 per px, 8192x4096 row-major) at end
+    // of sim.  H7b.2: sourced from the DDR3 slave's write-back overlay (the
+    // VRAM region at word 0x0600_0000) instead of blit_vram_beh.  Diff
+    // against the golden model with `blitgold --boardtrace <dump> --raw
+    // <file>` - the "C++ render of the DDR3 VRAM region = 0 bad px" accept.
     //========================================================================
     string bv_file;
     final begin
         if ($value$plusargs("blitvram=%s", bv_file)) begin
             automatic integer bv_fd = $fopen(bv_file, "wb");
             if (bv_fd != 0) begin
-                for (int unsigned i = 0; i < 33554432; i++) begin
-                    automatic logic [15:0] px = dut.u_blit_vram.mem[i];
-                    $fwrite(bv_fd, "%c%c", px[7:0], px[15:8]);
+                for (int unsigned i = 0; i < 8388608; i++) begin
+                    automatic logic [63:0] w = u_ddr3.peek(29'h0600_0000 + 29'(i));
+                    $fwrite(bv_fd, "%c%c%c%c%c%c%c%c",
+                            w[7:0],   w[15:8],  w[23:16], w[31:24],
+                            w[39:32], w[47:40], w[55:48], w[63:56]);
                 end
                 $fclose(bv_fd);
-                $display("[blitvram] wrote %s", bv_file);
+                $display("[blitvram] wrote %s (DDR3 VRAM region)", bv_file);
             end
+        end
+    end
+
+    //========================================================================
+    // +blitreplay - replay a .blit trace window through the backdoor EXEC
+    // path at recorded cadence (extract with scripts/blit_replay_extract.py).
+    // Replay file: per exec a header "t_ckio list_addr clip_x clip_y nwords"
+    // followed by nwords "byte_addr u16" lines.  Each exec's list is written
+    // just before it fires (the lists are double-buffered at 3 addresses, so
+    // a single preload would alias them; the real game rebuilds them per
+    // frame the same way - the CPU-side list-build bus cost is not modeled).
+    // The real fetch unit bus-masters every chunk, so the U1 bus carries the
+    // authentic worst-case load - pair with +refstat for scheduler sizing.
+    // Run with +noirq1 +noirq2: the FASTBOOT game must stay parked in its
+    // VBLANK wait (an unmasked IRQ2 wakes it and it then clobbers the same
+    // work RAM the replay lists live in).
+    //   ./Vtb_cv1k +blitreplay +noirq1 +noirq2 +refstat +maxinsn=999999999
+    //              +tracefrom=999999999 [+replayfile=f]
+    // EXECs that fall due while the blitter is busy fire on ready (= the
+    // game's STATUS-poll slip, i.e. recorded slowdown behaves as on the PCB).
+    //========================================================================
+    integer br_on = 0;
+    longint br_ckio = 0;
+    initial br_on = $test$plusargs("blitreplay");
+    always @(posedge i_CLK) if (dut.CKIO_PCEN) br_ckio = br_ckio + 1;
+
+    initial begin
+        string rpf;
+        integer fd, nw, nex, k;
+        reg [31:0] a; reg [15:0] w;
+        longint t_ckio, t_base; reg [31:0] lst; integer cx, cy;
+        #10;
+        if (br_on != 0) begin
+            rpf = "build/ddps_replay.txt";
+            void'($value$plusargs("replayfile=%s", rpf));
+            fd = $fopen(rpf, "r");
+            if (fd == 0) begin $display("[blitreplay] cannot open %s", rpf); $finish; end
+            wait (br_ckio >= 600_000);
+            wait (dut.u_blit.u_blit_gov.o_busy   == 1'b0 &&
+                  dut.u_blit.u_blit_fetch.o_busy == 1'b0 &&
+                  dut.u_blit.u_blit_draw.o_busy  == 1'b0);
+            t_base = br_ckio; nex = 0;
+            while ($fscanf(fd, "%d %h %d %d %d", t_ckio, lst, cx, cy, nw) == 5) begin
+                for (k = 0; k < nw; k = k + 1) begin
+                    if ($fscanf(fd, "%h %h", a, w) != 2)
+                        begin $display("[blitreplay] truncated ops"); $finish; end
+                    ba_wr16(a, w);
+                end
+                while (br_ckio < t_base + t_ckio) @(posedge i_CLK);
+                wait (dut.u_blit.u_blit_gov.o_busy   == 1'b0 &&
+                      dut.u_blit.u_blit_fetch.o_busy == 1'b0 &&
+                      dut.u_blit.u_blit_draw.o_busy  == 1'b0);
+                @(negedge i_CLK);
+                dut.u_blit.u_blit_regs.bd_list     = lst[28:0];
+                dut.u_blit.u_blit_regs.bd_clip_x   = cx[15:0];
+                dut.u_blit.u_blit_regs.bd_clip_y   = cy[15:0];
+                dut.u_blit.u_blit_regs.bd_exec_req = 1'b1;
+                wait (dut.u_blit.u_blit_gov.o_busy == 1'b1);
+                nex = nex + 1;
+                if (nex % 8 == 0)
+                    $display("[blitreplay] exec %0d fired @ %0d CKIO", nex, br_ckio - t_base);
+            end
+            $fclose(fd);
+            wait (dut.u_blit.u_blit_gov.o_busy   == 1'b0 &&
+                  dut.u_blit.u_blit_fetch.o_busy == 1'b0 &&
+                  dut.u_blit.u_blit_draw.o_busy  == 1'b0);
+            $display("[blitreplay] done: %0d execs, %0d CKIO span (%.1f ms)",
+                     nex, br_ckio - t_base, real'(br_ckio - t_base) / 51_200.0);
+            $finish;
         end
     end
 

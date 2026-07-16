@@ -1,6 +1,6 @@
 // ikacore CV1k - H7a step-4 testbench harness.
 //
-// Drives tb_h7 (blit_draw + blit_batch + blit_video[PREFETCH] + ddr3_harness)
+// Drives tb_h7 (blit_draw + blit_batch + blit_video[PREFETCH] + CV1k_ddr3_harness)
 // at the TARGET clock configuration (153.6 MHz, CKIO enable every 3rd cycle)
 // against a C++ DDRAM slave whose timing is the calibrated ddr3_stat.h model
 // (M-DDR3 measurements: latency histogram under HPS load, beta_R/beta_W,

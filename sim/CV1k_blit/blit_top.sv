@@ -12,12 +12,12 @@
 //
 // Platform-agnostic by construction: everything below this boundary is the
 // same RTL on the Verilator board sim and on the MiSTer core.  The memory
-// side is exported as the H3 beat channels (fixed-latency read contract,
-// per-pixel-lane masked writes, no RMW) - in the board sim they connect to
-// blit_vram_beh; in H7a a NEW blit_batch (K=8-objline trains, ping-pong
-// staging) sits between these channels and the swappable ddr3_harness.
-// blit_fetch stays on the SH-3 shared bus (authentic BREQ/BACK) and never
-// touches the DDR3 stack.
+// side is exported as the H3 beat channels (read-stall i_rd_vld protocol,
+// per-pixel-lane masked writes, no RMW) - since H7b.2 the board top wires
+// them to blit_batch (K=8-objline trains) in front of the swappable
+// CV1k_ddr3_harness; the H6 unit rigs keep the fixed-latency
+// blit_vram_beh (i_rd_vld tied 1, PREFETCH=0).  blit_fetch stays on the
+// SH-3 shared bus (authentic BREQ/BACK) and never touches the DDR3 stack.
 //
 // Steal arbitration (H5 semantics, unchanged): while the line fetcher owns
 // the memory (o_steal), the draw engine's write channel backpressures on
@@ -26,9 +26,16 @@
 // arbitration is the DDR3 harness's job behind these same channels.
 //============================================================================
 module blit_top #(
-    parameter DSW_S2 = 4'h0            // DIP S2 (provisional; not a boot gate)
+    // H7b.2: PREFETCH=1 selects blit_video's 1-hline train prefetch (the
+    // o_lf_* face below, served by CV1k_ddr3_harness) instead of the
+    // beat-wise o_vrd channel - the tb_h7-proven target configuration.
+    // Default 0 keeps the H6 fixed-latency rigs bit-identical.
+    parameter bit PREFETCH = 1'b0
 )(
-    input  wire        i_CLK,          // 102.4 MHz domain (2x CKIO)
+    input  wire [3:0]  i_DSW_S2,       // DIP S2 (H7b: runtime input from the
+                                       // MiSTer OSD; was a parameter)
+    input  wire        i_CLK,          // blit domain clock (H7b.2: 153.6 MHz =
+                                       // 3x CKIO; H6 rigs drove 102.4 = 2x)
     input  wire        i_CKIO_PCEN,    // pulses the i_CLK cycle CKIO rises
     input  wire        i_RST_n,
 
@@ -57,6 +64,8 @@ module blit_top #(
     output wire        o_BF_WE,
     output wire [3:0]  o_BF_DQM,
     input  wire [31:0] i_D_BUS,        // resolved shared bus (fetch read data)
+    output wire        o_REF_WIN,      // fetch guarantees >= 5 CKIO w/o PALL/ACT
+                                       // (CV1k_sdram_control refresh scheduler)
 
     //------------------------------------------------------------------
     // interrupts (falling-edge sources, INTC-visible shapes)
@@ -88,9 +97,14 @@ module blit_top #(
     output wire [3:0]  o_wr_mask,
     input  wire        i_wr_rdy,
     input  wire        i_rd_vld,       // read-stall (H7): tie 1 on fixed-latency backends
-    output wire        o_vrd_req,      // video line fetch
+    output wire        o_vrd_req,      // video line fetch (PREFETCH=0 only)
     output wire [24:0] o_vrd_addr,
     input  wire [63:0] i_vrd_data,
+    output wire        o_lf_req,       // PREFETCH=1 line-train face
+    output wire [11:0] o_lf_y,         // (CV1k_ddr3_harness video client;
+    output wire [12:0] o_lf_x0,        //  idle when PREFETCH=0)
+    input  wire        i_lf_dvld,
+    input  wire [63:0] i_lf_data,
     output wire        o_steal,        // scanout-owns-memory window (debug/arb tap)
 
     //------------------------------------------------------------------
@@ -160,9 +174,8 @@ assign o_wr_req = bv_wr_req_raw && !blit_steal;
 //==================================================================
 //  Register file (CS6 0x18000000, blitter_detail.md §3)  [H0/I-1.1]
 //==================================================================
-blit_regs #(
-    .DSW_S2 (DSW_S2)
-) u_blit_regs (
+blit_regs u_blit_regs (
+    .i_DSW_S2    (i_DSW_S2),
     .i_CLK       (i_CLK),
     .i_CKIO_PCEN (i_CKIO_PCEN),
     .i_RST_n     (i_RST_n),
@@ -216,7 +229,8 @@ blit_fetch u_blit_fetch (
     .o_snoop_push (blit_snoop_push),   // H4: governor arrival stream
     .o_snoop_word (blit_snoop_word),
     .o_busy       (blit_busy),
-    .o_done       (blit_done)
+    .o_done       (blit_done),
+    .o_REF_WIN    (o_REF_WIN)
 );
 
 //==================================================================
@@ -295,7 +309,9 @@ blit_draw u_blit_draw (
 //==================================================================
 //  Video scanout (H5 / I-3.1/2/3, provisional params)
 //==================================================================
-blit_video u_blit_video (
+blit_video #(
+    .PREFETCH    (PREFETCH)
+) u_blit_video (
     .i_CLK       (i_CLK),
     .i_CKIO_PCEN (i_CKIO_PCEN),
     .i_RST_n     (i_RST_n),
@@ -305,6 +321,11 @@ blit_video u_blit_video (
     .o_vrd_req   (o_vrd_req),
     .o_vrd_addr  (o_vrd_addr),
     .i_vrd_data  (i_vrd_data),
+    .o_lf_req    (o_lf_req),
+    .o_lf_y      (o_lf_y),
+    .o_lf_x0     (o_lf_x0),
+    .i_lf_dvld   (i_lf_dvld),
+    .i_lf_data   (i_lf_data),
     .o_steal     (blit_steal),
     .o_hline     (blit_hline),
     .o_vsync     (blit_vsync),

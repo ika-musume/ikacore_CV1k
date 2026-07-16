@@ -440,9 +440,17 @@ gaps       = ceil(bus_clks / 16) - 1          // one BREQ/BACK cycle per 64 B
 T_upload   ≈ bus_clks * 19.53 ns + gaps * T_GAP,   T_GAP ≈ 1.13 µs (B — variance!)
 ```
 Anchors: 8×8 → 36 beats, 2 gaps ≈ 2.98 µs; 256×5 → 644 beats, 40 gaps ≈ 58.08 µs
-(measured 58.77 µs). VRAM writes are concurrent and hidden. The difference
-between T_GAP≈1.13 µs (upload) and ≈0.7 µs (idle op stream) is unexplained —
-probably BACK-ack latency under different CPU load — **A/B: measure both cases.**
+(measured 58.77 µs). VRAM writes are concurrent and hidden. Note the gap
+formula assumes a chunk-aligned start; a command starting at offset *k* in
+the 16-word chunk grid ([PDF] "encountered at offset 5") crosses
+`ceil((k + bus_clks)/16) − 1` boundaries — up to one more gap. The RTL needs
+no correction (chunking is by stream position, so the offset emerges); the
+closed form is a cost-table estimate only. The difference between
+T_GAP≈1.13 µs (upload) and ≈0.7 µs (idle op stream) is unexplained —
+candidates: BACK-ack latency under different CPU load, or upload↔VRAM-insert
+coupling ([PDF] calls them "coupled": the next chunk may wait on the 64 B
+drain into a VRAM also serving scanout/queued ops, which clipped-op streams
+never touch) — **A/B: measure both cases, correlate gap length vs VRAM load.**
 
 ### 7.6 Timing-decoupled FSM pattern (design contract for latency tuning)
 

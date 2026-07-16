@@ -7,7 +7,7 @@
 // init/compare code is backend-agnostic), served through blit_batch's
 // train-level interface instead of the fixed-latency beat channels.
 //
-// Semantics the RTL relies on (and that ddr3_harness must also provide):
+// Semantics the RTL relies on (and that CV1k_ddr3_harness must also provide):
 //   * strictly in-order: read commands are FIFO'd and their data returned
 //     in acceptance order; a write accepted before a read command is
 //     visible to it (here: writes commit at acceptance).

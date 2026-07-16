@@ -3,7 +3,7 @@
 // blit_batch.sv - K=8-objline train batcher                     [H7a / I-4.3]
 //
 // Sits between blit_top's beat channels (H3 fixed-latency read contract,
-// per-pixel masked writes) and a train-level memory port (ddr3_harness on
+// per-pixel masked writes) and a train-level memory port (CV1k_ddr3_harness on
 // target, blit_port_beh in the trace TB).  Realizes the FINDINGS.md §5
 // frozen contract: the engine's row-major beat stream is served from
 // on-chip staging that is filled K=8 objlines at a time as ONE read train
@@ -92,7 +92,7 @@ module blit_batch #(
     input  wire        i_dsc_wait,
 
     //------------------------------------------------------------------
-    // train port (ddr3_harness / blit_port_beh)
+    // train port (CV1k_ddr3_harness / blit_port_beh)
     //------------------------------------------------------------------
     output reg         o_prd_req,      // read burst command (one per segment)
     output wire [22:0] o_prd_addr,     // 64-bit-word address (flat px >> 2)
