@@ -72,6 +72,17 @@
 // a confirmed burst leaves only ~3 fast edges of tail margin before a
 // possible same-bank ACT - and the two classes above already meet demand.
 // The BSC's REF lockout (TRAS+TPC = 4 CKIO) has no room after tRFC either.
+//
+// H7b.8: the download idle-grid window class (w_dl) closes the OPEN ITEM
+// found at H7b.4 - during an ioctl DOWNLOAD the CPU is held in RESETM and
+// no CS activity opens either window class above, so a real seconds-long
+// HPS stream would have decayed early-written NOR-window rows.  While
+// i_IOCTL_DOWNLOAD is high every engine-quiet slot is an any-row window
+// (the grid is provably silent); the loader engine and the maintenance
+// pair interlock both ways (a pair opens only when the loader is idle,
+// the loader holds in LS_IDLE - o_IOCTL_WAIT stalls the HPS - while a
+// pair is open).  Accept: +refage bound holds THROUGH a download and
+// pairs issue while streaming (H7b.8 sim run).
 //============================================================================
 module CV1k_sdram_control #(
     parameter        NOR_BSWAP = 1'b0,       // 1: swap ioctl byte pairs (MAME dumps need 0)
@@ -166,12 +177,24 @@ reg [4:0] rdn_sh;                            // NOR/engine BL2 reads (beat 0 onl
 reg [15:0] rd_hi;                            // grid beat-0 (D[31:16]) capture
 reg [31:0] rd_word;                          // assembled word, held for the CKIO window
 
+// DQ mid-window capture bank (H7b.8): every falling edge samples the pad.
+// Each CL2 beat is stable across the falling edge inside its drive window
+// (sim model drives beats for exactly one fast period; on silicon the
+// SDRAM_CLK phase preset centers tAC..tOH around this edge), so dq_n holds
+// beat k from E+k.5 to E+k+1.5 -- the SAME value every posedge consumer
+// previously read live off the pad, but launched from a register.  This is
+// the only pad-timed DQ endpoint; everything downstream (rd_hi/rd_word/
+// nor_data/the o_G_RDATA arm) is register-to-register.  Value-identical in
+// RTL sim by construction (FASTBOOT datum re-proven).
+reg [15:0] dq_n;
+always @(negedge i_CLK) dq_n <= i_S_DQ_I;
+
 // The BSC latches i_D_I exactly at fast edge E+4 (CKIO E+2: i_BCEN && rd_lat,
 // CL2 pipeline in bsc.sv). At that same edge this module commits its NBAs, so
 // the sample may resolve pre- or post-commit; both mux arms carry the word
-// either way: pre-commit rdg_sh[2]=1 selects {rd_hi, live beat-1 DQ},
-// post-commit rdg_sh[3]=1 selects the just-registered rd_word.
-assign o_G_RDATA    = rdg_sh[2] ? {rd_hi, i_S_DQ_I} : rd_word;
+// either way: pre-commit rdg_sh[2]=1 selects {rd_hi, dq_n} (dq_n holds
+// beat 1 from E+3.5), post-commit rdg_sh[3]=1 selects the registered rd_word.
+assign o_G_RDATA    = rdg_sh[2] ? {rd_hi, dq_n} : rd_word;
 assign o_G_RDATA_OE = rdg_sh[2] | rdg_sh[3];
 
 //------------------------------------------------------------------
@@ -299,11 +322,13 @@ wire        lo_tick  = (tick_lo_c  == TICK_LO  - 12'd1);   // all LO + banks 1-3
 wire        hi0_tick = (tick_hi0_c == TICK_HI0 - 12'd1);   // bank 0 HI
 
 reg         m_open;                          // maintenance row open
+reg         m_cool;                          // 1 edge after a pair closes
+                                             // (loader tRP guard, see LS_IDLE)
 reg  [1:0]  m_bank;
 reg         m_hi;
 reg  [2:0]  m_cnt;                           // edges since our ACT
 
-reg         back_ff, bwin_ff, ordn_ff, cs0n_ff;
+reg         back_ff, bwin_ff, ordn_ff, cs0n_ff, dl_ff;
 reg  [4:0]  ord_cnt;                         // edges since CS4/5/6 strobe fell
 reg  [4:0]  cs0_cnt;                         // edges since CS0 strobe fell
 
@@ -321,7 +346,13 @@ wire w_ord  = !ordn_ff && (ord_cnt >= 5'd2)  && (ord_cnt <= 5'd6);
 // but live tails (rdg_sh/rdn_sh) must have drained.
 wire eng_quiet = (nst == NS_IDLE) && (rdn_sh == 5'b0) && (lst == LS_IDLE)
                  && !ld_beat2 && !wr_beat2 && (rdg_sh[2:0] == 3'b0);
-wire w_any = (w_cs0 || w_ord) && eng_quiet;
+// download idle-grid window (H7b.8): the CPU is held in RESETM for the
+// whole download, so every engine-quiet slot is any-row safe.  The loader
+// engine can want the bus at any time (a new HPS byte) - the LS_IDLE
+// dispatch below holds it out while a maintenance row is open, and
+// o_IOCTL_WAIT (ld_go) stalls the stream for those few edges.
+wire w_dl  = dl_ff && eng_quiet;
+wire w_any = (w_cs0 || w_ord || w_dl) && eng_quiet;
 wire w_lo  = w_blit || w_any;
 
 wire [3:0] b_elig = {init_done && !ga_open[3] && (cool[3] == 3'd0) && !(m_open && (m_bank == 2'd3)),
@@ -330,25 +361,44 @@ wire [3:0] b_elig = {init_done && !ga_open[3] && (cool[3] == 3'd0) && !(m_open &
                      init_done && !ga_open[0] && (cool[0] == 3'd0) && !(m_open && (m_bank == 2'd0))};
 
 // pick: HI region first in any-row windows (it has no other supply), then
-// LO; within a region the highest-deficit eligible bank, ties -> low bank
-reg        sel_v, sel_hi;
-reg [1:0]  sel_bank;
-reg [12:0] sel_best;
-always @* begin
-    sel_v = 1'b0; sel_hi = 1'b0; sel_bank = 2'd0; sel_best = 13'd0;
-    if (w_any) begin
-        if (b_elig[0] && (def_hi[0] > sel_best)) begin sel_v = 1'b1; sel_hi = 1'b1; sel_bank = 2'd0; sel_best = def_hi[0]; end
-        if (b_elig[1] && (def_hi[1] > sel_best)) begin sel_v = 1'b1; sel_hi = 1'b1; sel_bank = 2'd1; sel_best = def_hi[1]; end
-        if (b_elig[2] && (def_hi[2] > sel_best)) begin sel_v = 1'b1; sel_hi = 1'b1; sel_bank = 2'd2; sel_best = def_hi[2]; end
-        if (b_elig[3] && (def_hi[3] > sel_best)) begin sel_v = 1'b1; sel_hi = 1'b1; sel_bank = 2'd3; sel_best = def_hi[3]; end
-    end
-    if (!sel_v && w_lo) begin
-        if (b_elig[0] && (def_lo[0] > sel_best)) begin sel_v = 1'b1; sel_bank = 2'd0; sel_best = def_lo[0]; end
-        if (b_elig[1] && (def_lo[1] > sel_best)) begin sel_v = 1'b1; sel_bank = 2'd1; sel_best = def_lo[1]; end
-        if (b_elig[2] && (def_lo[2] > sel_best)) begin sel_v = 1'b1; sel_bank = 2'd2; sel_best = def_lo[2]; end
-        if (b_elig[3] && (def_lo[3] > sel_best)) begin sel_v = 1'b1; sel_bank = 2'd3; sel_best = def_lo[3]; end
-    end
-end
+// LO; within a region the highest-deficit eligible bank, ties -> low bank.
+// H7b.8: restructured from a serial 8-deep compare/mux scan (the fitter
+// chained it into a ~25 ns cone ending at o_S_A - the first-fit c102
+// worst path at -21 ns) into balanced argmax trees.  Semantics are
+// EXACTLY the old scan's: eligibility masks a bank's deficit to 0 (a 0
+// deficit was never selectable - the scan's strict > against sel_best
+// = 0), and "right wins only on strictly greater" at every tree node
+// reproduces argmax-with-ties->lowest-bank.
+wire [12:0] dq_hi0 = b_elig[0] ? def_hi[0] : 13'd0;
+wire [12:0] dq_hi1 = b_elig[1] ? def_hi[1] : 13'd0;
+wire [12:0] dq_hi2 = b_elig[2] ? def_hi[2] : 13'd0;
+wire [12:0] dq_hi3 = b_elig[3] ? def_hi[3] : 13'd0;
+wire [12:0] dq_lo0 = b_elig[0] ? def_lo[0] : 13'd0;
+wire [12:0] dq_lo1 = b_elig[1] ? def_lo[1] : 13'd0;
+wire [12:0] dq_lo2 = b_elig[2] ? def_lo[2] : 13'd0;
+wire [12:0] dq_lo3 = b_elig[3] ? def_lo[3] : 13'd0;
+
+wire        h01   = (dq_hi1 > dq_hi0);
+wire [12:0] h01_d = h01 ? dq_hi1 : dq_hi0;
+wire        h23   = (dq_hi3 > dq_hi2);
+wire [12:0] h23_d = h23 ? dq_hi3 : dq_hi2;
+wire        hfin  = (h23_d > h01_d);
+wire [12:0] hi_d  = hfin ? h23_d : h01_d;
+wire [1:0]  hi_b  = hfin ? {1'b1, h23} : {1'b0, h01};
+
+wire        l01   = (dq_lo1 > dq_lo0);
+wire [12:0] l01_d = l01 ? dq_lo1 : dq_lo0;
+wire        l23   = (dq_lo3 > dq_lo2);
+wire [12:0] l23_d = l23 ? dq_lo3 : dq_lo2;
+wire        lfin  = (l23_d > l01_d);
+wire [12:0] lo_d  = lfin ? l23_d : l01_d;
+wire [1:0]  lo_b  = lfin ? {1'b1, l23} : {1'b0, l01};
+
+wire        hi_pick  = w_any && (hi_d != 13'd0);
+wire        lo_pick  = w_lo  && (lo_d != 13'd0);
+wire        sel_v    = hi_pick || lo_pick;
+wire        sel_hi   = hi_pick;
+wire [1:0]  sel_bank = hi_pick ? hi_b : lo_b;
 wire [12:0] sel_row = sel_hi ? ptr_hi[sel_bank] : {2'b00, ptr_lo[sel_bank]};
 
 integer sbi;                                 // scheduler bookkeeping loop var
@@ -392,9 +442,10 @@ always @(posedge i_CLK) begin
         nor_data <= 16'h0; nor_rdy <= 1'b0;
         lst <= LS_IDLE; lcnt <= 3'd0; ld_beat2 <= 1'b0;
         ga_open <= 4'b0; ref_hold <= 4'd0; act_gap <= 2'd0;
-        m_open <= 1'b0; m_bank <= 2'd0; m_hi <= 1'b0; m_cnt <= 3'd0;
+        m_open <= 1'b0; m_cool <= 1'b0; m_bank <= 2'd0; m_hi <= 1'b0; m_cnt <= 3'd0;
         tick_lo_c <= 12'd0; tick_hi0_c <= 12'd0;
         back_ff <= 1'b1; bwin_ff <= 1'b0; ordn_ff <= 1'b1; cs0n_ff <= 1'b1;
+        dl_ff <= 1'b0;
         ord_cnt <= 5'd0; cs0_cnt <= 5'd0;
         for (sbi = 0; sbi < 4; sbi = sbi + 1) begin
             cool[sbi]   <= 3'd0;
@@ -417,8 +468,8 @@ always @(posedge i_CLK) begin
         // (i_BCEN && rd_lat = CKIO E+2 = fast E+4, see doc section 5.1).
         rdg_sh <= {rdg_sh[4:0], 1'b0};
         rdn_sh <= {rdn_sh[3:0], 1'b0};
-        if (rdg_sh[1]) rd_hi   <= i_S_DQ_I;               // CL2 beat 0 at its drive edge (E+3)
-        if (rdg_sh[2]) rd_word <= {rd_hi, i_S_DQ_I};      // CL2 beat 1 at its drive edge (E+4)
+        if (rdg_sh[1]) rd_hi   <= dq_n;                   // CL2 beat 0 (dq_n @E+2.5)
+        if (rdg_sh[2]) rd_word <= {rd_hi, dq_n};          // CL2 beat 1 (dq_n @E+3.5)
 
         //--------------------------------------------------------------
         // refresh-scheduler bookkeeping (every edge; guard decrements sit
@@ -428,6 +479,8 @@ always @(posedge i_CLK) begin
         bwin_ff <= i_BLIT_WIN;
         ordn_ff <= i_ORD_CS_n;
         cs0n_ff <= i_N_CS_n;
+        dl_ff   <= i_IOCTL_DOWNLOAD;
+        m_cool  <= m_open;
         ord_cnt <= i_ORD_CS_n ? 5'd0 : ((ord_cnt == 5'h1F) ? ord_cnt : ord_cnt + 5'd1);
         cs0_cnt <= i_N_CS_n   ? 5'd0 : ((cs0_cnt == 5'h1F) ? cs0_cnt : cs0_cnt + 5'd1);
         if (ref_hold != 4'd0) ref_hold <= ref_hold - 4'd1;
@@ -632,7 +685,11 @@ always @(posedge i_CLK) begin
                                 end
                             end
                             else if (sel_v && (ref_hold == 4'd0)
-                                           && (act_gap == 2'd0)) begin
+                                           && (act_gap == 2'd0)
+                                           && !ld_go) begin
+                                // !ld_go: a pending loader halfword wins the
+                                // slot (w_dl windows only - ld_go is never
+                                // set outside a download); the pair waits
                                 {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_ACT;
                                 o_S_A  <= sel_row;
                                 o_S_BA <= sel_bank;
@@ -662,8 +719,8 @@ always @(posedge i_CLK) begin
                     ncnt <= ncnt + 2'd1;
                     if (ncnt >= 2'd2) nst <= NS_RD;
                 end
-                NS_CAP: if (rdn_sh[1]) begin                  // CL2 beat 0 = the addressed halfword, at its drive edge
-                    nor_data <= i_S_DQ_I;
+                NS_CAP: if (rdn_sh[1]) begin                  // CL2 beat 0 = the addressed halfword (dq_n @drive-edge-.5)
+                    nor_data <= dq_n;
                     nor_rdy  <= 1'b1;
                     nst <= NS_IDLE;
                 end
@@ -675,7 +732,16 @@ always @(posedge i_CLK) begin
         // loader engine bookkeeping
         //--------------------------------------------------------------
         case (lst)
-            LS_IDLE: if (ld_go && init_done) lst <= LS_ACT;
+            // !m_open (H7b.8): hold the loader out while a maintenance
+            // pair is open (w_dl windows); o_IOCTL_WAIT stalls the HPS
+            // for those few edges.  The pair-open side blocks on ld_go,
+            // so the two can never start together.
+            // !m_cool: one extra edge after a maintenance pair closes -- the
+            // pair's PRE and the loader's ACT can hit the same bank, and a
+            // release on the very next edge puts them 2 edges (19.5 ns)
+            // apart, under tRP 21 ns (H7b.8 matrix cell C find: determin-
+            // istic ld_go-held-behind-a-pair collision at the u4 phase)
+            LS_IDLE: if (ld_go && init_done && !m_open && !m_cool) lst <= LS_ACT;
             LS_RCD:  begin                                    // >= 3 edges ACT->WRITE
                 lcnt <= lcnt + 3'd1;
                 if (lcnt >= 3'd2) lst <= LS_WR;
@@ -692,6 +758,7 @@ end
 //------------------------------------------------------------------
 // optional debug (+pumpdbg): init completion + NOR engine trace
 //------------------------------------------------------------------
+`ifndef SYNTHESIS
 integer pdbg = 0;
 integer pdbg_n = 0;
 reg     pdbg_init_d = 1'b0;
@@ -719,6 +786,7 @@ always @(posedge i_CLK) if (pdbg != 0) begin
         end
     end
 end
+`endif
 
 endmodule
 `default_nettype wire

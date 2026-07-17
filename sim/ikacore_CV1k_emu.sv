@@ -12,17 +12,28 @@
 // the lint stubs in tb/stubs/ (`./build_emu_lint.sh`) so port/name drift is
 // caught long before the H7b.8 Quartus pass.
 //
-// Clocking (plan of record): ONE fractional PLL VCO (1228.8 MHz), static
-// fracn - outclk_0 = 153.6 MHz (blit/DDR3 domain, consumed at H7b.2),
-// outclk_1 = 102.4 MHz (CPU/board/SDRAM domain), outclk_2 = SDRAM_CLK
-// (102.4 MHz, phase-tunable; H7b.8 starts the sweep at ~ -72 deg lead and
-// adds the OSD dynamic-phase nudge via the PLL reconfig MGMT port).
+// Clocking (H7b.8, built): ONE fractional PLL VCO at (exact - 6 mHz)
+// 1228.8 MHz, STATIC plan hand-authored in srcs/rtl/pll/pll_0002.v via
+// the advanced physical parameters - outclk_0 = 153.6 MHz (blit/DDR3
+// domain), outclk_1 = 102.4 MHz (CPU/board/SDRAM domain), outclk_2 =
+// SDRAM_CLK (102.4 MHz, C2 phase preset +77 VCO/8 taps = +7833 ps ~
+// -72 deg lead per the Psychic5/BubSys scaling).  The reconfig MGMT
+// port serves ONLY the OSD dynamic-phase nudge (below) - no frequency
+// retune ever happens at runtime, so POR determinism (the soft-reset
+// CKIO-parity carry-over) has no PLL term beyond pll_locked itself.
 //
-// Reset policy (MiSTer compliance, recorded 2026-07-16):
-//   hard reset = RESET | ~pll_locked | ioctl_download  -> full chain
-//                (pump JEDEC re-init + CPU POR; MRA reload re-inits memory)
-//   soft reset = OSD status[0] | buttons[1]            -> CPU/blitter reboot
-//                only; pump init state and SDRAM/DDR3 contents preserved
+// Reset policy (MiSTer compliance, recorded 2026-07-16; download term
+// refined at H7b.4):
+//   hard reset = RESET | ~pll_locked      -> full chain (pump JEDEC
+//                re-init + CPU POR)
+//   ioctl_download                        -> handled INSIDE the core: the
+//                reset sequencer's dl_hold keeps the CPU in POR for the
+//                whole download + the decoder's drain, then re-runs the
+//                POR/RESETM stagger.  It must NOT drive the hard reset -
+//                the pump's loader and JEDEC-init state have to be alive
+//                to accept the stream (H7b.4).
+//   soft reset = OSD status[0] | buttons[1] -> CPU/blitter reboot only;
+//                pump init state and SDRAM/DDR3 contents preserved
 //============================================================================
 
 module emu
@@ -69,6 +80,8 @@ localparam CONF_STR = {
 	"P1O[5],S2-2,Off,On;",
 	"P1O[6],S2-3,Off,On;",
 	"P1O[7],S2-4,Off,On;",
+	"P2,Timing;",
+	"P2O[13:9],SDRAM Phase,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
@@ -118,6 +131,8 @@ wire clk_102m4;                    // CPU/board/SDRAM domain (= 2x CKIO)
 wire clk_sdram;                    // SDRAM_CLK: 102.4 MHz, phase-tunable
 wire pll_locked;
 
+wire [63:0] reconfig_to_pll, reconfig_from_pll;
+
 pll pll
 (
 	.refclk(CLK_50M),
@@ -125,10 +140,93 @@ pll pll
 	.outclk_0(clk_153m6),
 	.outclk_1(clk_102m4),
 	.outclk_2(clk_sdram),
+	.reconfig_to_pll(reconfig_to_pll),
+	.reconfig_from_pll(reconfig_from_pll),
 	.locked(pll_locked)
 );
 
-assign SDRAM_CLK = clk_sdram;
+// SDRAM_CLK leaves through a DDIO output cell (H7b.8): the pad toggles from
+// the IOE register pair clocked by clk_sdram, so the chip-clock lag vs the
+// fabric is the IOE tCO (~2 ns) plus the C2 phase preset -- fit #2 measured
+// ~13.8 ns of PLL->pad clock-network route with a plain assign, which
+// swallowed the entire CL2 read window.  The preset is (re)derived against
+// the DDIO numbers; the OSD phase nudge remains the per-module trim.
+`ifdef SYNTHESIS
+altddio_out #(
+    .extend_oe_disable("OFF"),
+    .intended_device_family("Cyclone V"),
+    .invert_output("OFF"),
+    .lpm_hint("UNUSED"),
+    .lpm_type("altddio_out"),
+    .oe_reg("UNREGISTERED"),
+    .power_up_high("OFF"),
+    .width(1)
+) u_sdrclk_ddio (
+    .datain_h(1'b1),
+    .datain_l(1'b0),
+    .outclock(clk_sdram),
+    .dataout(SDRAM_CLK),
+    .aclr(1'b0), .aset(1'b0), .oe(1'b1),
+    .outclocken(1'b1), .sclr(1'b0), .sset(1'b0)
+);
+`else
+assign SDRAM_CLK = clk_sdram;   // sim face: ideal clock, no IOE model
+`endif
+
+// OSD SDRAM-phase nudge (H7b.8, PERMANENT module-variance trim).
+// The frequency plan is STATIC - rtl/pll/pll_0002.v bakes the exact
+// 1228.8 MHz fractional VCO and the C2 (~-72 deg) phase preset - so the
+// reconfig MGMT port is used ONLY for dynamic phase steps on C2
+// (SDRAM_CLK): one VCO/8 tap = 101.7 ps per step, OSD value = signed
+// 5-bit tap offset from the preset, +1 = one tap later (more delay /
+// less lead).  DPS reg 6 encoding: [15:0] step count, [20:16] cnt_sel
+// (C2 = 2), [21] up/dn.  Runs on CLK_50M, free of the clocks it trims;
+// each write self-completes (waitrequest covers the shift, no START).
+wire        cfg_waitrequest;
+reg         cfg_write = 0;
+reg   [5:0] cfg_address;
+reg  [31:0] cfg_data;
+
+pll_cfg pll_cfg
+(
+	.mgmt_clk(CLK_50M),
+	.mgmt_reset(0),
+	.mgmt_waitrequest(cfg_waitrequest),
+	.mgmt_read(0),
+	.mgmt_readdata(),
+	.mgmt_write(cfg_write),
+	.mgmt_address(cfg_address),
+	.mgmt_writedata(cfg_data),
+	.reconfig_to_pll(reconfig_to_pll),
+	.reconfig_from_pll(reconfig_from_pll)
+);
+
+always @(posedge CLK_50M) begin : sdram_phase_nudge
+	reg  [4:0] ph_osd_m  = 0;              // 2-FF sync (OSD value is quasi-static)
+	reg  [4:0] ph_osd    = 0;
+	reg  [1:0] lock_ok   = 0;
+	reg signed [5:0] ph_applied = 0;       // taps applied since config load
+	reg signed [5:0] ph_target;
+
+	ph_osd_m  <= status[13:9];
+	ph_osd    <= ph_osd_m;
+	lock_ok   <= {lock_ok[0], pll_locked};
+	ph_target  = $signed({ph_osd[4], ph_osd});
+
+	cfg_write <= 0;
+	if ((&lock_ok) && !cfg_waitrequest && !cfg_write && ph_applied != ph_target) begin
+		cfg_address <= 6'd6;                            // DPS register
+		if (ph_applied < ph_target) begin
+			cfg_data   <= 32'h0022_0001;                // C2 +1 tap (up)
+			ph_applied <= ph_applied + 1'd1;
+		end
+		else begin
+			cfg_data   <= 32'h0002_0001;                // C2 -1 tap (down)
+			ph_applied <= ph_applied - 1'd1;
+		end
+		cfg_write <= 1;
+	end
+end
 
 // RTC 32.768 kHz crystal: CLK_AUDIO (24.576 MHz) / 750 = exactly 32,768 Hz
 reg [9:0] rtc_div = 10'd0;
@@ -142,8 +240,11 @@ always @(posedge CLK_AUDIO) begin
 end
 
 ///////////////////////   RESETS   ///////////////////////////////
+// ioctl_download deliberately NOT in rst_hard (H7b.4): the core's own
+// sequencer holds the CPU during a download (dl_hold), while the pump
+// loader - which needs its init state - accepts the stream.
 
-wire rst_hard = RESET | ~pll_locked | ioctl_download;
+wire rst_hard = RESET | ~pll_locked;
 wire rst_soft = status[0] | buttons[1];
 
 ///////////////////////   INPUTS   ///////////////////////////////
@@ -169,6 +270,8 @@ wire [5:0] sys = {joystick_1[8],                        // start2
 
 wire [15:0] px;
 wire        px_de, vsync, hline;
+wire        ce_pixel, vga_hs, vga_vs, vga_de;
+wire [7:0]  vga_r, vga_g, vga_b;
 wire [15:0] snd_l, snd_r;
 wire        init_done;
 
@@ -197,6 +300,13 @@ ikacore_CV1k core
 	.o_PX_DE         (px_de),
 	.o_VSYNC         (vsync),
 	.o_HLINE         (hline),
+	.o_CE_PIXEL      (ce_pixel),
+	.o_VGA_R         (vga_r),
+	.o_VGA_G         (vga_g),
+	.o_VGA_B         (vga_b),
+	.o_VGA_HS        (vga_hs),
+	.o_VGA_VS        (vga_vs),
+	.o_VGA_DE        (vga_de),
 
 	.o_SND_L         (snd_l),
 	.o_SND_R         (snd_r),
@@ -247,22 +357,21 @@ assign SDRAM_DQMH = sdram_dqm[1];
 assign SDRAM_CKE  = sdram_cke;
 
 ///////////////////////   VIDEO   ////////////////////////////////
-// PLACEHOLDER until H7b.6 (video face step): the core's ARGB1555 stream +
-// DE/vsync taps are up, but the 5->8 expansion, CE_PIXEL and the explicit
-// hsync/porch split (blit_video touch) land together with their accept.
-// Until then the wrapper emits black - the sim accepts run on the core's
-// taps, not on this stage.
+// H7b.6: the core's MiSTer face goes straight out - 5->8 expanded RGB,
+// porch-split syncs and the 6.4 MHz dot CE, all in the 153.6 MHz blit
+// domain (= CLK_VIDEO).  320x240 @ 60.0184 Hz (853,072 CKIO exact);
+// porch widths provisional until M-1 (blit_video parameters).
 
 assign CLK_VIDEO = clk_153m6;
-assign CE_PIXEL  = 1'b0;
-assign VGA_R     = 8'd0;
-assign VGA_G     = 8'd0;
-assign VGA_B     = 8'd0;
-assign VGA_HS    = 1'b0;
-assign VGA_VS    = vsync;
-assign VGA_DE    = 1'b0;
+assign CE_PIXEL  = ce_pixel;
+assign VGA_R     = vga_r;
+assign VGA_G     = vga_g;
+assign VGA_B     = vga_b;
+assign VGA_HS    = vga_hs;
+assign VGA_VS    = vga_vs;
+assign VGA_DE    = vga_de;
 
-wire _unused_video = &{1'b0, px, px_de, hline, forced_scandoubler,
+wire _unused_video = &{1'b0, px, px_de, hline, vsync, forced_scandoubler,
                        HDMI_WIDTH, HDMI_HEIGHT, 1'b0};
 
 ///////////////////////   AUDIO   ////////////////////////////////
@@ -274,7 +383,7 @@ assign AUDIO_R = snd_r;
 
 assign LED_USER = ioctl_download | ~init_done;
 
-wire _unused_misc = &{1'b0, status[3:1], status[127:8], OSD_STATUS,
+wire _unused_misc = &{1'b0, status[3:1], status[8], status[127:14], OSD_STATUS,
                       UART_CTS, UART_RXD, UART_DSR, USER_IN,
                       SD_MISO, SD_CD, 1'b0};
 

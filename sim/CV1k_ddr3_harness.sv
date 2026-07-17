@@ -6,7 +6,7 @@
 // blit_batch -> HERE).  Multiplexes the port's tenants onto the single
 // FPGA->HPS SDRAM bridge, at TRAIN granularity, non-preemptive, priority
 //
-//     video line fetch  >  blit_batch trains  >  NAND page fill  (> YMZ, later)
+//     video line fetch  >  blit_batch trains  >  NAND page fill  >  YMZ
 //
 // exactly the FINDINGS.md §5.1 scheduling rule: every client's occupancy is
 // a bounded train, so lower-priority injections look like the latency tails
@@ -22,8 +22,12 @@
 //     back-to-back so the controller exposes ONE latency per train) and
 //     posted write words.  The batch's own o_rd_train/o_wr_train framing
 //     delimits its port ownership; the harness never breaks a train.
-//   * NAND (step 5): one 264-word page-register fill per request, lowest
-//     priority, single train.
+//   * NAND (step 5): one 264-word page-register fill per request, single
+//     train.
+//   * YMZ (H7b.5): audio-sample reads out of the DDR3-resident u23/u24
+//     images, lowest priority, single train per request - the reserved
+//     slot; the YMZ770 frontend itself is a later phase, so today the
+//     client is exercised by the sim-only probe in ikacore_CV1k.sv.
 //
 // DDRAM protocol (MiSTer f2sdram face, 64-bit words): commands accepted
 // when !DDRAM_BUSY; reads return BURSTCNT words in order on DDRAM_DOUT_READY
@@ -79,6 +83,16 @@ module CV1k_ddr3_harness #(
     output wire [63:0] o_nd_data,
 
     //------------------------------------------------------------------
+    // client 3: YMZ sample reads (H7b.5; lowest priority, single train)
+    //------------------------------------------------------------------
+    input  wire        i_ym_req,
+    input  wire [28:0] i_ym_addr,      // pre-mapped DDRAM word address
+    input  wire [10:0] i_ym_len,
+    output wire        o_ym_rdy,
+    output wire        o_ym_dvld,
+    output wire [63:0] o_ym_data,
+
+    //------------------------------------------------------------------
     // MiSTer DDRAM face
     //------------------------------------------------------------------
     output wire        DDRAM_CLK,
@@ -95,28 +109,28 @@ module CV1k_ddr3_harness #(
 
     assign DDRAM_CLK = i_CLK;
 
-    localparam [1:0] OWN_NONE = 2'd0, OWN_VID = 2'd1,
-                     OWN_BAT  = 2'd2, OWN_ND  = 2'd3;
-    reg [1:0] own /*verilator public_flat_rd*/;
+    localparam [2:0] OWN_NONE = 3'd0, OWN_VID = 3'd1,
+                     OWN_BAT  = 3'd2, OWN_ND  = 3'd3, OWN_YMZ = 3'd4;
+    reg [2:0] own /*verilator public_flat_rd*/;
 
     // ---------------------------------------------------------------------
     // in-order read-return routing: one {owner} tag + word count per issued
     // DDRAM read burst (f2sdram completes in order).  16 batch segments + 2
-    // video + NAND splits fit in 32.  Occupancy is DERIVED from the
+    // video + NAND/YMZ splits fit in 32.  Occupancy is DERIVED from the
     // pointers - a shared up/down counter written from both the pop logic
     // and a same-edge push loses one of the updates (last NBA wins) and
     // desyncs the routing.  The 1-cycle head-reload bubble after each
     // burst is covered by the >=2-cycle inter-burst data gap (G_CMD + the
     // first word's beta).
     // ---------------------------------------------------------------------
-    reg [9:0]  oq [0:31];              // {owner[1:0], len[7:0]}
+    reg [10:0] oq [0:31];              // {owner[2:0], len[7:0]}
     reg [4:0]  oq_wp, oq_rp;
     reg [7:0]  oq_left /*verilator public_flat_rd*/;
     reg        oq_head_v /*verilator public_flat_rd*/;
 
     wire [4:0] oq_occ  = oq_wp - oq_rp;          // entries incl. the head
     wire       oq_room = (oq_occ < 5'd30);
-    wire [1:0] ret_own = oq[oq_rp][9:8];
+    wire [2:0] ret_own = oq[oq_rp][10:8];
 
     assign o_lf_dvld  = DDRAM_DOUT_READY && oq_head_v && (ret_own == OWN_VID);
     assign o_lf_data  = DDRAM_DOUT;
@@ -124,6 +138,8 @@ module CV1k_ddr3_harness #(
     assign o_prd_data = DDRAM_DOUT;
     assign o_nd_dvld  = DDRAM_DOUT_READY && oq_head_v && (ret_own == OWN_ND);
     assign o_nd_data  = DDRAM_DOUT;
+    assign o_ym_dvld  = DDRAM_DOUT_READY && oq_head_v && (ret_own == OWN_YMZ);
+    assign o_ym_data  = DDRAM_DOUT;
 
     // ---------------------------------------------------------------------
     // pending video request (latched; served between trains)
@@ -155,10 +171,17 @@ module CV1k_ddr3_harness #(
     reg [10:0] np_left;
     wire [7:0] np_burst = (np_left > BL_MAX) ? 8'(BL_MAX) : np_left[7:0];
 
+    // YMZ macro-cmd splitter (H7b.5, same shape)
+    reg        yp_v;
+    reg [28:0] yp_addr;
+    reg [10:0] yp_left;
+    wire [7:0] yp_burst = (yp_left > BL_MAX) ? 8'(BL_MAX) : yp_left[7:0];
+
     // accept a batch read command only when the splitter register is free
     // (commands still pipeline: the splitter drains at DDRAM accept rate)
     assign o_prd_rdy = (own == OWN_BAT) && !bp_v;
     assign o_nd_rdy  = (own == OWN_ND)  && !np_v;
+    assign o_ym_rdy  = (own == OWN_YMZ) && !yp_v;
 
     // batch writes pass through whenever the batch owns the port and the
     // face can take a word at this edge (a held WE word leaves exactly when
@@ -181,6 +204,7 @@ module CV1k_ddr3_harness #(
             vid_pend <= 1'b0; vid_y <= '0; vid_x0 <= '0;
             bp_v <= 1'b0; bp_addr <= '0; bp_left <= '0;
             np_v <= 1'b0; np_addr <= '0; np_left <= '0;
+            yp_v <= 1'b0; yp_addr <= '0; yp_left <= '0;
             vid_seg <= 2'd0;
             DDRAM_RD <= 1'b0; DDRAM_WE <= 1'b0;
             DDRAM_BURSTCNT <= '0; DDRAM_ADDR <= '0;
@@ -243,6 +267,7 @@ module CV1k_ddr3_harness #(
                 end
                 else if (bat_busy)  own <= OWN_BAT;
                 else if (i_nd_req)  own <= OWN_ND;
+                else if (i_ym_req)  own <= OWN_YMZ;
             end
 
             OWN_VID: begin
@@ -322,6 +347,26 @@ module CV1k_ddr3_harness #(
                     if (np_left <= BL_MAX) np_v <= 1'b0;
                 end
                 if (!np_v && !i_nd_req && !DDRAM_RD)
+                    own <= OWN_NONE;
+            end
+
+            OWN_YMZ: begin
+                if (i_ym_req && o_ym_rdy) begin
+                    yp_v    <= 1'b1;
+                    yp_addr <= i_ym_addr;
+                    yp_left <= i_ym_len;
+                end
+                if (yp_v && !DDRAM_RD && oq_room) begin
+                    DDRAM_RD       <= 1'b1;
+                    DDRAM_ADDR     <= yp_addr;
+                    DDRAM_BURSTCNT <= yp_burst;
+                    oq[oq_wp] <= {OWN_YMZ, yp_burst};
+                    oq_wp <= oq_wp + 5'd1;
+                    yp_addr <= yp_addr + {21'd0, yp_burst};
+                    yp_left <= yp_left - {3'd0, yp_burst};
+                    if (yp_left <= BL_MAX) yp_v <= 1'b0;
+                end
+                if (!yp_v && !i_ym_req && !DDRAM_RD)
                     own <= OWN_NONE;
             end
 

@@ -27,6 +27,12 @@
 //
 // Plusargs (same semantics as tb_cv1k): +maxinsn +trace +tracefrom
 // +blitdump[max] +norhex +irq2log +cycles +noirq1 +noirq2 +ndtrace
+// H7b.4+: +mra (ioctl-load boot: ioctl_sim streams the fixed MRA layout
+// once the pump init is done; NOR preload skipped - pair with the C++
+// side's region-RAM mode, which keys on the same +mra argument)
+// +ioctl_u2/u23/u24/u4= +ioctl_bytes= +ioctl_ival= (see tb/ioctl_sim.sv)
+// +nandbytes=<n> [+nandfile=<f>] (U2 RE-stream byte capture)
+// +ymzdump/+ymzoff/+ymzlen/+ymztrain/+ymzgap (H7b.5 probe, in the DUT)
 // C++ args: --vram <raw> --frame <raw> --seed <n>  (see the main)
 //============================================================================
 module ikacore_CV1k_tb (
@@ -48,11 +54,18 @@ module ikacore_CV1k_tb (
     output wire [7:0]  DDRAM_BE,
     output wire        DDRAM_WE,
 
-    // video face -> C++ frame capture
+    // video taps -> C++ frame capture, + the H7b.6 MiSTer face
     output wire [15:0] o_PX,
     output wire        o_PX_DE,
     output wire        o_VSYNC,
     output wire        o_HLINE,
+    output wire        o_CE_PIXEL,
+    output wire [7:0]  o_VGA_R,
+    output wire [7:0]  o_VGA_G,
+    output wire [7:0]  o_VGA_B,
+    output wire        o_VGA_HS,
+    output wire        o_VGA_VS,
+    output wire        o_VGA_DE,
     output wire        o_INIT_DONE
 );
 
@@ -81,14 +94,21 @@ module ikacore_CV1k_tb (
         .o_PX_DE         (o_PX_DE),
         .o_VSYNC         (o_VSYNC),
         .o_HLINE         (o_HLINE),
+        .o_CE_PIXEL      (o_CE_PIXEL),
+        .o_VGA_R         (o_VGA_R),
+        .o_VGA_G         (o_VGA_G),
+        .o_VGA_B         (o_VGA_B),
+        .o_VGA_HS        (o_VGA_HS),
+        .o_VGA_VS        (o_VGA_VS),
+        .o_VGA_DE        (o_VGA_DE),
         .o_SND_L         (),
         .o_SND_R         (),
-        .i_IOCTL_DOWNLOAD(1'b0),           // ioctl option lands at H7b.4
-        .i_IOCTL_WR      (1'b0),
-        .i_IOCTL_ADDR    (27'd0),
-        .i_IOCTL_DATA    (8'd0),
-        .i_IOCTL_INDEX   (16'd0),
-        .o_IOCTL_WAIT    (),
+        .i_IOCTL_DOWNLOAD(ioctl_download), // H7b.4: ioctl_sim under +mra
+        .i_IOCTL_WR      (ioctl_wr),
+        .i_IOCTL_ADDR    (ioctl_addr),
+        .i_IOCTL_DATA    (ioctl_data),
+        .i_IOCTL_INDEX   (ioctl_index),
+        .o_IOCTL_WAIT    (ioctl_wait),
         .o_SDRAM_A       (sdram_a),
         .o_SDRAM_BA      (sdram_ba),
         .o_SDRAM_nCS     (sdram_ncs),
@@ -131,11 +151,44 @@ module ikacore_CV1k_tb (
     );
 
     //------------------------------------------------------------------
+    // HPS ioctl (H7b.4): under +mra, ioctl_sim streams the fixed MRA
+    // layout (u2 | u23 | u24 | u4 x2) as soon as the pump init is done -
+    // the DUT's dl_hold keeps the CPU in POR until the download drains,
+    // then boots from the ioctl-loaded NOR window/DDR3 regions.  Without
+    // +mra the group idles and the zero-time preloads below apply.
+    //------------------------------------------------------------------
+    wire        ioctl_download, ioctl_wr, ioctl_wait, ioctl_done;
+    wire [26:0] ioctl_addr;
+    wire [7:0]  ioctl_data;
+    wire [15:0] ioctl_index;
+
+    reg  mra_on = 1'b0;
+    reg  ioctl_start = 1'b0;
+    reg  init_done_d = 1'b0;
+    initial mra_on = $test$plusargs("mra");
+
+    ioctl_sim u_ioctl_sim (
+        .i_CLK(i_CLK102), .i_START(ioctl_start),
+        .o_DOWNLOAD(ioctl_download), .o_ADDR(ioctl_addr), .o_DATA(ioctl_data),
+        .o_WR(ioctl_wr), .o_INDEX(ioctl_index),
+        .i_WAIT(ioctl_wait), .o_DONE(ioctl_done)
+    );
+
+    always @(posedge i_CLK102) begin
+        init_done_d <= o_INIT_DONE;
+        if (mra_on && o_INIT_DONE && !init_done_d && !ioctl_start) begin
+            ioctl_start <= 1'b1;
+            $display("[tb] +mra: pump init done - starting the MRA download");
+        end
+    end
+
+    //------------------------------------------------------------------
     // NOR window preload (zero-time; same image + scatter as tb_cv1k).
-    // +norhex=<hex> overrides for the H7b.D diag ROMs.
+    // +norhex=<hex> overrides for the H7b.D diag ROMs.  Skipped under
+    // +mra - the download IS the load path there.
     //------------------------------------------------------------------
     reg [7:0] nor_bytes [0:4194303];
-    initial begin
+    initial if (!$test$plusargs("mra")) begin
         integer pk;
         string norhex_path;
         if ($value$plusargs("norhex=%s", norhex_path)) begin
@@ -348,6 +401,40 @@ module ikacore_CV1k_tb (
     final $display("[tb] face census: rd cmds=%0d words_cmd=%0d rdy_words_seen=%0d | last rd @%0d ns addr=%07x cnt=%0d, last rdy @%0d, last we @%0d",
                    tb_rd_cmd, tb_rd_words_cmd, tb_rdy_cnt,
                    tb_last_rd_t, tb_last_rd_a, tb_last_rd_b, tb_last_rdy_t, tb_last_we_t);
+
+    //------------------------------------------------------------------
+    // H7b.7 accepts: fetch attribute-FIFO high-water (fifo_study depths
+    // must hold on the final stack) + U2 NAND RE-stream byte capture
+    // (+nandbytes=<n> [+nandfile=<f>]; cmp against the H7a-validated
+    // vendor-arm datum - the stream legitimately starts with the chip-ID
+    // bytes EC F1..., it is NOT a prefix of the raw dump)
+    //------------------------------------------------------------------
+    longint fifo_hw = 0;
+    always @(posedge i_CLK153)
+        if (longint'(dut.u_blit.u_blit_fetch.fifo_level) > fifo_hw)
+            fifo_hw = longint'(dut.u_blit.u_blit_fetch.fifo_level);
+    final $display("[tb] fetch FIFO high-water: %0d words (phys 20480 = 640 chunks)%s",
+                   fifo_hw, (fifo_hw < 20480) ? " - PASS" : " - FAIL");
+
+    integer nb_fd = 0, nb_cnt = 0, nb_max = 0;
+    reg     nb_re_d = 1'b1;
+    string  nb_file = "build/nand_bytes_tb.bin";
+    initial begin
+        void'($value$plusargs("nandbytes=%d", nb_max));
+        void'($value$plusargs("nandfile=%s", nb_file));
+        if (nb_max != 0) nb_fd = $fopen(nb_file, "wb");
+    end
+    always @(posedge i_CLK102) begin
+        if (!nb_re_d && dut.u2_re_n && nb_fd != 0 && nb_cnt < nb_max) begin
+            $fwrite(nb_fd, "%c", dut.D[7:0]);
+            nb_cnt = nb_cnt + 1;
+            if (nb_cnt == nb_max) begin
+                $fclose(nb_fd); nb_fd = 0;
+                $display("[tb] captured %0d NAND bytes -> %s", nb_cnt, nb_file);
+            end
+        end
+        nb_re_d <= dut.u2_re_n;
+    end
 
     // +prdlog: first 60 batch read requests (train-shape forensics - a
     // stream of len=2 requests means an op fell into the strict/beat path,

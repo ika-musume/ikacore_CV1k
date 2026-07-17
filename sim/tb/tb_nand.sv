@@ -154,6 +154,8 @@ module tb_nand;
         .i_rd_train(1'b0), .i_wr_train(1'b0),
         .i_nd_req(nd_req), .i_nd_addr(nd_addr), .i_nd_len(nd_len),
         .o_nd_rdy(nd_rdy), .o_nd_dvld(nd_dvld), .o_nd_data(nd_data),
+        .i_ym_req(1'b0), .i_ym_addr(29'd0), .i_ym_len(11'd0),
+        .o_ym_rdy(), .o_ym_dvld(), .o_ym_data(),
         .DDRAM_CLK(ddr_clk), .DDRAM_BUSY(ddr_busy),
         .DDRAM_BURSTCNT(ddr_burstcnt), .DDRAM_ADDR(ddr_addr),
         .DDRAM_DOUT(ddr_dout), .DDRAM_DOUT_READY(ddr_dout_ready),

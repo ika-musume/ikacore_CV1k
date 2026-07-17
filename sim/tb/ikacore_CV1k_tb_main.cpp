@@ -58,6 +58,11 @@ struct DdrSlave {
     std::vector<uint16_t> vram;                                   // 32M px
     std::unordered_map<uint32_t, uint64_t> ovl;                   // non-VRAM writes
     FILE *f_nand = nullptr, *f_u23 = nullptr, *f_u24 = nullptr;
+    // +mra (H7b.4): the NAND/YMZ regions are RAM-backed and zero-init -
+    // reads return ONLY what the ioctl download wrote (no file plane, so
+    // a decoder hole cannot be masked by file-served data)
+    bool mra_mode = false;
+    std::vector<uint64_t> nand_ram, ymz_ram;
     ddr3::LatencySampler lat;
     uint32_t seed;
 
@@ -76,9 +81,15 @@ struct DdrSlave {
                              // H7b.8 must confirm f2sdram or add a skid)
     uint64_t n_rd_words = 0, n_wr_words = 0, n_bursts = 0, n_nand_bursts = 0;
 
-    explicit DdrSlave(uint32_t s)
-        : vram(size_t(1) << 25, 0), lat(s ? s : 1), seed(s)
+    explicit DdrSlave(uint32_t s, bool mra)
+        : vram(size_t(1) << 25, 0), mra_mode(mra), lat(s ? s : 1), seed(s)
     {
+        if (mra_mode) {
+            nand_ram.assign(NAND_WSZ, 0);
+            ymz_ram.assign(YMZ_WSZ, 0);
+            std::printf("[cv1k_tb] +mra: NAND/YMZ regions RAM-backed (ioctl load only)\n");
+            return;
+        }
         f_nand = std::fopen("roms/ibara/u2", "rb");
         if (!f_nand) { std::printf("FATAL: cannot open roms/ibara/u2\n"); std::exit(1); }
         f_u23 = std::fopen("roms/ibara/u23", "rb");               // optional (H7b.5)
@@ -113,14 +124,20 @@ struct DdrSlave {
             return (uint64_t(vram[p + 3]) << 48) | (uint64_t(vram[p + 2]) << 32)
                  | (uint64_t(vram[p + 1]) << 16) |  uint64_t(vram[p]);
         }
-        auto it = ovl.find(w);
-        if (it != ovl.end()) return it->second;
-        if (w >= NAND_W0 && w < NAND_W0 + NAND_WSZ)
-            return file_word(f_nand, long(w - NAND_W0) * 8);
-        if (w >= YMZ_W0 && w < YMZ_W0 + YMZ_WSZ) {
-            const uint32_t o = w - YMZ_W0;
-            return (o < YMZ_CHIP_W) ? file_word(f_u23, long(o) * 8)
-                                    : file_word(f_u24, long(o - YMZ_CHIP_W) * 8);
+        if (mra_mode) {
+            if (w >= NAND_W0 && w < NAND_W0 + NAND_WSZ) return nand_ram[w - NAND_W0];
+            if (w >= YMZ_W0  && w < YMZ_W0  + YMZ_WSZ)  return ymz_ram[w - YMZ_W0];
+        }
+        else {
+            auto it = ovl.find(w);
+            if (it != ovl.end()) return it->second;
+            if (w >= NAND_W0 && w < NAND_W0 + NAND_WSZ)
+                return file_word(f_nand, long(w - NAND_W0) * 8);
+            if (w >= YMZ_W0 && w < YMZ_W0 + YMZ_WSZ) {
+                const uint32_t o = w - YMZ_W0;
+                return (o < YMZ_CHIP_W) ? file_word(f_u23, long(o) * 8)
+                                        : file_word(f_u24, long(o - YMZ_CHIP_W) * 8);
+            }
         }
         std::printf("FATAL: DDRAM read outside region map: word %08x\n", w);
         std::exit(1);
@@ -140,7 +157,12 @@ struct DdrSlave {
                 cur &= ~(uint64_t(0xFF) << (8 * k));
                 cur |=  ((d >> (8 * k)) & 0xFF) << (8 * k);
             }
-        ovl[w] = cur;
+        if (mra_mode) {
+            if      (w >= NAND_W0 && w < NAND_W0 + NAND_WSZ) nand_ram[w - NAND_W0] = cur;
+            else if (w >= YMZ_W0  && w < YMZ_W0  + YMZ_WSZ)  ymz_ram[w - YMZ_W0]   = cur;
+            else { std::printf("FATAL: DDRAM write outside region map: word %08x\n", w); std::exit(1); }
+        }
+        else ovl[w] = cur;
     }
 
     bool busy() const { return rq.size() >= 8 || wr_busy_until > 0; }
@@ -190,13 +212,21 @@ struct DdrSlave {
             rq.push_back(std::move(b));
         }
         if (tb.DDRAM_WE && !was_busy) {
-            wr_word(tb.DDRAM_ADDR, tb.DDRAM_DIN, uint8_t(tb.DDRAM_BE));
+            const uint32_t wa = tb.DDRAM_ADDR;
+            wr_word(wa, tb.DDRAM_DIN, uint8_t(tb.DDRAM_BE));
+            n_wr_words++;
+            // +mra loader writes (always outside VRAM; the core is held in
+            // reset behind the download mux) are timing-free: carrying
+            // their turnaround/busy state into the boot would give the
+            // boot's first read a phantom write->read p_turn a preload
+            // boot never pays (H7b.7 cell C load-mode equivalence)
+            if (mra_mode && !(wa >= VRAM_W0 && wa < VRAM_W0 + VRAM_WSZ))
+                return;
             double t = std::max(now, free_ns);
             if (have_dir && dir_read) t += p_turn();
             free_ns = t + p_bw();
             wr_busy_until = free_ns;             // throttles the next accept
             have_dir = true; dir_read = false;
-            n_wr_words++;
         }
     }
 };
@@ -209,15 +239,17 @@ int main(int argc, char **argv)
     ctx->commandArgs(argc, argv);
 
     uint32_t seed = 0;
+    bool mra = false;
     const char *vram_f = nullptr, *frame_f = nullptr;
     for (int i = 1; i < argc; i++) {
         if      (!std::strcmp(argv[i], "--seed")  && i + 1 < argc) seed = uint32_t(std::strtoul(argv[++i], nullptr, 0));
         else if (!std::strcmp(argv[i], "--vram")  && i + 1 < argc) vram_f = argv[++i];
         else if (!std::strcmp(argv[i], "--frame") && i + 1 < argc) frame_f = argv[++i];
+        else if (!std::strcmp(argv[i], "+mra"))                    mra = true;
     }
 
     Vikacore_CV1k_tb tb{ctx.get()};
-    DdrSlave ddr(seed);
+    DdrSlave ddr(seed, mra);
 
     tb.i_CLK102 = 0; tb.i_CLK153 = 0; tb.i_EXTAL2 = 0;
     tb.i_INITRST_n = 0; tb.i_SOFTRST_n = 0;
@@ -233,10 +265,13 @@ int main(int argc, char **argv)
     static const int32_t OFFS[12] = {0, -1, 3333, 5000, 6667, -1,
                                      10000, -1, 13333, 15000, 16667, -1};
 
-    // frame capture (vsync-to-vsync with all 76,800 px_de strobes)
+    // frame capture (vsync-to-vsync with all 76,800 px_de strobes) off the
+    // raw ARGB1555 tap; the H7b.6 VGA face is cross-checked live against
+    // it (5->8 replication round-trips exactly; alpha is not scanned out)
     std::vector<uint16_t> fr_cur(320 * 240, 0), fr_last(320 * 240, 0);
     long fr_idx = 0, fr_frames = 0;
     bool prev_vsync = false;
+    uint64_t face_px = 0, face_bad = 0, face_ce = 0;
 
     uint64_t u = 0, ticks153 = 0;
     uint64_t last_report = 0;
@@ -291,6 +326,24 @@ int main(int argc, char **argv)
             prev_vsync = tb.o_VSYNC;
             if (tb.o_PX_DE && fr_idx < 320 * 240)
                 fr_cur[size_t(fr_idx++)] = tb.o_PX;
+            // H7b.6 face self-check: at every DE'd CE instant the VGA RGB,
+            // repacked to 555, must equal the raw tap minus its alpha bit,
+            // and DE/CE must stay mutually aligned
+            if (tb.o_CE_PIXEL) face_ce++;
+            if (tb.o_PX_DE) {
+                face_px++;
+                const uint16_t rp = uint16_t(((tb.o_VGA_R >> 3) << 10)
+                                           | ((tb.o_VGA_G >> 3) << 5)
+                                           |  (tb.o_VGA_B >> 3));
+                if (!tb.o_CE_PIXEL || !tb.o_VGA_DE
+                    || rp != (tb.o_PX & 0x7FFF)) {
+                    if (face_bad < 5)
+                        std::printf("[cv1k_tb] FACE MISMATCH: ce=%d de=%d rgb=%04x px=%04x\n",
+                                    int(tb.o_CE_PIXEL), int(tb.o_VGA_DE),
+                                    rp, tb.o_PX & 0x7FFF);
+                    face_bad++;
+                }
+            }
         }
 
         if ((u >> 20) != last_report) {          // liveness marker (~1.75 ms)
@@ -312,6 +365,11 @@ int main(int argc, char **argv)
                 (unsigned long long)ddr.n_wr_words,
                 (unsigned long long)ddr.n_bursts,
                 (unsigned long long)ddr.n_nand_bursts, fr_frames, seed);
+    if (face_px)
+        std::printf("[cv1k_tb] VGA face: %llu DE px / %llu CE, %llu mismatch - %s\n",
+                    (unsigned long long)face_px, (unsigned long long)face_ce,
+                    (unsigned long long)face_bad,
+                    face_bad == 0 ? "FACE-EXACT" : "FAIL");
 
     if (frame_f) {
         if (fr_frames == 0)

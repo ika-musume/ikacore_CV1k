@@ -136,7 +136,10 @@ module blit_top #(
     output wire        o_hline,        // 1-cycle pulse per line (steal point)
     output wire        o_vsync,        // 1-cycle pulse at VSYNC_LINE start
     output wire        o_px_de,
-    output wire [15:0] o_px
+    output wire [15:0] o_px,
+    output wire        o_ce_pix,       // H7b.6 MiSTer face: 6.4 MHz dot CE +
+    output wire        o_hs,           // porch-split sync pulses (see
+    output wire        o_vs            // blit_video header; o_px_de = DE)
 );
 
 //------------------------------------------------------------------
@@ -330,7 +333,10 @@ blit_video #(
     .o_hline     (blit_hline),
     .o_vsync     (blit_vsync),
     .o_px_de     (o_px_de),
-    .o_px        (o_px)
+    .o_px        (o_px),
+    .o_ce_pix    (o_ce_pix),
+    .o_hs        (o_hs),
+    .o_vs        (o_vs)
 );
 
 //==================================================================

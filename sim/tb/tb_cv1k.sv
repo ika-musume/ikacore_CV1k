@@ -113,6 +113,7 @@ module tb_cv1k;
     wire [28:0] ddram_addr;
     wire [63:0] ddram_din, ddram_dout;
     wire        ddram_busy, ddram_dout_ready;
+    wire        vga_hs, vga_vs;             // H7b.6 face (anchor F rates)
 
     // DUT: the CV1000-B portable core top (H7b.1 two-file split: the MiSTer
     // framework wrapper ikacore_CV1k_emu.sv is Quartus-only; this TB plays it)
@@ -137,6 +138,13 @@ module tb_cv1k;
         .o_PX_DE         (),
         .o_VSYNC         (),
         .o_HLINE         (),
+        .o_CE_PIXEL      (),
+        .o_VGA_R         (),
+        .o_VGA_G         (),
+        .o_VGA_B         (),
+        .o_VGA_HS        (vga_hs),         // H7b.6 face rates (blitanchor F)
+        .o_VGA_VS        (vga_vs),
+        .o_VGA_DE        (),
         .o_SND_L         (),
         .o_SND_R         (),
         .i_IOCTL_DOWNLOAD(ioctl_download),
@@ -535,38 +543,116 @@ module tb_cv1k;
     end
 `endif
 
-    // ioctl smoke test: +ioctl_test [+ioctl_bytes=N] [+ioctl_bin=<raw dump>]
-    // CPU stays in reset; the file is streamed through the pump's loader and
-    // the NOR window is verified against the file afterwards.
+    // ioctl download test (H7b.4): +ioctl_test [+ioctl_bytes=N] [+ioctl_u*=f]
+    // CPU stays in reset; ioctl_sim streams the fixed MRA layout through the
+    // CV1k_ioctl decoder, then every region the stream covered is verified
+    // byte-exactly against its source file:
+    //   NAND u2  -> DDR3 word 0x0680_0000 (via u_ddr3.peek)
+    //   YMZ u23/u24 -> DDR3 word 0x07A0_0000 / 0x07B0_0000 (zero-padded slots)
+    //   u4 x2    -> pump NOR window (halfword probe [0] == 0xdf3d + full cmp)
+    // Run with +ddr3_noimage, or the NAND check reads the file plane and is
+    // vacuous.  +ioctl_bytes truncates for the CI smoke; absent = the full
+    // 152 MiB layout (the run-once accept).
+    task automatic ick_ddr3(input string tag, input string path,
+                            input [28:0] base_w, input longint nb,
+                            inout longint errs);
+        integer fd, ch;
+        longint k;
+        reg [7:0]  exp8;
+        reg [63:0] w;
+        begin
+            fd = $fopen(path, "rb");
+            w = 64'd0;
+            for (k = 0; k < nb; k = k + 1) begin
+                if (k[2:0] == 3'd0) w = u_ddr3.peek(base_w + 29'(k >> 3));
+                ch   = (fd != 0) ? $fgetc(fd) : -1;
+                exp8 = (ch < 0) ? 8'h00 : ch[7:0];
+                if (w[8*k[2:0] +: 8] !== exp8) begin
+                    errs = errs + 1;
+                    if (errs <= 10)
+                        $display("[ioctl_test] %s MISMATCH byte %0d: got %02x expected %02x",
+                                 tag, k, w[8*k[2:0] +: 8], exp8);
+                end
+            end
+            if (fd != 0) $fclose(fd);
+            $display("[ioctl_test] %s: %0d bytes checked", tag, nb);
+        end
+    endtask
+
     initial if ($test$plusargs("ioctl_test")) begin
         integer f, bb;
-        longint k, nhw, errs, tst_bytes;
-        reg [7:0]  lo8;
-        reg [15:0] expd, got;
-        string p2;
-        tst_bytes = 65536; p2 = "roms/ibara/u4";
+        longint k, errs, tst_bytes, left;
+        reg [7:0]  norimg [0:4194303];
+        reg [15:0] got;
+        string p_u2, p_u23, p_u24, p_u4;
+        longint fsz4;
+        p_u2 = "roms/ibara/u2"; p_u23 = "roms/ibara/u23";
+        p_u24 = "roms/ibara/u24"; p_u4 = "roms/ibara/u4";
+        void'($value$plusargs("ioctl_u2=%s",  p_u2));
+        void'($value$plusargs("ioctl_u23=%s", p_u23));
+        void'($value$plusargs("ioctl_u24=%s", p_u24));
+        void'($value$plusargs("ioctl_u4=%s",  p_u4));
+        tst_bytes = 0;
         void'($value$plusargs("ioctl_bytes=%d", tst_bytes));
-        void'($value$plusargs("ioctl_bin=%s", p2));
+        if (tst_bytes == 0) tst_bytes = 64'h980_0000;
+        if (!$test$plusargs("ddr3_noimage"))
+            $display("[ioctl_test] WARNING: +ddr3_noimage missing - NAND check may be vacuous");
         #12_000;                                   // pump init complete
         @(posedge i_CLK) ioctl_start = 1'b1;
         @(posedge ioctl_done);
+        wait (dut.u_ioctl.o_HOLD == 1'b0);         // packer/NOR drain
         repeat (64) @(posedge i_CLK);
-        f = $fopen(p2, "rb");
-        nhw = tst_bytes / 2; errs = 0;
-        for (k = 0; k < nhw; k = k + 1) begin
-            bb = $fgetc(f); lo8 = bb[7:0];
-            bb = $fgetc(f);
-            expd = {bb[7:0], lo8};
-            got  = u_sdram.chip0.Bank0[23'h40_0000 + k[22:0]];
-            if (got !== expd) begin
-                errs = errs + 1;
-                if (errs <= 10)
-                    $display("[ioctl_test] MISMATCH hw %0d: got %04x expected %04x", k, got, expd);
-            end
+
+        errs = 0;
+        // NAND region
+        left = (tst_bytes < 64'h840_0000) ? tst_bytes : 64'h840_0000;
+        ick_ddr3("u2->DDR3", p_u2, 29'h0680_0000, left, errs);
+        // YMZ slots (files zero-pad to the 8 MiB chip slots)
+        if (tst_bytes > 64'h840_0000) begin
+            left = tst_bytes - 64'h840_0000;
+            if (left > 64'h80_0000) left = 64'h80_0000;
+            ick_ddr3("u23->DDR3", p_u23, 29'h07A0_0000, left, errs);
         end
-        $fclose(f);
-        if (errs == 0) $display("[ioctl_test] PASS: %0d halfwords verified", nhw);
-        else           $display("[ioctl_test] FAIL: %0d/%0d mismatches", errs, nhw);
+        if (tst_bytes > 64'h8C0_0000) begin
+            left = tst_bytes - 64'h8C0_0000;
+            if (left > 64'h80_0000) left = 64'h80_0000;
+            ick_ddr3("u24->DDR3", p_u24, 29'h07B0_0000, left, errs);
+        end
+        // NOR window (only meaningful once the u4 slot streamed completely)
+        if (tst_bytes >= 64'h980_0000) begin
+            // expected image: file zero-padded, tiled x2 if <= 2 MiB
+            for (k = 0; k < 4194304; k = k + 1) norimg[k] = 8'h00;
+            f = $fopen(p_u4, "rb");
+            fsz4 = 0;
+            if (f != 0) begin
+                for (k = 0; k < 4194304; k = k + 1) begin
+                    bb = $fgetc(f);
+                    if (bb == -1) break;
+                    norimg[k] = bb[7:0];
+                end
+                fsz4 = k;
+                $fclose(f);
+            end
+            if (fsz4 <= 64'h20_0000)
+                for (k = 0; k < 64'h20_0000; k = k + 1)
+                    norimg[64'h20_0000 + k] = norimg[k];
+            got = u_sdram.chip0.Bank0[23'h40_0000];
+            $display("[ioctl_test] NOR halfword[0] = %04x (expect %02x%02x)",
+                     got, norimg[1], norimg[0]);
+            if (got !== {norimg[1], norimg[0]}) errs = errs + 1;
+            for (k = 0; k < 2097152; k = k + 1) begin
+                got = u_sdram.chip0.Bank0[23'h40_0000 + k[22:0]];
+                if (got !== {norimg[2*k+1], norimg[2*k]}) begin
+                    errs = errs + 1;
+                    if (errs <= 10)
+                        $display("[ioctl_test] NOR MISMATCH hw %0d: got %04x expected %02x%02x",
+                                 k, got, norimg[2*k+1], norimg[2*k]);
+                end
+            end
+            $display("[ioctl_test] NOR window: 2097152 halfwords checked");
+        end
+        if (errs == 0) $display("[ioctl_test] PASS: layout verified (%0d stream bytes)", tst_bytes);
+        else           $display("[ioctl_test] FAIL: %0d mismatches", errs);
         $finish;
     end
 `endif
@@ -1198,6 +1284,30 @@ module tb_cv1k;
                 else begin
                     $display("[blitanchor] frame period: %0d CKIO (want 853,072)  FAIL", t_b - t_a);
                     ba_fail = ba_fail + 1;
+                end
+                // H7b.6: MiSTer face sync rates + widths (porch split is a
+                // pure decode of the H5 counters - periods must equal the
+                // hline/frame anchors, widths the provisional parameters)
+                begin : face_rates
+                    longint h0, hw, h1, v0, vw, v1;
+                    wait (vga_hs == 1'b0); wait (vga_hs == 1'b1); h0 = ba_ckio;
+                    wait (vga_hs == 1'b0); hw = ba_ckio;
+                    wait (vga_hs == 1'b1); h1 = ba_ckio;
+                    if (h1 - h0 == 3256 && hw - h0 == 248)
+                        $display("[blitanchor] VGA_HS: period %0d width %0d CKIO  PASS", h1 - h0, hw - h0);
+                    else begin
+                        $display("[blitanchor] VGA_HS: period %0d width %0d CKIO (want 3256/248)  FAIL", h1 - h0, hw - h0);
+                        ba_fail = ba_fail + 1;
+                    end
+                    wait (vga_vs == 1'b0); wait (vga_vs == 1'b1); v0 = ba_ckio;
+                    wait (vga_vs == 1'b0); vw = ba_ckio;
+                    wait (vga_vs == 1'b1); v1 = ba_ckio;
+                    if (v1 - v0 == 853_072 && vw - v0 == 9768)
+                        $display("[blitanchor] VGA_VS: period %0d width %0d CKIO  PASS", v1 - v0, vw - v0);
+                    else begin
+                        $display("[blitanchor] VGA_VS: period %0d width %0d CKIO (want 853,072/9768)  FAIL", v1 - v0, vw - v0);
+                        ba_fail = ba_fail + 1;
+                    end
                 end
                 // let +blitframe's snapshot at this vsync land before $finish
                 // (the frame scanned between these two vsyncs is the clean,

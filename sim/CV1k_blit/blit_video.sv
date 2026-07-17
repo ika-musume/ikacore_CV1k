@@ -72,7 +72,17 @@ module blit_video #(
     parameter int unsigned VSYNC_LINE = 240,   // IRQ2 line (provisional, M-2)
     parameter int unsigned DOT_CKIO   = 8,     // 1 dot = 8 CKIO (P-30)
     parameter int unsigned STEAL_CKIO = 111,   // ~166 VCLK engine-stall window
-    parameter bit          PREFETCH   = 1'b0   // H7a: 1-hline train prefetch
+    parameter bit          PREFETCH   = 1'b0,  // H7a: 1-hline train prefetch
+    // H7b.6 sync-face porch split (PROVISIONAL until M-1: pure decode of
+    // the existing counters - no timing anchor moves).  Line: sync at
+    // dots [HS_START_DOT, +HS_DOTS) inside the 80-dot left blanking =
+    // front porch 15 dots / sync 31 (4.84 us) / back porch 41.  Frame:
+    // sync at lines [VS_START_LINE, +VS_LINES) inside the 22-line vblank
+    // = front porch 8 lines / sync 3 / back porch 11.
+    parameter int unsigned HS_START_DOT  = 8,
+    parameter int unsigned HS_DOTS       = 31,
+    parameter int unsigned VS_START_LINE = 248,
+    parameter int unsigned VS_LINES      = 3
 )(
     input  wire        i_CLK,
     input  wire        i_CKIO_PCEN,
@@ -107,7 +117,16 @@ module blit_video #(
 
     // pixel stream (o_px valid for the 1-cycle o_px_de strobe, 320x240/frame)
     output reg         o_px_de,
-    output reg  [15:0] o_px
+    output reg  [15:0] o_px,
+
+    // H7b.6 MiSTer video face: o_ce_pix is the 6.4 MHz dot CE (one i_CLK
+    // cycle per dot, the cycle o_px/o_px_de update); o_hs/o_vs are the
+    // porch-split sync pulses, registered on the same dot grid so the
+    // whole face is sampled coherently at CE instants.  o_px_de doubles
+    // as VGA_DE (it is exactly ~(hblank|vblank) at CE instants).
+    output reg         o_ce_pix,
+    output reg         o_hs,
+    output reg         o_vs
 );
 
     // ---------------------------------------------------------------------
@@ -166,6 +185,31 @@ module blit_video #(
                 lat_sx <= i_scroll_x[12:0];
                 y_v    <= i_scroll_y[11:0]
                           + {3'd0, PREFETCH ? pf_line : next_line};
+            end
+        end
+    end
+
+    // ---------------------------------------------------------------------
+    // H7b.6 sync face: registered on the dot grid with the same "current
+    // hcnt/vcnt at dot_ce" convention as o_px_de/o_px below, so hs/vs/de
+    // stay mutually aligned at every o_ce_pix instant.  Widths/positions
+    // are the provisional porch parameters; the counters themselves (and
+    // with them every H5 timing anchor) are untouched.
+    // ---------------------------------------------------------------------
+    wire hs_now = (hcnt >= 9'(HS_START_DOT)) && (hcnt < 9'(HS_START_DOT + HS_DOTS));
+    wire vs_now = (vcnt >= 9'(VS_START_LINE)) && (vcnt < 9'(VS_START_LINE + VS_LINES));
+
+    always_ff @(posedge i_CLK or negedge i_RST_n) begin
+        if (!i_RST_n) begin
+            o_ce_pix <= 1'b0;
+            o_hs     <= 1'b0;
+            o_vs     <= 1'b0;
+        end
+        else begin
+            o_ce_pix <= dot_ce;
+            if (dot_ce) begin
+                o_hs <= hs_now;
+                o_vs <= vs_now;
             end
         end
     end

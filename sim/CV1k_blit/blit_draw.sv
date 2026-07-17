@@ -180,16 +180,25 @@ module blit_draw (
     reg               pv_valid;
 
     // pixel pipe (B1 issue -> B2 data-on-bus -> B3 raw regs/ALU1 -> B4 ALU2/write)
+    // H7b.8 Fmax retime: ALU1 (tint) evaluates on the live read-return
+    // during B2 and registers into B3; ALU2 (blend) evaluates from the B3
+    // registers and lands in the B4 data register that drives the write
+    // port directly.  Same values at the same edges as the original
+    // ALU1@B3/ALU2@B4 comb placement (read data is held stable by the
+    // i_rd_vld protocol, and mode banks cannot change under in-flight
+    // beats per the s3_bank_clear gate), so H0-H6 behavior is
+    // bit-identical - but no stage carries more than one ALU, and the
+    // draw->batch wfifo hop is register->RAM routing only.
     reg         b1_v, b2_v, b3_v, b4_v;
     reg         b1_bk, b2_bk, b3_bk, b4_bk;
-    reg         b1_px1, b2_px1, b3_px1;        // 1-pixel beat (strict smear mode)
+    reg         b1_px1, b2_px1;                // 1-pixel beat (strict smear mode)
     reg  [24:0] b1_sa_, b1_wa, b2_wa, b3_wa, b4_wa;
-    reg  [3:0]  b1_en, b2_en, b3_en, b4_mask;
-    reg  [63:0] b3_src, b3_dst;
-    reg  [63:0] b4_raw;                        // post-flip raw src px (copy path)
-    reg  [3:0][4:0] b4_sr, b4_sg, b4_sb;       // tinted src channels
-    reg  [3:0][4:0] b4_dr, b4_dg, b4_db;       // dst channels
-    reg  [3:0]      b4_a;                      // src A bits
+    reg  [3:0]  b1_en, b2_en, b3_mask, b4_mask;
+    reg  [63:0] b3_raw;                        // post-flip raw src px (copy path)
+    reg  [3:0][4:0] b3_sr, b3_sg, b3_sb;       // tinted src channels
+    reg  [3:0][4:0] b3_dr, b3_dg, b3_db;       // dst channels
+    reg  [3:0]      b3_a;                      // src A bits
+    reg  [63:0] b4_data;                       // blended write beat
 
     // double-banked per-op mode state (two ops may coexist in the pipe)
     reg  [1:0]      bk_simple, bk_blend, bk_tint, bk_trans, bk_flip;
@@ -760,8 +769,8 @@ module blit_draw (
     // ---------------------------------------------------------------------
     // pixel pipe B1..B4
     // ---------------------------------------------------------------------
-    // ALU1 (comb, from B3): lane un-flip, channel extract, tint multiply,
-    // trans/A masking.  Results register into B4.
+    // ALU1 (comb, from B2 + the live read return): lane un-flip, channel
+    // extract, tint multiply, trans/A masking.  Results register into B3.
     logic [3:0][15:0] a1_raw;
     logic [3:0][4:0]  a1_sr, a1_sg, a1_sb, a1_dr, a1_dg, a1_db;
     logic [3:0]       a1_a, a1_mask;
@@ -770,18 +779,18 @@ module blit_draw (
             automatic logic [15:0] rw;
             automatic logic [15:0] dw_;
             // src lane un-flip: 4-px beats read ascending, output descending
-            rw  = b3_px1 ? b3_src[15:0]
-                : (bk_flip[b3_bk] ? b3_src[(3-l)*16 +: 16] : b3_src[l*16 +: 16]);
-            dw_ = b3_dst[l*16 +: 16];
+            rw  = b2_px1 ? i_srd_data[15:0]
+                : (bk_flip[b2_bk] ? i_srd_data[(3-l)*16 +: 16] : i_srd_data[l*16 +: 16]);
+            dw_ = i_drd_data[l*16 +: 16];
             a1_raw[l] = rw;
             a1_a[l]   = rw[15];
-            a1_sr[l]  = bk_tint[b3_bk] ? f_mulop(rw[14:10], bk_tr[b3_bk], 1'b0) : rw[14:10];
-            a1_sg[l]  = bk_tint[b3_bk] ? f_mulop(rw[9:5],   bk_tg[b3_bk], 1'b0) : rw[9:5];
-            a1_sb[l]  = bk_tint[b3_bk] ? f_mulop(rw[4:0],   bk_tb[b3_bk], 1'b0) : rw[4:0];
+            a1_sr[l]  = bk_tint[b2_bk] ? f_mulop(rw[14:10], bk_tr[b2_bk], 1'b0) : rw[14:10];
+            a1_sg[l]  = bk_tint[b2_bk] ? f_mulop(rw[9:5],   bk_tg[b2_bk], 1'b0) : rw[9:5];
+            a1_sb[l]  = bk_tint[b2_bk] ? f_mulop(rw[4:0],   bk_tb[b2_bk], 1'b0) : rw[4:0];
             a1_dr[l]  = dw_[14:10];
             a1_dg[l]  = dw_[9:5];
             a1_db[l]  = dw_[4:0];
-            a1_mask[l]= b3_en[l] && (!bk_trans[b3_bk] || rw[15]);
+            a1_mask[l]= b2_en[l] && (!bk_trans[b2_bk] || rw[15]);
         end
     end
 
@@ -789,28 +798,27 @@ module blit_draw (
         if (!i_RST_n) begin
             b1_v <= 1'b0; b2_v <= 1'b0; b3_v <= 1'b0; b4_v <= 1'b0;
             b1_bk <= 1'b0; b2_bk <= 1'b0; b3_bk <= 1'b0; b4_bk <= 1'b0;
-            b1_px1 <= 1'b0; b2_px1 <= 1'b0; b3_px1 <= 1'b0;
+            b1_px1 <= 1'b0; b2_px1 <= 1'b0;
             b1_sa_ <= '0; b1_wa <= '0; b2_wa <= '0; b3_wa <= '0; b4_wa <= '0;
-            b1_en <= '0; b2_en <= '0; b3_en <= '0; b4_mask <= '0;
-            b3_src <= '0; b3_dst <= '0; b4_raw <= '0;
-            b4_sr <= '0; b4_sg <= '0; b4_sb <= '0;
-            b4_dr <= '0; b4_dg <= '0; b4_db <= '0; b4_a <= '0;
+            b1_en <= '0; b2_en <= '0; b3_mask <= '0; b4_mask <= '0;
+            b3_raw <= '0; b4_data <= '0;
+            b3_sr <= '0; b3_sg <= '0; b3_sb <= '0;
+            b3_dr <= '0; b3_dg <= '0; b3_db <= '0; b3_a <= '0;
         end
         else if (adv) begin
-            // B3 -> B4 (ALU1 results)
+            // B3 -> B4 (ALU2 result lands in the write-data register)
             b4_v    <= b3_v;
             b4_bk   <= b3_bk;
             b4_wa   <= b3_wa;
-            b4_mask <= b3_v ? a1_mask : 4'b0;
-            for (int l = 0; l < 4; l++) b4_raw[l*16 +: 16] <= a1_raw[l];
-            b4_sr <= a1_sr;  b4_sg <= a1_sg;  b4_sb <= a1_sb;
-            b4_dr <= a1_dr;  b4_dg <= a1_dg;  b4_db <= a1_db;
-            b4_a  <= a1_a;
-            // B2 -> B3 (read data lands here)
-            b3_v   <= b2_v;   b3_bk <= b2_bk;  b3_px1 <= b2_px1;
-            b3_wa  <= b2_wa;  b3_en <= b2_en;
-            b3_src <= i_srd_data;
-            b3_dst <= i_drd_data;
+            b4_mask <= b3_v ? b3_mask : 4'b0;
+            b4_data <= {a2_out[3], a2_out[2], a2_out[1], a2_out[0]};
+            // B2 -> B3 (read data lands here, through ALU1)
+            b3_v   <= b2_v;   b3_bk <= b2_bk;
+            b3_wa  <= b2_wa;  b3_mask <= a1_mask;
+            for (int l = 0; l < 4; l++) b3_raw[l*16 +: 16] <= a1_raw[l];
+            b3_sr <= a1_sr;  b3_sg <= a1_sg;  b3_sb <= a1_sb;
+            b3_dr <= a1_dr;  b3_dg <= a1_dg;  b3_db <= a1_db;
+            b3_a  <= a1_a;
             // B1 -> B2
             b2_v  <= b1_v;   b2_bk <= b1_bk;  b2_px1 <= b1_px1;
             b2_wa <= b1_wa;  b2_en <= b1_en;
@@ -850,54 +858,55 @@ module blit_draw (
     assign o_dsc_upl_dimx = up_dimx;
     assign o_dsc_upl_dimy = up_dimy;
 
-    // ALU2 (comb, from B4): the unified blend form; copy path passes raw
+    // ALU2 (comb, from B3): the unified blend form; copy path passes raw.
+    // Registers into b4_data at the B3->B4 edge.
     logic [3:0][15:0] a2_out;
     always_comb begin
         for (int l = 0; l < 4; l++) begin
             automatic logic [4:0] c0r, c0g, c0b, dtr, dtg, dtb, orr, org_, orb;
             automatic logic [4:0] xr, xg, xb, yr, yg, yb;
             automatic logic [2:0] sm, dm;
-            sm = bk_smode[b4_bk];
-            dm = bk_dmode[b4_bk];
+            sm = bk_smode[b3_bk];
+            dm = bk_dmode[b3_bk];
             // clr0 = f(smode): operand select {alpha, s, d}, rev = sm[2]
             case (sm[1:0])
-                2'd0: begin xr = bk_sa[b4_bk]; xg = bk_sa[b4_bk]; xb = bk_sa[b4_bk]; end
-                2'd1: begin xr = b4_sr[l];     xg = b4_sg[l];     xb = b4_sb[l];     end
-                default: begin xr = b4_dr[l];  xg = b4_dg[l];     xb = b4_db[l];     end
+                2'd0: begin xr = bk_sa[b3_bk]; xg = bk_sa[b3_bk]; xb = bk_sa[b3_bk]; end
+                2'd1: begin xr = b3_sr[l];     xg = b3_sg[l];     xb = b3_sb[l];     end
+                default: begin xr = b3_dr[l];  xg = b3_dg[l];     xb = b3_db[l];     end
             endcase
             if (sm[1:0] == 2'd3) begin
-                c0r = b4_sr[l];  c0g = b4_sg[l];  c0b = b4_sb[l];
+                c0r = b3_sr[l];  c0g = b3_sg[l];  c0b = b3_sb[l];
             end
             else begin
-                c0r = f_mulop(xr, {1'b0, b4_sr[l]}, sm[2]);
-                c0g = f_mulop(xg, {1'b0, b4_sg[l]}, sm[2]);
-                c0b = f_mulop(xb, {1'b0, b4_sb[l]}, sm[2]);
+                c0r = f_mulop(xr, {1'b0, b3_sr[l]}, sm[2]);
+                c0g = f_mulop(xg, {1'b0, b3_sg[l]}, sm[2]);
+                c0b = f_mulop(xb, {1'b0, b3_sb[l]}, sm[2]);
             end
             // dterm = f(dmode)
             case (dm[1:0])
-                2'd0: begin yr = bk_da[b4_bk]; yg = bk_da[b4_bk]; yb = bk_da[b4_bk]; end
-                2'd1: begin yr = b4_sr[l];     yg = b4_sg[l];     yb = b4_sb[l];     end
-                default: begin yr = b4_dr[l];  yg = b4_dg[l];     yb = b4_db[l];     end
+                2'd0: begin yr = bk_da[b3_bk]; yg = bk_da[b3_bk]; yb = bk_da[b3_bk]; end
+                2'd1: begin yr = b3_sr[l];     yg = b3_sg[l];     yb = b3_sb[l];     end
+                default: begin yr = b3_dr[l];  yg = b3_dg[l];     yb = b3_db[l];     end
             endcase
             if (dm[1:0] == 2'd3) begin
-                dtr = b4_dr[l];  dtg = b4_dg[l];  dtb = b4_db[l];
+                dtr = b3_dr[l];  dtg = b3_dg[l];  dtb = b3_db[l];
             end
             else begin
-                dtr = f_mulop(yr, {1'b0, b4_dr[l]}, dm[2]);
-                dtg = f_mulop(yg, {1'b0, b4_dg[l]}, dm[2]);
-                dtb = f_mulop(yb, {1'b0, b4_db[l]}, dm[2]);
+                dtr = f_mulop(yr, {1'b0, b3_dr[l]}, dm[2]);
+                dtg = f_mulop(yg, {1'b0, b3_dg[l]}, dm[2]);
+                dtb = f_mulop(yb, {1'b0, b3_db[l]}, dm[2]);
             end
             // the dmode2 MAME quirk: G/B adds take clr0.R as first index
             orr = f_satadd(c0r, dtr);
             org_= f_satadd((dm == 3'd2) ? c0r : c0g, dtg);
             orb = f_satadd((dm == 3'd2) ? c0r : c0b, dtb);
 
-            if (bk_simple[b4_bk])
-                a2_out[l] = b4_raw[l*16 +: 16];
-            else if (bk_blend[b4_bk])
-                a2_out[l] = {b4_a[l], orr, org_, orb};
+            if (bk_simple[b3_bk])
+                a2_out[l] = b3_raw[l*16 +: 16];
+            else if (bk_blend[b3_bk])
+                a2_out[l] = {b3_a[l], orr, org_, orb};
             else  // tint only
-                a2_out[l] = {b4_a[l], b4_sr[l], b4_sg[l], b4_sb[l]};
+                a2_out[l] = {b3_a[l], b3_sr[l], b3_sg[l], b3_sb[l]};
         end
     end
 
@@ -906,7 +915,7 @@ module blit_draw (
     // ---------------------------------------------------------------------
     assign o_wr_req  = up_wr_fire | draw_wr;
     assign o_wr_addr = up_wr_fire ? up_beat  : b4_wa;
-    assign o_wr_data = up_wr_fire ? up_wdata : {a2_out[3], a2_out[2], a2_out[1], a2_out[0]};
+    assign o_wr_data = up_wr_fire ? up_wdata : b4_data;
     assign o_wr_mask = up_wr_fire ? up_wmask : b4_mask;
 
 `ifndef SYNTHESIS

@@ -88,12 +88,21 @@ module ikacore_CV1k #(
     input  wire [3:0]   i_DSW_S2,        // DIP S2 (blitter regfile 0x50)
 
     //------------------------------------------------------------------
-    // video taps (H7b.6 grows the full face: hsync/porches/CE)
+    // video taps (raw blit_video stream - the sim-accept datum) + the
+    // H7b.6 MiSTer face (5->8 expanded RGB, porch-split syncs, 6.4 MHz
+    // CE; everything in the 153.6 MHz blit domain = CLK_VIDEO)
     //------------------------------------------------------------------
     output wire [15:0]  o_PX,            // ARGB1555 pixel stream
     output wire         o_PX_DE,
-    output wire         o_VSYNC,
+    output wire         o_VSYNC,         // 1-cycle IRQ2-source pulse (not VGA_VS)
     output wire         o_HLINE,
+    output wire         o_CE_PIXEL,      // dot CE, one blit-clk cycle per dot
+    output wire [7:0]   o_VGA_R,
+    output wire [7:0]   o_VGA_G,
+    output wire [7:0]   o_VGA_B,
+    output wire         o_VGA_HS,
+    output wire         o_VGA_VS,
+    output wire         o_VGA_DE,        // = o_PX_DE (exact ~(hb|vb) at CE)
 
     //------------------------------------------------------------------
     // sound (YMZ770 - later phase; tied silent)
@@ -175,20 +184,54 @@ wire blit_clk = i_EMU_CLK153M;
 wire pump_init_done;                         // MISTER arm (tied 1 otherwise)
 wire dl_hold;
 `ifdef MISTER_SDRAM
-assign dl_hold = i_IOCTL_DOWNLOAD;
+// H7b.4: the hold covers the whole download AND the ioctl decoder's
+// drain (a packed DDR3 word may still be crossing into the 153.6 domain
+// just after ioctl_download falls) - the CPU POR releases only once the
+// DDRAM face is definitively back with the harness.
+wire ioctl_hold;
+assign dl_hold = ioctl_hold;
 `else
 assign dl_hold = 1'b0;
 `endif
 
-wire cpu_go = i_EMU_INITRST_n & i_EMU_SOFTRST_n & pump_init_done & ~dl_hold;
+// H7b.4 split: the download holds the CPU in MANUAL reset (RESETM), not
+// POR.  HS3's CKIO divider (cpg_wdt ckio_ph) is reset by POR ONLY, and
+// its phase parity on the 51.2 MHz grid is set by the POR-release edge -
+// releasing POR at the download's end (an arbitrary 102.4 edge) put CKIO
+// rises on 153.6 FALLING edges (pcen23 misphase, found by H7b.7 cell C).
+// So POR releases at the TB/emu-anchored SOFTRST instant (known-good
+// parity), CKIO locks its grid phase once, and a download only extends
+// the RESETM hold; the blitter/board glue hold on sys_rst_n throughout.
+// (On-target note, H7b.8: soft reset still cycles POR - parity there is
+// a PLL/sequencer determinism item; and a real seconds-long HPS download
+// opens NO refresh windows on the idle grid - see the pump header.)
+wire cpu_por_go = i_EMU_INITRST_n & i_EMU_SOFTRST_n & pump_init_done;
+
+// dl_hold release quantizer (H7b.7 cell C determinism): a download ends
+// on an arbitrary 102.4 edge, but the RESETM release must land on the
+// same CKIO sub-phase as a preload boot's POR release (where ckio_ph=0,
+// CKIO high, falling next clock).  Extending the hold to the next
+// CKIO_PCEN instant makes cpu_go rise one clock after PCEN = a ph=0
+// edge = exactly that alignment.  Inert when dl_hold never rises.
+reg dl_hold_q = 1'b0;
+always @(posedge i_EMU_CLK102M) begin
+    if (dl_hold)        dl_hold_q <= 1'b1;
+    else if (CKIO_PCEN) dl_hold_q <= 1'b0;
+end
+wire cpu_go = cpu_por_go & ~dl_hold & ~dl_hold_q;
 
 reg [3:0] rst_cnt = 4'd0;
 always @(posedge i_EMU_CLK102M) begin
     if (!cpu_go)             rst_cnt <= 4'd0;
     else if (rst_cnt != 4'd9) rst_cnt <= rst_cnt + 4'd1;
 end
-assign i_POR_n = cpu_go;                     // combinational: same release edge the TB drove
+assign i_POR_n = cpu_por_go;                 // combinational: same release edge the TB drove
 assign i_RST_n = cpu_go & (rst_cnt >= 4'd8); // 8-clock stagger (old tb repeat(8))
+
+// board glue + blit stack reset: identical to the old i_POR_n in every
+// non-download run (dl_hold=0 -> sys_rst_n == i_POR_n, same edge), and
+// held through a download so the DDRAM face stays with the ioctl mux
+wire sys_rst_n = cpu_go;
 
 assign o_INIT_DONE = pump_init_done;
 
@@ -459,6 +502,16 @@ wire [31:0] pump_g_rdata;
 wire        pump_g_oe;
 wire [15:0] pump_n_rdata;
 wire        pump_n_oe;
+wire        pump_ioctl_wait;
+
+// H7b.4 ioctl decoder nets (decoder <-> pump / DDRAM mux)
+wire        ic_nor_download, ic_nor_wr;
+wire [26:0] ic_nor_addr;
+wire [7:0]  ic_nor_data;
+wire        ic_ddr_own, ic_ddr_we;
+wire [28:0] ic_ddr_addr;
+wire [63:0] ic_ddr_din;
+wire [7:0]  ic_ddr_be;
 
 assign D        = pump_g_oe ? pump_g_rdata : 32'hzzzz_zzzz;  // CS3 read beats
 assign D[15:0]  = pump_n_oe ? pump_n_rdata : 16'hzzzz;       // CS0 (NOR) reads
@@ -499,13 +552,15 @@ CV1k_sdram_control u_pump (
     .i_BACK_n     (BACK_n),
     .i_BLIT_WIN   (blit_ref_win),
     .i_ORD_CS_n   ((CS4_n & CS5_n & CS6_n) | ~BUS_OE),
-    // HPS ioctl
-    .i_IOCTL_DOWNLOAD (i_IOCTL_DOWNLOAD),
-    .i_IOCTL_WR       (i_IOCTL_WR),
-    .i_IOCTL_ADDR     (i_IOCTL_ADDR),
-    .i_IOCTL_DATA     (i_IOCTL_DATA),
-    .i_IOCTL_INDEX    (i_IOCTL_INDEX),
-    .o_IOCTL_WAIT     (o_IOCTL_WAIT),
+    // HPS ioctl: since H7b.4 the pump sees only the u4 sub-stream of the
+    // MRA layout, rebased to 0 by the CV1k_ioctl decoder below (the pump's
+    // own <4 MiB window check + {odd,even} halfword assembly unchanged)
+    .i_IOCTL_DOWNLOAD (ic_nor_download),
+    .i_IOCTL_WR       (ic_nor_wr),
+    .i_IOCTL_ADDR     (ic_nor_addr),
+    .i_IOCTL_DATA     (ic_nor_data),
+    .i_IOCTL_INDEX    (16'h0000),
+    .o_IOCTL_WAIT     (pump_ioctl_wait),
     // status
     .o_INIT_DONE  (pump_init_done),
     // module pins (pad tristate + SDRAM_CLK live in the wrapper/TB)
@@ -513,6 +568,38 @@ CV1k_sdram_control u_pump (
     .o_S_nRAS(o_SDRAM_nRAS), .o_S_nCAS(o_SDRAM_nCAS), .o_S_nWE(o_SDRAM_nWE),
     .o_S_DQM(o_SDRAM_DQM), .o_S_CKE(o_SDRAM_CKE),
     .o_S_DQ_O(o_SDRAM_DQ_O), .o_S_DQ_OE(o_SDRAM_DQ_OE), .i_S_DQ_I(i_SDRAM_DQ_I)
+);
+
+//==================================================================
+//  H7b.4 - ioctl download decoder: splits the one MRA stream on its own
+//  byte counter (ioctl_addr wraps at 128 MiB) into the pump's NOR window
+//  (u4 x2, rebased to 0) and DDR3 (NAND u2 + YMZ slots) through the
+//  8-byte packer.  The DDRAM face is muxed to the packer while
+//  o_DDR_OWN; the core is held in reset the whole time (dl_hold above),
+//  so the harness never contends.  See CV1k_ioctl.sv for the layout.
+//==================================================================
+CV1k_ioctl u_ioctl (
+    .i_CLK          (i_CLK),
+    .i_RST_n        (i_EMU_INITRST_n),
+    .i_DOWNLOAD     (i_IOCTL_DOWNLOAD),
+    .i_WR           (i_IOCTL_WR),
+    .i_ADDR         (i_IOCTL_ADDR),
+    .i_DATA         (i_IOCTL_DATA),
+    .i_INDEX        (i_IOCTL_INDEX),
+    .o_WAIT         (o_IOCTL_WAIT),
+    .o_HOLD         (ioctl_hold),
+    .o_NOR_DOWNLOAD (ic_nor_download),
+    .o_NOR_WR       (ic_nor_wr),
+    .o_NOR_ADDR     (ic_nor_addr),
+    .o_NOR_DATA     (ic_nor_data),
+    .i_NOR_WAIT     (pump_ioctl_wait),
+    .i_CLK_DDR      (blit_clk),
+    .o_DDR_OWN      (ic_ddr_own),
+    .o_DDR_WE       (ic_ddr_we),
+    .o_DDR_ADDR     (ic_ddr_addr),
+    .o_DDR_DIN      (ic_ddr_din),
+    .o_DDR_BE       (ic_ddr_be),
+    .i_DDR_BUSY     (i_DDRAM_BUSY)
 );
 `endif // MISTER_SDRAM
 
@@ -527,7 +614,7 @@ CV1k_sdram_control u_pump (
 CV1k_cpld u_u13_cpld (
     .i_CLK        (i_CLK),
     .i_CKIO_PCEN  (CKIO_PCEN),
-    .i_RST_n      (i_POR_n),
+    .i_RST_n      (sys_rst_n),
     .i_CS4_n      (CS4_n),
     .i_CS5_n      (CS5_n),
     .i_CS6_n      (CS6_n),
@@ -593,7 +680,7 @@ wire [63:0] nd_data;
 
 CV1k_nand #(.NAND_BASE_W(29'h0680_0000)) u_u2_nand (
     .i_CLK    (blit_clk),               // H7b.2: harness-client domain
-    .i_RST_n  (i_POR_n),
+    .i_RST_n  (sys_rst_n),
     .i_Dq     (D_O[7:0]),               // SH-3 write-data view (cmd/addr in)
     .o_Dq     (nd_dq_o),
     .o_Dq_oe  (nd_dq_oe),
@@ -690,7 +777,7 @@ blit_top #(
     .i_DSW_S2    (i_DSW_S2),           // DIP S2 (H7b.1: OSD-fed runtime input)
     .i_CLK       (blit_clk),           // H7b.2: 153.6 MHz domain
     .i_CKIO_PCEN (blit_pcen3),
-    .i_RST_n     (i_POR_n),
+    .i_RST_n     (sys_rst_n),
 
     // CS6 slave
     .i_BLIT_n    (blit_n),             // U13 o_BLITTER_n (= CS6_n)
@@ -761,11 +848,14 @@ blit_top #(
     .o_dsc_upl_dimx (), .o_dsc_upl_dimy (),
 
     // video timing + pixel stream (H7b.1: exported at the module boundary;
-    // H7b.6 grows the full hsync/porch face for the MiSTer video pipeline)
+    // H7b.6: + the porch-split sync face and the 6.4 MHz dot CE)
     .o_hline     (o_HLINE),
     .o_vsync     (o_VSYNC),
     .o_px_de     (o_PX_DE),
-    .o_px        (o_PX)
+    .o_px        (o_PX),
+    .o_ce_pix    (o_CE_PIXEL),
+    .o_hs        (o_VGA_HS),
+    .o_vs        (o_VGA_VS)
 );
 
 //==================================================================
@@ -777,7 +867,7 @@ blit_top #(
 //==================================================================
 blit_batch u_batch (
     .i_CLK        (blit_clk),
-    .i_RST_n      (i_POR_n),
+    .i_RST_n      (sys_rst_n),
     .i_srd_req    (bv_srd_req),
     .i_srd_addr   (bv_srd_addr),
     .o_srd_data   (bv_srd_data),
@@ -821,13 +911,36 @@ blit_batch u_batch (
 
 //==================================================================
 //  The ONE shared DDR3 harness (H7a step 4): train-level arbiter,
-//  video line fetch > batch reads/writes > NAND, onto the MiSTer
+//  video line fetch > batch reads/writes > NAND > YMZ, onto the MiSTer
 //  DDRAM face (served by ddr3_beh in tb_cv1k, the C++ stat slave in
-//  ikacore_CV1k_tb, the real f2sdram on target).
+//  ikacore_CV1k_tb, the real f2sdram on target).  H7b.4: the face goes
+//  through the download mux below - while an ioctl download (or its
+//  drain) is in flight the CV1k_ioctl packer owns the command pins and
+//  the harness sits in reset (POR held by dl_hold).
 //==================================================================
+wire        hz_ddram_rd, hz_ddram_we;
+wire [7:0]  hz_ddram_burstcnt, hz_ddram_be;
+wire [28:0] hz_ddram_addr;
+wire [63:0] hz_ddram_din;
+
+// client 3: YMZ sample reads.  The YMZ770 frontend is a later phase
+// (post-H7b); the reserved slot is exercised today by the sim-only
+// +ymzdump probe below, and idles on target.
+wire        ym_rdy, ym_dvld;
+wire [63:0] ym_data;
+`ifdef SYNTHESIS
+wire        ym_req  = 1'b0;
+wire [28:0] ym_addr = 29'd0;
+wire [10:0] ym_len  = 11'd0;
+`else
+reg         ym_req  = 1'b0;
+reg  [28:0] ym_addr = 29'd0;
+reg  [10:0] ym_len  = 11'd0;
+`endif
+
 CV1k_ddr3_harness u_harness (
     .i_CLK        (blit_clk),
-    .i_RST_n      (i_POR_n),
+    .i_RST_n      (sys_rst_n),
     .i_lf_req     (lf_req),
     .i_lf_y       (lf_y),
     .i_lf_x0      (lf_x0),
@@ -852,17 +965,135 @@ CV1k_ddr3_harness u_harness (
     .o_nd_rdy     (nd_rdy),
     .o_nd_dvld    (nd_dvld),
     .o_nd_data    (nd_data),
+    .i_ym_req     (ym_req),
+    .i_ym_addr    (ym_addr),
+    .i_ym_len     (ym_len),
+    .o_ym_rdy     (ym_rdy),
+    .o_ym_dvld    (ym_dvld),
+    .o_ym_data    (ym_data),
     .DDRAM_CLK    (o_DDRAM_CLK),
     .DDRAM_BUSY   (i_DDRAM_BUSY),
-    .DDRAM_BURSTCNT (o_DDRAM_BURSTCNT),
-    .DDRAM_ADDR   (o_DDRAM_ADDR),
+    .DDRAM_BURSTCNT (hz_ddram_burstcnt),
+    .DDRAM_ADDR   (hz_ddram_addr),
     .DDRAM_DOUT   (i_DDRAM_DOUT),
     .DDRAM_DOUT_READY (i_DDRAM_DOUT_READY),
-    .DDRAM_RD     (o_DDRAM_RD),
-    .DDRAM_DIN    (o_DDRAM_DIN),
-    .DDRAM_BE     (o_DDRAM_BE),
-    .DDRAM_WE     (o_DDRAM_WE)
+    .DDRAM_RD     (hz_ddram_rd),
+    .DDRAM_DIN    (hz_ddram_din),
+    .DDRAM_BE     (hz_ddram_be),
+    .DDRAM_WE     (hz_ddram_we)
 );
+
+//------------------------------------------------------------------
+// H7b.4 download-gated DDRAM command mux.  ic_ddr_own is a 153.6-domain
+// signal that covers the whole download plus the last word's drain; the
+// harness is in reset throughout (dl_hold -> POR low), and stays quiet
+// for >60 us after POR release (first video line train), so the switch
+// itself never races a command.
+//------------------------------------------------------------------
+`ifdef MISTER_SDRAM
+assign o_DDRAM_RD       = ic_ddr_own ? 1'b0       : hz_ddram_rd;
+assign o_DDRAM_WE       = ic_ddr_own ? ic_ddr_we  : hz_ddram_we;
+assign o_DDRAM_ADDR     = ic_ddr_own ? ic_ddr_addr: hz_ddram_addr;
+assign o_DDRAM_DIN      = ic_ddr_own ? ic_ddr_din : hz_ddram_din;
+assign o_DDRAM_BE       = ic_ddr_own ? ic_ddr_be  : hz_ddram_be;
+assign o_DDRAM_BURSTCNT = ic_ddr_own ? 8'd1       : hz_ddram_burstcnt;
+`else
+assign o_DDRAM_RD       = hz_ddram_rd;
+assign o_DDRAM_WE       = hz_ddram_we;
+assign o_DDRAM_ADDR     = hz_ddram_addr;
+assign o_DDRAM_DIN      = hz_ddram_din;
+assign o_DDRAM_BE       = hz_ddram_be;
+assign o_DDRAM_BURSTCNT = hz_ddram_burstcnt;
+`endif
+
+//------------------------------------------------------------------
+// H7b.6 MiSTer video face: comb 5->8 bit replication off the registered
+// ARGB1555 stream (alpha is a blend-plane flag, not scanned out).  All
+// face signals update on the blit clock and are sampled at o_CE_PIXEL.
+//------------------------------------------------------------------
+assign o_VGA_R  = {o_PX[14:10], o_PX[14:12]};
+assign o_VGA_G  = {o_PX[9:5],   o_PX[9:7]};
+assign o_VGA_B  = {o_PX[4:0],   o_PX[4:2]};
+assign o_VGA_DE = o_PX_DE;
+
+`ifndef SYNTHESIS
+//------------------------------------------------------------------
+// H7b.5 accept probe: +ymzdump=<file> streams bytes out of the YMZ DDR3
+// region through the harness's client-3 port while the system runs (the
+// arbitration-under-load accept), and writes them little-endian for a
+// byte-diff against the u23/u24 images.
+//   +ymzoff=<byte off in the 16 MB region>   (default 0 = u23[0];
+//                                             8 MiB = u24[0])
+//   +ymzlen=<bytes>       (default 65536)
+//   +ymztrain=<words>     (default 64  = 512 B per train)
+//   +ymzgap=<blit clks>   (default 4096 ~ 26.7 us between trains)
+//------------------------------------------------------------------
+integer ymz_fd = 0;
+longint ymz_off = 0, ymz_len_bytes = 65536;
+longint ymz_train_w = 64, ymz_gap = 4096;
+longint ymz_left_w = 0, ymz_burst_left = 0, ymz_gap_cnt = 0, ymz_bytes_out = 0;
+reg [28:0] ymz_next_w;
+reg [1:0]  ymz_st = 2'd0;               // 0 idle/gap, 1 request, 2 collect
+
+initial begin
+    string ymz_file;
+    if ($value$plusargs("ymzdump=%s", ymz_file)) begin
+        void'($value$plusargs("ymzoff=%d",   ymz_off));
+        void'($value$plusargs("ymzlen=%d",   ymz_len_bytes));
+        void'($value$plusargs("ymztrain=%d", ymz_train_w));
+        void'($value$plusargs("ymzgap=%d",   ymz_gap));
+        ymz_fd = $fopen(ymz_file, "wb");
+        if (ymz_fd == 0) $display("[ymz] ERROR: cannot open %s", ymz_file);
+        else $display("[ymz] probe: %0d bytes from region byte 0x%0x, %0d words/train, gap %0d clks",
+                      ymz_len_bytes, ymz_off, ymz_train_w, ymz_gap);
+    end
+end
+
+always @(posedge blit_clk) if (ymz_fd != 0 && sys_rst_n) begin
+    case (ymz_st)
+    2'd0: begin                          // arm / inter-train gap
+        if (ymz_left_w == 0 && ymz_bytes_out == 0) begin
+            ymz_left_w  = (ymz_len_bytes + 7) / 8;
+            ymz_next_w  = 29'h07A0_0000 + 29'(ymz_off / 8);
+            ymz_gap_cnt = ymz_gap;
+        end
+        if (ymz_left_w == 0) begin
+            $display("[ymz] probe done: %0d bytes dumped", ymz_bytes_out);
+            $fclose(ymz_fd); ymz_fd = 0;
+        end
+        else if (ymz_gap_cnt != 0) ymz_gap_cnt = ymz_gap_cnt - 1;
+        else begin
+            ym_req  <= 1'b1;
+            ym_addr <= ymz_next_w;
+            ym_len  <= 11'((ymz_left_w > ymz_train_w) ? ymz_train_w : ymz_left_w);
+            ymz_st  <= 2'd1;
+        end
+    end
+    2'd1: if (ym_rdy) begin              // accepted this edge
+        ym_req         <= 1'b0;
+        ymz_burst_left = longint'(ym_len);
+        ymz_st         <= 2'd2;
+    end
+    2'd2: begin
+        if (ym_dvld) begin
+            for (int k = 0; k < 8; k++)
+                if (ymz_bytes_out < ymz_len_bytes) begin
+                    $fwrite(ymz_fd, "%c", ym_data[8*k +: 8]);
+                    ymz_bytes_out = ymz_bytes_out + 1;
+                end
+            ymz_next_w     = ymz_next_w + 29'd1;
+            ymz_left_w     = ymz_left_w - 1;
+            ymz_burst_left = ymz_burst_left - 1;
+            if (ymz_burst_left == 0) begin
+                ymz_gap_cnt = ymz_gap;
+                ymz_st      <= 2'd0;
+            end
+        end
+    end
+    default: ymz_st <= 2'd0;
+    endcase
+end
+`endif
 
 endmodule
 `default_nettype wire

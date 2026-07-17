@@ -65,6 +65,7 @@ CV1k_cpld.v
 CV1k_sdram_control.sv
 CV1k_ddr3_harness.sv
 CV1k_nand.sv
+CV1k_ioctl.sv
 ddr3_beh.sv
 blit_vram_beh.sv
 // H7b.1 two-file split: ikacore_CV1k.sv = the portable core top (the TB

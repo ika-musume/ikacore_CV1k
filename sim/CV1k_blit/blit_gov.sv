@@ -76,11 +76,18 @@
 // END arrival), the honest hardware-facing window, which additionally trails
 // by the END chunk fetch.
 //
-// Synthesis notes (sim-first, same convention as blit_draw): the DRAW cost
-// is computed combinationally at the op's last-word arrival (three 26-38 bit
-// multiply-adds -- DSP-able but long; >= 10 cycles of slack exist per draw,
-// so this can be pipelined/multi-cycled for Fmax later), and the cost queue
-// is a comb-read 4096x32 array (respin to sync-read BRAM at the MiSTer pass).
+// Synthesis notes (H7b.8): the DRAW cost is a staged pipeline keyed to the
+// op's own word arrivals -- X-clamp at w7, Y-clamp + coefficient products at
+// w8, raw products at w9 (the emit edge), final sum+saturate comb into the
+// queue write port one cycle later -- so no cycle carries more than one DSP
+// level.  Bit-exact with the old single-cone form: the entry lands in q_mem
+// at the same edge with the same value (reassociation is exact -- dpw is
+// always a multiple of 4, and the src_px/4 truncation is corrected with a
+// mod-4 remainder term; all narrowed widths are proven bounds for surviving
+// draws, and rejected draws store 0).  The cost queue infers M10K with the
+// read address register absorbed; mixed-port read-during-write is "don't
+// care" there, so q_head carries an explicit one-cycle new-data bypass
+// (value-identical in RTL sim, defined data on silicon).
 //============================================================================
 module blit_gov (
     input  wire        i_CLK,
@@ -134,6 +141,7 @@ module blit_gov (
     // runtime tables
     //------------------------------------------------------------------
     reg [11:0] t_p_src, t_p_rw, t_p_wr, t_p_spr;
+    reg [12:0] t_rwwr;                   // P_RW + P_WR, kept pre-summed
     reg [7:0]  t_c_src4, t_c_dst4;
     reg [15:0] t_hline_p;                // half-VCLK
     reg [11:0] t_steal;                  // VCLK
@@ -150,6 +158,7 @@ module blit_gov (
             t_p_src    <= 12'd5;         // P_PDF set (hits all three anchors)
             t_p_rw     <= 12'd20;
             t_p_wr     <= 12'd10;
+            t_rwwr     <= 13'd30;
             t_p_spr    <= 12'd10;
             t_c_src4   <= 8'd1;
             t_c_dst4   <= 8'd2;
@@ -164,8 +173,14 @@ module blit_gov (
         else if (i_tbl_we) begin
             case (i_tbl_idx)
                 4'd0 : t_p_src    <= i_tbl_data[11:0];
-                4'd1 : t_p_rw     <= i_tbl_data[11:0];
-                4'd2 : t_p_wr     <= i_tbl_data[11:0];
+                4'd1 : begin
+                    t_p_rw <= i_tbl_data[11:0];
+                    t_rwwr <= {1'b0, i_tbl_data[11:0]} + {1'b0, t_p_wr};
+                end
+                4'd2 : begin
+                    t_p_wr <= i_tbl_data[11:0];
+                    t_rwwr <= {1'b0, t_p_rw} + {1'b0, i_tbl_data[11:0]};
+                end
                 4'd3 : t_p_spr    <= i_tbl_data[11:0];
                 4'd4 : t_c_src4   <= i_tbl_data[7:0];
                 4'd5 : t_c_dst4   <= i_tbl_data[7:0];
@@ -212,11 +227,12 @@ module blit_gov (
     reg  [25:0] gp_wcnt;                 // words since EXEC; chunk = [25:5]
     reg  [20:0] gp_c0;                   // current op's first-word chunk
 
-    // captured DRAW fields (raw u16, DrawView slices)
+    // captured DRAW fields (raw u16, DrawView slices).  The w/h words are
+    // folded into end-coordinate pre-adds at capture (dxe = dx + (w-1),
+    // dye = dy + (h-1), u16 wrap) so the clip-clamp stages start from
+    // registers -- see the cost pipeline below.
     reg  [15:0] gd_sx, gd_sy, gd_dx, gd_dy;
-    reg  [13:0] gd_w;                    // (w6 & 0x1fff) + 1
-    reg  [12:0] gd_h;                    // (w7 & 0x0fff) + 1
-    reg  [12:0] gu_dimx;                 // UPLOAD w6 & 0x1fff
+    reg  [13:0] gu_dimx1;                // UPLOAD (w6 & 0x1fff) + 1
 
     // clip window state (u16 wrap semantics, workload.h window_clip)
     reg  [15:0] gc_minx, gc_maxx, gc_miny, gc_maxy;
@@ -226,33 +242,71 @@ module blit_gov (
     reg  [20:0] win_f;                   // surviving-draw chunks arrived
     reg  [20:0] last_mark;               // next unmarked chunk candidate
 
-    // clip test + clamp on the registered DRAW fields (valid at word idx 9;
-    // fields settle by idx 7, so this comb cone has >= 2 spare cycles)
-    wire [15:0] dxe    = gd_dx + {2'd0, gd_w} - 16'd1;
-    wire [15:0] dye    = gd_dy + {3'd0, gd_h} - 16'd1;
-    wire        reject = (gd_dx > gc_maxx) || (dxe < gc_minx) ||
-                         (gd_dy > gc_maxy) || (dye < gc_miny);
-    wire [15:0] cx0    = (gd_dx > gc_minx) ? gd_dx : gc_minx;
-    wire [15:0] cy0    = (gd_dy > gc_miny) ? gd_dy : gc_miny;
-    wire [15:0] cx1    = (dxe   < gc_maxx) ? dxe   : gc_maxx;
-    wire [15:0] cy1    = (dye   < gc_maxy) ? dye   : gc_maxy;
-    wire [15:0] cw     = cx1 - cx0 + 16'd1;      // MAME keeps src origin,
-    wire [15:0] chh    = cy1 - cy0 + 16'd1;      // shrinks dims
+    //------------------------------------------------------------------
+    // DRAW cost pipeline (H7b.8 Fmax respin -- bit-exact with the old
+    // single-cycle cone; see header).  Stages are keyed to the draw's own
+    // word arrivals, which can be back-to-back i_CLK cycles when the fetch
+    // skid has backlog, so each stage carries at most one DSP level:
+    //   w6 edge : x_dxe  = dx + (w-1)           (u16 pre-add, live word)
+    //             x_cx0  = max(dx, minx)        (settled since w4)
+    //   w7 edge : X regs = x-axis clamp + spans (cx1/cw/dpw/tspans/reject)
+    //             y_dye  = dy + (h-1)           (u16 pre-add, live word)
+    //   w8 edge : Y regs = y-axis clamp + spans, PLUS the four coefficient
+    //             products off the X regs (reassociated -- exact: integer
+    //             multiplication is associative, and dpw is always a
+    //             multiple of 4 so dst_px/4 = (dpw/4)*chh needs no
+    //             correction; src_px/4 truncation is repaired with the
+    //             mod-4 remainder term rcs = (cw[1:0]*chh[1:0])[1:0]*c)
+    //   w9 edge : M regs = four raw products (single DSP each) -- this is
+    //             the emit edge (q_push/q_pkind/q_pnslot as before)
+    //   w9+1    : sum + saturate comb into the q_mem write port -- the
+    //             entry lands in the queue at the same edge with the same
+    //             value as the old design.
+    // Widths are proven bounds for SURVIVING draws (clip windows are at
+    // most 8192 x 4096, and a passing clip test excludes u16 wrap in the
+    // end coordinates -- see blitter_todo H7b.8); rejected draws store 0,
+    // so truncated junk in the narrow regs is never observable.
+    //------------------------------------------------------------------
+    reg  [15:0] x_dxe, y_dye;            // end-coordinate pre-adds
+    reg  [15:0] x_cx0;
+    reg         x_rej;                   // x-axis reject
+    reg  [13:0] x_cw;                    // clip-clamped width   (<= 8192)
+    reg  [11:0] x_dpw4;                  // padded dst width / 4 (<= 2050)
+    reg  [9:0]  x_ts_sx, x_ts_dx;        // x tile spans         (<= 514)
+    reg         y_rej;                   // full reject (x OR y)
+    reg  [12:0] y_chh;                   // clip-clamped height  (<= 4096)
+    reg  [9:0]  y_ts_sy, y_ts_dy;        // y tile spans         (<= 258)
+    reg  [21:0] y_cwc;                   // cw    * C_SRC4
+    reg  [19:0] y_dpwc;                  // dpw/4 * C_DST4
+    reg  [21:0] y_tsxc;                  // ts_sx * P_SRC
+    reg  [22:0] y_tsdc;                  // ts_dx * (P_RW + P_WR)
+    reg  [34:0] m_psrc;                  // (cw * C_SRC4) * chh
+    reg  [32:0] m_pdst;                  // (dpw/4 * C_DST4) * chh
+    reg  [31:0] m_psps;                  // (ts_sx * P_SRC) * ts_sy
+    reg  [32:0] m_pspd;                  // (ts_dx * P_RWWR) * ts_dy
+    reg  [9:0]  m_rcs;                   // (src_px mod 4) * C_SRC4
 
-    // BD §6.5 draw cost from the tables
-    wire [31:0] src_px  = cw * chh;
-    wire [15:0] dxa     = {cx0[15:2], 2'b00};
-    wire [15:0] dxb     = cx1 | 16'd3;
-    wire [15:0] dpw     = dxb - dxa + 16'd1;
-    wire [31:0] dst_px  = dpw * chh;
-    wire [25:0] sp_s    = f_tspan(gd_sx[4:0], cw) * f_tspan(gd_sy[4:0], chh);
-    wire [25:0] sp_d    = f_tspan(cx0[4:0],   cw) * f_tspan(cy0[4:0],   chh);
-    wire [39:0] cost_w  = {10'd0, src_px[31:2]} * {32'd0, t_c_src4}
-                        + {10'd0, dst_px[31:2]} * {32'd0, t_c_dst4}
-                        + {14'd0, sp_s} * {28'd0, t_p_src}
-                        + {14'd0, sp_d} * ({27'd0, t_p_rw} + {27'd0, t_p_wr})
-                        + {28'd0, t_p_spr};
-    wire [26:0] cost_v  = (|cost_w[39:27]) ? 27'h7FF_FFFF : cost_w[26:0];
+    // X-stage comb (w6 -> w7 window)
+    wire [15:0] xc_cx1  = (x_dxe < gc_maxx) ? x_dxe : gc_maxx;
+    wire [15:0] xc_cw   = xc_cx1 - x_cx0 + 16'd1;
+    wire [15:0] xc_dxa  = {x_cx0[15:2], 2'b00};
+    wire [15:0] xc_dxb  = xc_cx1 | 16'd3;
+    wire [15:0] xc_dpw  = xc_dxb - xc_dxa + 16'd1;   // always a multiple of 4
+
+    // Y-stage comb (w7 -> w8 window)
+    wire [15:0] yc_cy0  = (gd_dy > gc_miny) ? gd_dy : gc_miny;
+    wire [15:0] yc_cy1  = (y_dye < gc_maxy) ? y_dye : gc_maxy;
+    wire [15:0] yc_chh  = yc_cy1 - yc_cy0 + 16'd1;
+
+    // C-stage comb (w9 -> w9+1 window): sum + saturate into the queue.
+    // m_psrc - m_rcs is exactly 4x the old floor(src_px/4)*C_SRC4 term.
+    wire [35:0] c_tsrc  = {1'b0, m_psrc} - {26'd0, m_rcs};
+    wire [35:0] c_sum   = {2'b0, c_tsrc[35:2]}
+                        + {3'd0, m_pdst}
+                        + {4'd0, m_psps}
+                        + {3'd0, m_pspd}
+                        + {24'd0, t_p_spr};
+    wire [26:0] c_sat   = (|c_sum[35:27]) ? 27'h7FF_FFFF : c_sum[26:0];
 
     // chunk-slot marking for the governed window (surviving draws only)
     wire [20:0] op_c1   = gp_wcnt[25:5];                 // last-word chunk
@@ -260,11 +314,77 @@ module blit_gov (
     wire [1:0]  nslot_w = (op_c1 >= mark_lo) ? 2'(op_c1 - mark_lo + 21'd1)
                                              : 2'd0;    // draw spans <= 2 chunks
 
-    // cost-queue push interface (driven by the parser below)
+    // cost-queue push interface (driven by the parser below).  The cost
+    // itself is NOT a register: wr_cost is the C-stage comb result, muxed
+    // to zero for every non-surviving-draw entry, feeding the queue write
+    // port directly at the write edge.
     reg         q_push;
     reg  [1:0]  q_pkind;
     reg  [1:0]  q_pnslot;
-    reg  [26:0] q_pcost;
+    wire [26:0] wr_cost = (q_pkind == 2'd1) ? c_sat : 27'd0;
+
+    // cost pipeline registers (stage gates keyed to the draw word index;
+    // pauses between words only widen the comb windows)
+    wire        gp_dbody = i_push && (gp == GP_BODY) && (gp_kind == 2'd1);
+    wire [12:0] xc_tssx  = f_tspan(gd_sx[4:0], xc_cw);
+    wire [12:0] xc_tsdx  = f_tspan(x_cx0[4:0], xc_cw);
+    wire [12:0] yc_tssy  = f_tspan(gd_sy[4:0], yc_chh);
+    wire [12:0] yc_tsdy  = f_tspan(yc_cy0[4:0], yc_chh);
+    wire [3:0]  mc_r4    = x_cw[1:0] * y_chh[1:0];   // src_px mod 4 in [1:0]
+
+    // UPLOAD sizing product (w7 live word; see the parser below)
+    wire [12:0] up_h1    = {1'b0, i_word[11:0]} + 13'd1;
+    wire [26:0] up_px    = gu_dimx1 * up_h1;         // 14x13, <= 2^25
+
+    always_ff @(posedge i_CLK or negedge i_RST_n) begin
+        if (!i_RST_n) begin
+            x_dxe   <= 16'd0;  x_cx0   <= 16'd0;
+            y_dye   <= 16'd0;
+            x_rej   <= 1'b0;   x_cw    <= 14'd0;  x_dpw4 <= 12'd0;
+            x_ts_sx <= 10'd0;  x_ts_dx <= 10'd0;
+            y_rej   <= 1'b0;   y_chh   <= 13'd0;
+            y_ts_sy <= 10'd0;  y_ts_dy <= 10'd0;
+            y_cwc   <= 22'd0;  y_dpwc  <= 20'd0;
+            y_tsxc  <= 22'd0;  y_tsdc  <= 23'd0;
+            m_psrc  <= 35'd0;  m_pdst  <= 33'd0;
+            m_psps  <= 32'd0;  m_pspd  <= 33'd0;
+            m_rcs   <= 10'd0;
+        end
+        else if (gp_dbody) begin
+            case (gp_idx)
+                4'd6: begin                  // w6 live: fold w-1 into dxe
+                    x_dxe   <= gd_dx + {3'd0, i_word[12:0]};
+                    x_cx0   <= (gd_dx > gc_minx) ? gd_dx : gc_minx;
+                end
+                4'd7: begin                  // X stage + w7 live pre-add
+                    x_rej   <= (gd_dx > gc_maxx) || (x_dxe < gc_minx);
+                    x_cw    <= xc_cw[13:0];
+                    x_dpw4  <= xc_dpw[13:2];
+                    x_ts_sx <= xc_tssx[9:0];
+                    x_ts_dx <= xc_tsdx[9:0];
+                    y_dye   <= gd_dy + {4'd0, i_word[11:0]};
+                end
+                4'd8: begin                  // Y stage + coefficient DSPs
+                    y_rej   <= x_rej || (gd_dy > gc_maxy) || (y_dye < gc_miny);
+                    y_chh   <= yc_chh[12:0];
+                    y_ts_sy <= yc_tssy[9:0];
+                    y_ts_dy <= yc_tsdy[9:0];
+                    y_cwc   <= x_cw    * t_c_src4;
+                    y_dpwc  <= x_dpw4  * t_c_dst4;
+                    y_tsxc  <= x_ts_sx * t_p_src;
+                    y_tsdc  <= x_ts_dx * t_rwwr;
+                end
+                4'd9: begin                  // M stage (emit edge)
+                    m_psrc  <= y_cwc   * y_chh;
+                    m_pdst  <= y_dpwc  * y_chh;
+                    m_psps  <= y_tsxc  * y_ts_sy;
+                    m_pspd  <= y_tsdc  * y_ts_dy;
+                    m_rcs   <= mc_r4[1:0] * t_c_src4;
+                end
+                default: ;
+            endcase
+        end
+    end
 
     always_ff @(posedge i_CLK or negedge i_RST_n) begin
         if (!i_RST_n) begin
@@ -276,8 +396,7 @@ module blit_gov (
             gp_c0     <= 21'd0;
             gd_sx     <= 16'd0;  gd_sy <= 16'd0;
             gd_dx     <= 16'd0;  gd_dy <= 16'd0;
-            gd_w      <= 14'd0;  gd_h  <= 13'd0;
-            gu_dimx   <= 13'd0;
+            gu_dimx1  <= 14'd0;
             gc_minx   <= 16'd0;  gc_maxx <= 16'd0;
             gc_miny   <= 16'd0;  gc_maxy <= 16'd0;
             gl_clip_x <= 16'd0;  gl_clip_y <= 16'd0;
@@ -286,7 +405,6 @@ module blit_gov (
             q_push    <= 1'b0;
             q_pkind   <= 2'd0;
             q_pnslot  <= 2'd0;
-            q_pcost   <= 27'd0;
         end
         else begin
             q_push <= 1'b0;
@@ -316,7 +434,6 @@ module blit_gov (
                                 q_push  <= 1'b1;
                                 q_pkind <= 2'd2;
                                 q_pnslot<= 2'd0;
-                                q_pcost <= 27'd0;
                                 gp      <= GP_HALT;
                             end
                             4'hC: begin gp_kind <= 2'd0; gp_need <= 26'd1; gp <= GP_BODY; end
@@ -326,7 +443,6 @@ module blit_gov (
                                 q_push  <= 1'b1;
                                 q_pkind <= 2'd2;
                                 q_pnslot<= 2'd0;
-                                q_pcost <= 27'd0;
                                 gp      <= GP_HALT;
 `ifndef SYNTHESIS
                                 $display("[blit_gov] WALK FAULT: op %04x", i_word);
@@ -339,25 +455,28 @@ module blit_gov (
                         gp_idx  <= (gp_idx == 4'hF) ? 4'hF : gp_idx + 4'd1;
                         gp_need <= gp_need - 26'd1;
 
-                        // DRAW field capture (DrawView slices)
+                        // DRAW field capture (DrawView slices; the w6/w7
+                        // dimension words are captured as end-coordinate
+                        // pre-adds in the cost pipeline block above)
                         if (gp_kind == 2'd1) begin
                             case (gp_idx)
                                 4'd2: gd_sx <= i_word;
                                 4'd3: gd_sy <= i_word;
                                 4'd4: gd_dx <= i_word;
                                 4'd5: gd_dy <= i_word;
-                                4'd6: gd_w  <= {1'b0, i_word[12:0]} + 14'd1;
-                                4'd7: gd_h  <= {1'b0, i_word[11:0]} + 13'd1;
                                 default: ;
                             endcase
                         end
 
-                        // UPLOAD payload sizing (same law as the fetch walker)
+                        // UPLOAD payload sizing (same law as the fetch
+                        // walker).  dimx+1 is pre-registered so the sizing
+                        // product is a single narrow multiply (14x13; the
+                        // payload bound 8192*4096 = 2^25 fits gp_need) --
+                        // the next push can land on the very next cycle.
                         if (gp_kind == 2'd2 && gp_idx == 4'd6)
-                            gu_dimx <= i_word[12:0];
+                            gu_dimx1 <= {1'b0, i_word[12:0]} + 14'd1;
                         if (gp_kind == 2'd2 && gp_idx == 4'd7)
-                            gp_need <= (26'(gu_dimx) + 26'd1) *
-                                       (26'({14'd0, i_word[11:0]}) + 26'd1);
+                            gp_need <= up_px[25:0];
                         else if (gp_need == 26'd1) begin
                             // op complete on THIS word: emit its entry
                             gp <= GP_HDR;
@@ -366,7 +485,6 @@ module blit_gov (
                                     q_push  <= 1'b1;
                                     q_pkind <= 2'd0;
                                     q_pnslot<= 2'd0;
-                                    q_pcost <= 27'd0;
                                     if (i_word != 16'd0) begin
                                         gc_minx <= gl_clip_x - 16'd32;
                                         gc_maxx <= gl_clip_x + 16'd351;
@@ -382,15 +500,13 @@ module blit_gov (
                                 end
                                 2'd1: begin          // DRAW: clip test + cost
                                     q_push  <= 1'b1;
-                                    if (reject) begin
+                                    if (y_rej) begin // registered clip reject
                                         q_pkind <= 2'd0;
                                         q_pnslot<= 2'd0;
-                                        q_pcost <= 27'd0;
                                     end
                                     else begin
                                         q_pkind <= 2'd1;
                                         q_pnslot<= nslot_w;
-                                        q_pcost <= cost_v;
                                         win_f   <= win_f + {19'd0, nslot_w};
                                         if (nslot_w != 2'd0)
                                             last_mark <= op_c1 + 21'd1;
@@ -400,7 +516,6 @@ module blit_gov (
                                     q_push  <= 1'b1;
                                     q_pkind <= 2'd0;
                                     q_pnslot<= 2'd0;
-                                    q_pcost <= 27'd0;
                                 end
                             endcase
                         end
@@ -445,7 +560,7 @@ module blit_gov (
             end
             else begin
                 if (q_push) begin
-                    q_mem[q_wp] <= {q_pkind, q_pnslot, q_pcost};
+                    q_mem[q_wp] <= {q_pkind, q_pnslot, wr_cost};
                     q_wp        <= q_wp + 12'd1;
 `ifndef SYNTHESIS
                     if (q_lvl >= 13'(QDEPTH)) $fatal(1, "[blit_gov] cost queue overflow");
@@ -507,7 +622,7 @@ module blit_gov (
             // per-op debug tap (arrival side)
             o_dbg_vld  <= q_push;
             o_dbg_kind <= q_pkind;
-            o_dbg_cost <= q_pcost;
+            o_dbg_cost <= wr_cost;
 
             // time base: 3 half-VCLK per CKIO, free-running since reset
             if (i_CKIO_PCEN)

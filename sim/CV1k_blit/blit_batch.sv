@@ -120,37 +120,57 @@ module blit_batch #(
     localparam int unsigned DAW = $clog2(DST_CAP_W);
 
     // ---------------------------------------------------------------------
-    // descriptor FIFO (depth 4; the engine holds at most ~2 ops in flight)
+    // descriptor FIFO (depth 4; the engine holds at most ~2 ops in flight).
+    // H7b.8 Fmax respin, round 2.  The push-time decode stores only the
+    // ADD-class geometry (span word counts, bpr, the sy0-pre-added src_lo0)
+    // -- fit #3 showed a full push-time decode (incl. the fit-cap compare
+    // tree) forms a one-cycle cone from DRAW's S-stage registers across the
+    // hierarchy into the entry registers (-7.8).  The fit-cap products
+    // (L / strict fold / first blen-after split) are computed from the head
+    // in TWO forms:
+    //   * lv_* comb  -- live, used ONLY for the c_*/sv_* register loads at
+    //     ld_fire (a plain register-datain cone, no roll arithmetic);
+    //   * hd_* regs  -- refreshed from lv_* every cycle, i.e. valid for any
+    //     head that has existed for >= 1 cycle.  The serve/roll path uses
+    //     hd_* exclusively: a read request can only coincide with ld_fire
+    //     when the load was HELD BACK (parked read / active train), and a
+    //     held load's head is aged by construction -- asserted below.
+    // Values are bit-identical in every reachable case (both forms are the
+    // same pure function of the stored entry).
+    // ramstyle "logic": 4 entries read combinationally at the head -- as
+    // registers the head mux is ~1 ns; inferred M10K costs ~3 ns + bypass.
     // ---------------------------------------------------------------------
-    localparam int unsigned DSCW = 5 + 13 + 12 + 13 + 14 + 25;
+    localparam int unsigned DSCW = 5 + 13 + 11 + 11 + 14 + 25 + 25;
 
-    reg [DSCW-1:0] dq [0:3];
+    (* ramstyle = "logic" *) reg [DSCW-1:0] dq [0:3];
     reg [1:0]      dq_wp, dq_rp;
     reg [2:0]      dq_cnt;
 
-    wire [DSCW-1:0] dhead    = dq[dq_rp];
-    wire            dh_wait  = dhead[81];
-    wire            dh_flipy = dhead[80];
-    wire            dh_blend = dhead[79];
-    wire            dh_strict= dhead[78];
-    wire            dh_px1   = dhead[77];
-    wire [12:0]     dh_sxlo  = dhead[76:64];
-    wire [11:0]     dh_sy0   = dhead[63:52];
-    wire [12:0]     dh_rows  = dhead[51:39];
-    wire [13:0]     dh_npx   = dhead[38:25];
-    wire [24:0]     dh_dst0  = dhead[24:0];
+    wire [DSCW-1:0] dhead     = dq[dq_rp];
+    wire            dh_wait   = dhead[103];
+    wire            dh_flipy  = dhead[102];
+    wire            dh_blend  = dhead[101];
+    wire            dh_strictr= dhead[100];       // raw dsc strict (pre-fold)
+    wire            dh_px1    = dhead[99];
+    wire [12:0]     dh_rows   = dhead[98:86];
+    wire [10:0]     ld_snw    = dhead[85:75];
+    wire [10:0]     ld_dnw    = dhead[74:64];
+    wire [13:0]     ld_bpr    = dhead[63:50];
+    wire [24:0]     ld_src_lo0= dhead[49:25];
+    wire [24:0]     dh_dst0   = dhead[24:0];
 
-    // load-time derived geometry (comb from the FIFO head; registered into
-    // c_* at the load edge).  Per-row word counts are op constants: row
-    // strides are 8192 px, so every row's span alignment is identical.
-    wire signed [14:0] ld_sxm3   = $signed({2'b00, dh_sxlo}) - 15'sd3;
-    wire [24:0]        ld_srcoff = {{10{ld_sxm3[14]}}, ld_sxm3} & 25'h1FFFFFC;
-    wire [1:0]         ld_sal    = ld_sxm3[1:0];
-    wire [1:0]         ld_dal    = dh_dst0[1:0];
+    // push-time decode (comb from the i_dsc_* pulse; the descriptor fields
+    // are draw's S-stage registers, stable through the pulse cycle).
+    // Per-row word counts are op constants: row strides are 8192 px, so
+    // every row's span alignment is identical.
+    wire signed [14:0] pd_sxm3   = $signed({2'b00, i_dsc_sx_lo}) - 15'sd3;
+    wire [24:0]        pd_srcoff = {{10{pd_sxm3[14]}}, pd_sxm3} & 25'h1FFFFFC;
+    wire [1:0]         pd_sal    = pd_sxm3[1:0];
+    wire [1:0]         pd_dal    = i_dsc_dst0[1:0];
     // src span = npx+3 px: the uniform sx_lo-3 underhang covers the
     // flip-mode beat-base adjust (costs <=1 extra word on non-flip rows)
-    wire [10:0] ld_snw = 11'(({12'd0, ld_sal} + {1'b0, dh_npx} + 15'd6) >> 2);
-    wire [10:0] ld_dnw = 11'(({12'd0, ld_dal} + {1'b0, dh_npx} + 15'd3) >> 2);
+    wire [10:0] pd_snw = 11'(({12'd0, pd_sal} + {1'b0, i_dsc_npx} + 15'd6) >> 2);
+    wire [10:0] pd_dnw = 11'(({12'd0, pd_dal} + {1'b0, i_dsc_npx} + 15'd3) >> 2);
 
     // largest k <= 8 with k*nw <= cap (0 = one row does not fit -> strict)
     function automatic logic [3:0] f_fitcap(input logic [10:0] nw,
@@ -168,12 +188,26 @@ module blit_batch #(
         else                                                         f_fitcap = 4'd0;
     endfunction
 
-    wire [3:0] ld_fit_s = f_fitcap(ld_snw, SRC_CAP_W);
-    wire [3:0] ld_fit_d = dh_blend ? f_fitcap(ld_dnw, DST_CAP_W) : 4'(K_ROWS);
-    wire [3:0] ld_fit   = (ld_fit_s < ld_fit_d) ? ld_fit_s : ld_fit_d;
-    wire [3:0] ld_L     = (ld_fit > 4'(K_ROWS)) ? 4'(K_ROWS) : ld_fit;
-    wire       ld_strict= dh_strict || (ld_L == 4'd0);
-    wire [13:0] ld_bpr  = dh_px1 ? dh_npx : 14'(({1'b0, dh_npx} + 15'd3) >> 2);
+    wire [13:0] pd_bpr  = i_dsc_px1 ? i_dsc_npx : 14'(({1'b0, i_dsc_npx} + 15'd3) >> 2);
+    wire [24:0] pd_srclo0 = ({i_dsc_sy0, 13'd0} + pd_srcoff) & 25'h1FFFFFF;
+
+    // head fit-cap products, live form (see the FIFO header note)
+    wire [3:0] lv_fit_s = f_fitcap(ld_snw, SRC_CAP_W);
+    wire [3:0] lv_fit_d = dh_blend ? f_fitcap(ld_dnw, DST_CAP_W) : 4'(K_ROWS);
+    wire [3:0] lv_fit   = (lv_fit_s < lv_fit_d) ? lv_fit_s : lv_fit_d;
+    wire [3:0] lv_L     = (lv_fit > 4'(K_ROWS)) ? 4'(K_ROWS) : lv_fit;
+    wire       lv_strict= dh_strictr || (lv_L == 4'd0);
+    wire [3:0]  lv_blen0  = ({9'd0, lv_L} < dh_rows) ? lv_L : dh_rows[3:0];
+    wire [12:0] lv_after0 = ({9'd0, lv_L} < dh_rows)
+                            ? (dh_rows - {9'd0, lv_L}) : 13'd0;
+
+    // aged-head registered form + freshness (hd_* describe the current head
+    // iff it already existed last cycle: no pop and no push-to-empty then)
+    reg  [3:0]  hd_L;
+    reg         hd_strict;
+    reg  [3:0]  hd_blen0;
+    reg  [12:0] hd_after0;
+    reg         hd_fresh;
 
     // ---------------------------------------------------------------------
     // current op + serve state
@@ -185,8 +219,6 @@ module blit_batch #(
     reg [12:0] c_rows;
     reg [13:0] c_bpr;
     reg [10:0] c_snw, c_dnw;
-    reg [24:0] c_srcoff;                // (sx_lo-3)&~3, mod 2^25
-    reg [24:0] c_dst0;
     reg [3:0]  c_L;
 
     // serve counters: the (row, beat) the NEXT engine request belongs to
@@ -232,28 +264,34 @@ module blit_batch #(
     // loaded, not the stale registers, and its roll updates override the
     // load's initializers (serve branch runs after the load branch).
     // ---------------------------------------------------------------------
-    wire [24:0] ld_src_lo0 = ({dh_sy0, 13'd0} + ld_srcoff) & 25'h1FFFFFF;
-    wire [3:0]  ld_blen0   = ({9'd0, ld_L} < dh_rows) ? ld_L : dh_rows[3:0];
-    wire [12:0] ld_after0  = ({9'd0, ld_L} < dh_rows)
-                             ? (dh_rows - {9'd0, ld_L}) : 13'd0;
-
-    wire        e_strict = ld_fire ? ld_strict : c_strict;
+    // fit-cap-derived terms come from the AGED registered form here: the
+    // serve/roll consumers below only ever see ld_fire together with a
+    // request when the load was held back, and a held head is aged (hd_*
+    // valid) -- asserted in the serve branch.
+    wire        e_strict = ld_fire ? hd_strict : c_strict;
     wire        e_flipy  = ld_fire ? dh_flipy  : c_flipy;
     wire [13:0] e_bpr    = ld_fire ? ld_bpr    : c_bpr;
     wire [12:0] e_rows   = ld_fire ? dh_rows   : c_rows;
     wire [10:0] e_snw    = ld_fire ? ld_snw    : c_snw;
     wire [10:0] e_dnw    = ld_fire ? ld_dnw    : c_dnw;
-    wire [3:0]  e_L      = ld_fire ? ld_L      : c_L;
+    wire [3:0]  e_L      = ld_fire ? hd_L      : c_L;
     wire [12:0] e_row    = ld_fire ? 13'd0     : sv_row;
     wire [13:0] e_beat   = ld_fire ? 14'd0     : sv_beat;
     wire [3:0]  e_slot   = ld_fire ? 4'd0      : sv_slot;
-    wire [3:0]  e_blen   = ld_fire ? ld_blen0  : sv_blen;
-    wire [12:0] e_after  = ld_fire ? ld_after0 : sv_after;
+    wire [3:0]  e_blen   = ld_fire ? hd_blen0  : sv_blen;
+    wire [12:0] e_after  = ld_fire ? hd_after0 : sv_after;
     wire [24:0] e_src_lo = ld_fire ? ld_src_lo0 : sv_src_lo;
     wire [24:0] e_dst_lo = ld_fire ? dh_dst0   : sv_dst_lo;
     wire [12:0] e_sbase  = ld_fire ? 13'd0     : sv_sbase;
     wire [12:0] e_dbase  = ld_fire ? 13'd0     : sv_dbase;
     wire [12:0] e_flabs  = ld_fire ? 13'd0     : fl_rows_abs;
+
+    // load-branch form: fresh heads (pushed to an empty queue last edge)
+    // take the live decode -- a plain register-datain cone
+    wire        el_strict = hd_fresh ? hd_strict : lv_strict;
+    wire [3:0]  el_L      = hd_fresh ? hd_L      : lv_L;
+    wire [3:0]  el_blen0  = hd_fresh ? hd_blen0  : lv_blen0;
+    wire [12:0] el_after0 = hd_fresh ? hd_after0 : lv_after0;
 
     wire [24:0] off_s = (i_srd_addr - e_src_lo) & 25'h1FFFFFF;
     wire [24:0] off_d = (i_drd_addr - {e_dst_lo[24:2], 2'b00}) & 25'h1FFFFFF;
@@ -277,12 +315,14 @@ module blit_batch #(
             cur_v <= 1'b0; sv_done <= 1'b0;
             c_flipy <= 1'b0; c_blend <= 1'b0; c_strict <= 1'b0; c_px1 <= 1'b0;
             c_rows <= '0; c_bpr <= '0; c_snw <= '0; c_dnw <= '0;
-            c_srcoff <= '0; c_dst0 <= '0; c_L <= '0;
+            c_L <= '0;
             sv_row <= '0; sv_beat <= '0; sv_slot <= '0;
             sv_blen <= '0; sv_after <= '0;
             sv_src_lo <= '0; sv_dst_lo <= '0; sv_sbase <= '0; sv_dbase <= '0;
             pend_v <= 1'b0; pend_drd <= 1'b0; pend_row <= '0;
             pend_spx <= '0; pend_dpx <= '0; pend_sa <= '0; pend_da <= '0;
+            hd_L <= '0; hd_strict <= 1'b0; hd_blen0 <= '0; hd_after0 <= '0;
+            hd_fresh <= 1'b0;
             o_rd_vld <= 1'b1;
             o_op_srv <= 1'b0;
         end
@@ -291,9 +331,9 @@ module blit_batch #(
             // descriptor push (fields are valid during the pulse cycle)
             if (i_dsc_vld) begin
                 dq[dq_wp] <= {i_dsc_wait, i_dsc_flipy, i_dsc_blend,
-                              i_dsc_strict, i_dsc_px1, i_dsc_sx_lo,
-                              i_dsc_sy0, i_dsc_rows,
-                              i_dsc_npx, i_dsc_dst0[24:0]};
+                              i_dsc_strict, i_dsc_px1, i_dsc_rows,
+                              pd_snw, pd_dnw, pd_bpr,
+                              pd_srclo0, i_dsc_dst0[24:0]};
                 dq_wp  <= dq_wp + 2'd1;
                 dq_cnt <= dq_cnt + 3'd1;
 `ifndef SYNTHESIS
@@ -306,21 +346,27 @@ module blit_batch #(
                 cur_v    <= 1'b1;
                 sv_done  <= 1'b0;
                 c_flipy  <= dh_flipy;  c_blend <= dh_blend;
-                c_strict <= ld_strict; c_px1   <= dh_px1;
+                c_strict <= el_strict; c_px1   <= dh_px1;
                 c_wait   <= dh_wait;
                 c_rows   <= dh_rows;   c_bpr   <= ld_bpr;
                 c_snw    <= ld_snw;    c_dnw   <= ld_dnw;
-                c_srcoff <= ld_srcoff; c_dst0  <= dh_dst0;
-                c_L      <= ld_L;
+                c_L      <= el_L;
                 sv_row  <= '0; sv_beat <= '0; sv_slot <= '0;
-                sv_blen <= ld_blen0;
-                sv_after<= ld_after0;
+                sv_blen <= el_blen0;
+                sv_after<= el_after0;
                 sv_src_lo <= ld_src_lo0;
                 sv_dst_lo <= dh_dst0;
                 sv_sbase  <= '0; sv_dbase <= '0;
                 dq_rp  <= dq_rp + 2'd1;
                 dq_cnt <= dq_cnt - 3'd1 + (i_dsc_vld ? 3'd1 : 3'd0);
             end
+
+            // aged-head decode registers (see the FIFO header note)
+            hd_L      <= lv_L;
+            hd_strict <= lv_strict;
+            hd_blen0  <= lv_blen0;
+            hd_after0 <= lv_after0;
+            hd_fresh  <= !ld_fire && !(i_dsc_vld && dq_cnt == 3'd0);
 
             // serve counting: every src-read request is one beat leaving B1
             // (evaluated in the e_* context so a load on this same edge
@@ -331,6 +377,11 @@ module blit_batch #(
                     $fatal(2, "[blit_batch] read request with no descriptor a=%07x cur_v=%b done=%b row=%0d beat=%0d rows=%0d dqc=%0d pend=%b t=%0t",
                            i_srd_addr, cur_v, sv_done, sv_row, sv_beat,
                            c_rows, dq_cnt, pend_v, $time);
+                // roll-context invariant: a request coinciding with a load
+                // means the load was held back, so the head must be aged
+                // (the e_* fit-cap terms read hd_* -- see the FIFO header)
+                if (ld_fire && !hd_fresh)
+                    $fatal(2, "[blit_batch] compose-load with a fresh head t=%0t", $time);
                 if (req_hit && (off_s[24:13] != 12'd0 ||
                                 off_s[12:0] >= {e_snw, 2'b00}))
                     $fatal(2, "[blit_batch] src offset 0x%07x outside segment t=%0t",
@@ -637,7 +688,7 @@ module blit_batch #(
             // per-op init of the prefetch walk (same edge as the op load)
             if (ld_fire) begin
                 pf_row      <= '0;
-                pf_src_lo   <= ({dh_sy0, 13'd0} + ld_srcoff) & 25'h1FFFFFF;
+                pf_src_lo   <= ld_src_lo0;
                 pf_dst_lo   <= dh_dst0;
                 fl_rows_abs <= '0;
             end

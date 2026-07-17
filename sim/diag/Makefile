@@ -46,8 +46,10 @@ build/%.elf: build/crt0.o build/%.o diag.ld
 build/%.bin: build/%.elf
 	$(OBJCOPY) -O binary $< $@
 
+# the .raw sibling is the pair-swapped 4 MiB image in raw-dump byte order
+# (what the H7b.4 ioctl MRA stream's u4 slot consumes: +ioctl_u4=)
 build/%.hex: build/%.bin mkhex.py
-	python3 mkhex.py $< $@
+	python3 mkhex.py $< $@ build/$*.raw
 
 clean:
 	rm -rf build

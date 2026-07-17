@@ -70,9 +70,11 @@ verilator --cc --timing -j 0 -O3 --sv \
     CV1k_sdram_control.sv \
     CV1k_ddr3_harness.sv \
     CV1k_nand.sv \
+    CV1k_ioctl.sv \
     ikacore_CV1k.sv \
     tb/cpu_tracer.sv \
     tb/blit_dsc_check.sv \
+    tb/ioctl_sim.sv \
     tb/ikacore_CV1k_tb.sv \
     --exe ../../tb/ikacore_CV1k_tb_main.cpp \
     -CFLAGS "-O2 -std=c++20 -I$(pwd)" \

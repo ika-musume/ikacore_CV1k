@@ -1,5 +1,59 @@
-set_global_assignment -name VERILOG_FILE rtl/lfsr.v
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/cos.sv
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/mycore.v
-set_global_assignment -name SDC_FILE Template.sdc
-set_global_assignment -name SYSTEMVERILOG_FILE Template.sv
+# ikacore_CV1k - core file manifest.  [H7b.8]
+# rtl/ is a mechanical copy of the sim/ dev tree - NEVER edit rtl/ by hand,
+# run sim/scripts/sync_srcs.sh after any sim-side RTL change instead.
+# Dependency order mirrors sim/filelist.f (packages + interfaces first).
+
+# --- SH-3 IP: packages + interfaces ---
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/cpu_core/cpu_bus_if.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/cpu_core/cache_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/cpu_core/int_pipe_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/peri_bus_if.sv
+
+# --- SH-3 CPU core ---
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/cpu_core/cache_mem.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/cpu_core/cache.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/cpu_core/agu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/cpu_core/int_pipe_mem.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/cpu_core/int_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/cpu_core/ctrl_reg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/cpu_core/exc_handler.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/cpu_core/cpu_core.sv
+
+# --- SH7709S peripherals + chip top ---
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/ibus_splitter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/ibus_bridge.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/ibus_arb.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/bsc.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/cpg_wdt.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/dmac_channel.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/dmac.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/intc.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/ioport.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/rtc.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/peri/tmu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/HS3/HS3.sv
+
+# --- blitter core ---
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_blit/blit_regs.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_blit/blit_fetch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_blit/blit_gov.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_blit/blit_draw.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_blit/blit_batch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_blit/blit_video.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_blit/blit_top.sv
+
+# --- board layer + portable core top ---
+# (CV1k_cpld.v is SystemVerilog despite the .v extension - always_ff etc.)
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_cpld.v
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_sdram_control.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_ddr3_harness.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_nand.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/CV1k_ioctl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/ikacore_CV1k.sv
+
+# --- PLL (hand-authored IP, Quartus-owned - NOT synced from sim/) ---
+set_global_assignment -name QIP_FILE rtl/pll.qip
+
+# --- constraints + MiSTer glue (module emu) ---
+set_global_assignment -name SDC_FILE ikacore_CV1k.sdc
+set_global_assignment -name SYSTEMVERILOG_FILE ikacore_CV1k_emu.sv

@@ -1,0 +1,38 @@
+<!--
+  ikacore_CV1k MRA - Ibara.  [H7b.8]
+
+  The <rom index="0"> stream is the FIXED game-agnostic CV1k layout the
+  in-core CV1k_ioctl decoder expects (sim reference: sim/tb/ioctl_sim.sv,
+  byte-exact accept at H7b.4).  Total 159,383,552 bytes:
+
+    [0x0000000, 0x8400000)  u2  NAND dump incl. spare (132 MiB, exact size)
+    [0x8400000, 0x8C00000)  u23 YMZ chip 0, zero-padded to the 8 MiB slot
+    [0x8C00000, 0x9400000)  u24 YMZ chip 1, zero-padded to the 8 MiB slot
+    [0x9400000, 0x9800000)  u4  program NOR x2 (2 MiB file listed twice =
+                            the undecoded-A21 mirror the boot ROM expects)
+
+  All parts stream RAW file bytes - byte-pair order is handled inside the
+  core (NOR_BSWAP=0 assembles {odd,even}; MAME dumps stream as stored).
+  <rbf> must match the deployed rbf base name.
+-->
+<misterromdescription>
+    <about author="ika-musume" source="https://github.com/ika-musume/ikacore_CV1k"/>
+    <name>Ibara</name>
+    <setname>ibara</setname>
+    <year>2005</year>
+    <manufacturer>Cave</manufacturer>
+    <category>Shooter</category>
+    <rbf>cv1k</rbf>
+
+    <rom index="0" zip="ibara.zip" md5="none">
+        <part name="u2"  crc="55840976"/>
+        <part name="u23" crc="ee5e585d"/>
+        <part repeat="0x400000">00</part>
+        <part name="u24" crc="f0aa3cb6"/>
+        <part repeat="0x400000">00</part>
+        <part name="u4"  crc="8e6c155d"/>
+        <part name="u4"  crc="8e6c155d"/>
+    </rom>
+
+    <buttons names="B1,B2,B3,B4,Start,Coin,Test,Service" default="A,B,X,Y,Start,R,L,Select"/>
+</misterromdescription>

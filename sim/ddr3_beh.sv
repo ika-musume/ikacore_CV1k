@@ -38,13 +38,18 @@ module ddr3_beh #(
     initial begin
         busy = 1'b0; dout_ready = 1'b0; dout = 64'd0;
         fd = 0;
-        if (IMAGE != "") begin               // "" = no file plane (VRAM only)
+        // +ddr3_noimage (H7b.4): disable the file plane so an ioctl-load
+        // accept reads ONLY what the download actually wrote (a file-served
+        // word would otherwise mask a decoder hole)
+        if (IMAGE != "" && !$test$plusargs("ddr3_noimage")) begin
             fd = $fopen(IMAGE, "rb");
             if (fd == 0)
                 $display("[ddr3_beh] WARNING: cannot open %s (reads return 0)", IMAGE);
             else
                 $display("[ddr3_beh] serving %s on-demand at word base 0x%07x", IMAGE, BASE_W);
         end
+        else if ($test$plusargs("ddr3_noimage"))
+            $display("[ddr3_beh] +ddr3_noimage: file plane disabled (overlay only)");
     end
 
     function [63:0] word_at(input [28:0] wa);

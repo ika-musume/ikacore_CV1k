@@ -52,6 +52,7 @@ verilator --lint-only --timing --sv -Wno-fatal \
     CV1k_sdram_control.sv \
     CV1k_ddr3_harness.sv \
     CV1k_nand.sv \
+    CV1k_ioctl.sv \
     blit_vram_beh.sv \
     ikacore_CV1k.sv \
     ikacore_CV1k_emu.sv
