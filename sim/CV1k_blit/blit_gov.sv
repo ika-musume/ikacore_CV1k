@@ -78,13 +78,21 @@
 //
 // Synthesis notes (H7b.8): the DRAW cost is a staged pipeline keyed to the
 // op's own word arrivals -- X-clamp at w7, Y-clamp + coefficient products at
-// w8, raw products at w9 (the emit edge), final sum+saturate comb into the
-// queue write port one cycle later -- so no cycle carries more than one DSP
-// level.  Bit-exact with the old single-cone form: the entry lands in q_mem
-// at the same edge with the same value (reassociation is exact -- dpw is
-// always a multiple of 4, and the src_px/4 truncation is corrected with a
-// mod-4 remainder term; all narrowed widths are proven bounds for surviving
-// draws, and rejected draws store 0).  The cost queue infers M10K with the
+// w8, raw products at w9 (the emit edge) -- so no cycle carries more than
+// one DSP level.  H7b.8e: the final sum + saturate no longer combs into the
+// queue write port; the span DSPs and the sum are spread over three
+// post-emit register stages (P1 = span products + src/dst partial, P2 =
+// second partial, F = final add + saturate + kind mux), and the M10K
+// write port + pointers are driven from the F registers one edge later
+// still.  Entry VALUES are bit-exact vs the single-cone form (pure
+// reassociation of a mod-2^36 zero-extended sum -- dpw is always a
+// multiple of 4, and the src_px/4 truncation is corrected with a mod-4
+// remainder term; all narrowed widths are proven bounds for surviving
+// draws, and rejected draws store 0).  Every entry becomes pop-visible
+// three i_CLK edges later than the old design; op_start/engine_free
+// quantize on the CKIO grid and the pop schedule is engine-bound at the
+// contractual points, so the timeline accepts (datum + anchors + matrix)
+// adjudicate -- see blitter_todo Part V H7b.8e.  The cost queue infers M10K with the
 // read address register absorbed; mixed-port read-during-write is "don't
 // care" there, so q_head carries an explicit one-cycle new-data bypass
 // (value-identical in RTL sim, defined data on silicon).
@@ -216,6 +224,25 @@ module blit_gov (
         end
     endfunction
 
+    // f_tspan with the off-dependent terms pre-decoded (nz = off != 0,
+    // thr = 32 - off): part > thr <=> off + part > 32.  Value-identical --
+    // off = 0 gives thr = 32, which part <= 31 can never exceed, matching
+    // the (off + part) > 32 impossibility at off = 0.
+    function automatic [12:0] f_tspan_p(input nz, input [5:0] thr,
+                                        input [15:0] len);
+        reg [10:0] nfull;
+        reg [4:0]  part;
+        begin
+            nfull     = len[15:5];
+            part      = len[4:0];
+            f_tspan_p = {2'd0, nfull}
+                      + ((part != 5'd0) ? 13'd1 : 13'd0)
+                      + (nz ? {2'd0, nfull} : 13'd0)
+                      + (((part != 5'd0) &&
+                          ({1'b0, part} > thr)) ? 13'd1 : 13'd0);
+        end
+    endfunction
+
     //------------------------------------------------------------------
     // arrival parser: re-frame the push stream, clip-test + cost each op
     //------------------------------------------------------------------
@@ -257,11 +284,16 @@ module blit_gov (
     //             multiple of 4 so dst_px/4 = (dpw/4)*chh needs no
     //             correction; src_px/4 truncation is repaired with the
     //             mod-4 remainder term rcs = (cw[1:0]*chh[1:0])[1:0]*c)
-    //   w9 edge : M regs = four raw products (single DSP each) -- this is
-    //             the emit edge (q_push/q_pkind/q_pnslot as before)
-    //   w9+1    : sum + saturate comb into the q_mem write port -- the
-    //             entry lands in the queue at the same edge with the same
-    //             value as the old design.
+    //   w9 edge : m_psrc/m_pdst/m_rcs + the span coefficient products
+    //             (single DSP each) -- this is the emit edge
+    //             (q_push/q_pkind/q_pnslot as before)
+    //   w9+1    : P1 -- span products s_psps/s_pspd (single DSP each) +
+    //             the src/dst partial p_a
+    //   w9+2    : P2 -- second partial p_b (+ p_a pass-through)
+    //   w9+3    : F  -- final add + saturate + kind mux (registered)
+    //   w9+4    : the entry lands in q_mem, write port fed from registers
+    //             (H7b.8e round 3; entry values identical, visibility +3
+    //             edges vs the original comb form)
     // Widths are proven bounds for SURVIVING draws (clip windows are at
     // most 8192 x 4096, and a passing clip test excludes u16 wrap in the
     // end coordinates -- see blitter_todo H7b.8); rejected draws store 0,
@@ -269,6 +301,16 @@ module blit_gov (
     //------------------------------------------------------------------
     reg  [15:0] x_dxe, y_dye;            // end-coordinate pre-adds
     reg  [15:0] x_cx0;
+    reg  [15:0] y_cy0;                   // w6 pre-reg: max(gd_dy, gc_miny)
+    reg         ys_nz;                   // w6: gd_sy[4:0] != 0
+    reg  [5:0]  ys_thr;                  // w6: 32 - gd_sy[4:0] (straddle base)
+    reg         xs_nz;                   // w6: gd_sx[4:0] != 0     (H7b.8e)
+    reg  [5:0]  xs_thr;                  // w6: 32 - gd_sx[4:0]
+    reg         xd_nz;                   // w6: x_cx0[4:0] != 0 (via the mux)
+    reg  [5:0]  xd_thr;                  // w6: 32 - x_cx0[4:0]
+    reg         yd_nz;                   // w7: y_cy0[4:0] != 0
+    reg  [5:0]  yd_thr;                  // w7: 32 - y_cy0[4:0]
+    reg  [15:0] y_gmc;                   // w7: gc_maxy - y_cy0 + 1 (clamp arm)
     reg         x_rej;                   // x-axis reject
     reg  [13:0] x_cw;                    // clip-clamped width   (<= 8192)
     reg  [11:0] x_dpw4;                  // padded dst width / 4 (<= 2050)
@@ -282,31 +324,45 @@ module blit_gov (
     reg  [22:0] y_tsdc;                  // ts_dx * (P_RW + P_WR)
     reg  [34:0] m_psrc;                  // (cw * C_SRC4) * chh
     reg  [32:0] m_pdst;                  // (dpw/4 * C_DST4) * chh
-    reg  [31:0] m_psps;                  // (ts_sx * P_SRC) * ts_sy
-    reg  [32:0] m_pspd;                  // (ts_dx * P_RWWR) * ts_dy
     reg  [9:0]  m_rcs;                   // (src_px mod 4) * C_SRC4
+    // (the span products ts*P land in the P1 stage regs s_psps/s_pspd)
 
-    // X-stage comb (w6 -> w7 window)
-    wire [15:0] xc_cx1  = (x_dxe < gc_maxx) ? x_dxe : gc_maxx;
-    wire [15:0] xc_cw   = xc_cx1 - x_cx0 + 16'd1;
+    // X-stage comb (w6 -> w7 window).  H7b.8e: the clamp subtracts are
+    // DISTRIBUTED over the select (exact mod 2^16 -- same arithmetic on
+    // both arms), mirroring the Y-stage recipe, so the compare runs in
+    // parallel with the subtracts instead of in series before them.
+    wire        xc_clmp = (x_dxe < gc_maxx);
+    wire [15:0] xc_cw   = xc_clmp ? (x_dxe - x_cx0 + 16'd1)
+                                  : (gc_maxx - x_cx0 + 16'd1);
     wire [15:0] xc_dxa  = {x_cx0[15:2], 2'b00};
-    wire [15:0] xc_dxb  = xc_cx1 | 16'd3;
-    wire [15:0] xc_dpw  = xc_dxb - xc_dxa + 16'd1;   // always a multiple of 4
+    wire [15:0] xc_dpw  = xc_clmp                    // always a multiple of 4
+                          ? ((x_dxe   | 16'd3) - xc_dxa + 16'd1)
+                          : ((gc_maxx | 16'd3) - xc_dxa + 16'd1);
 
-    // Y-stage comb (w7 -> w8 window)
-    wire [15:0] yc_cy0  = (gd_dy > gc_miny) ? gd_dy : gc_miny;
-    wire [15:0] yc_cy1  = (y_dye < gc_maxy) ? y_dye : gc_maxy;
-    wire [15:0] yc_chh  = yc_cy1 - yc_cy0 + 16'd1;
+    // Y-stage comb (w7 -> w8 window).  H7b.8c pre-regs: yc_cy0 and the
+    // f_tspan off-terms land in registers at w6/w7 (same values -- gd_dy is
+    // a w5 register, gd_sy a w3 register, and the clip window regs cannot
+    // change inside a draw body since ops are strictly serial in the push
+    // stream), so this window is one compare-mux + one subtract + the span
+    // sums off settled registers.
+    // Second round: chh = min(y_dye, gc_maxy) - y_cy0 + 1 with the subtract
+    // DISTRIBUTED over the select (exact mod 2^16 -- same arithmetic either
+    // side of the mux): the clamp arm is pre-subtracted into y_gmc at w7, so
+    // the w8 window runs the live subtract and the compare IN PARALLEL
+    // instead of compare-mux -> subtract in series.
+    wire [15:0] yc_chh  = (y_dye < gc_maxy) ? (y_dye - y_cy0 + 16'd1) : y_gmc;
 
-    // C-stage comb (w9 -> w9+1 window): sum + saturate into the queue.
-    // m_psrc - m_rcs is exactly 4x the old floor(src_px/4)*C_SRC4 term.
+    // C-stage (H7b.8e): the sum + saturate is a two-stage register pipe
+    // BEHIND the emit edge (P/F stages below the parser) instead of one
+    // comb cone into the q_mem write port -- see the header note.  This
+    // APPLIES the previously shelved reassociation lever (proven bit-exact
+    // 2026-07-18: balance the products in a pair tree; every term is
+    // zero-extended into 36 bits and no partial wraps, so the mod-2^36
+    // value is identical to the old left-fold) and then splits the tree at
+    // register boundaries.  m_psrc - m_rcs is exactly 4x the old
+    // floor(src_px/4)*C_SRC4 term, and cannot underflow (m_rcs =
+    // (src_px mod 4)*C_SRC4 <= src_px*C_SRC4 = m_psrc).
     wire [35:0] c_tsrc  = {1'b0, m_psrc} - {26'd0, m_rcs};
-    wire [35:0] c_sum   = {2'b0, c_tsrc[35:2]}
-                        + {3'd0, m_pdst}
-                        + {4'd0, m_psps}
-                        + {3'd0, m_pspd}
-                        + {24'd0, t_p_spr};
-    wire [26:0] c_sat   = (|c_sum[35:27]) ? 27'h7FF_FFFF : c_sum[26:0];
 
     // chunk-slot marking for the governed window (surviving draws only)
     wire [20:0] op_c1   = gp_wcnt[25:5];                 // last-word chunk
@@ -314,22 +370,83 @@ module blit_gov (
     wire [1:0]  nslot_w = (op_c1 >= mark_lo) ? 2'(op_c1 - mark_lo + 21'd1)
                                              : 2'd0;    // draw spans <= 2 chunks
 
-    // cost-queue push interface (driven by the parser below).  The cost
-    // itself is NOT a register: wr_cost is the C-stage comb result, muxed
-    // to zero for every non-surviving-draw entry, feeding the queue write
-    // port directly at the write edge.
+    // cost-queue push interface (driven by the parser below).  q_push marks
+    // the EMIT edge; the entry then takes the P/F register stages and lands
+    // in the RAM (pop-visible) two edges later.
     reg         q_push;
     reg  [1:0]  q_pkind;
     reg  [1:0]  q_pnslot;
-    wire [26:0] wr_cost = (q_pkind == 2'd1) ? c_sat : 27'd0;
+
+    // H7b.8e write-side stages (round 3 shape): P1 (w9+1) = the two span
+    // DSP products + the src/dst partial, P2 (w9+2) = the second partial,
+    // F (w9+3) = final add + saturate + non-surviving mux, RAM write at
+    // w9+4.  No window carries more than one DSP or two adder levels.
+    // The w9 regs are stable through P1 (they reload no earlier than the
+    // NEXT draw's w9, >= 10 pushes away), s_* / p_a through P2 likewise,
+    // and the table regs cannot change mid-list (uploads are serialized
+    // against EXEC).
+    reg         p1_vld, p2_vld, f_vld;
+    reg  [1:0]  p1_kind, p1_nslot, p2_kind, p2_nslot, f_kind, f_nslot;
+    reg  [31:0] s_psps;                  // (ts_sx * P_SRC) * ts_sy
+    reg  [32:0] s_pspd;                  // (ts_dx * P_RWWR) * ts_dy
+    reg  [35:0] p_a, p_a2, p_b;
+    reg  [26:0] f_cost;
+    wire [35:0] f_sum = p_a2 + p_b;
+    wire [26:0] f_sat = (|f_sum[35:27]) ? 27'h7FF_FFFF : f_sum[26:0];
+
+    always_ff @(posedge i_CLK or negedge i_RST_n) begin
+        if (!i_RST_n) begin
+            p1_vld  <= 1'b0;  p2_vld   <= 1'b0;  f_vld <= 1'b0;
+            p1_kind <= 2'd0;  p1_nslot <= 2'd0;
+            p2_kind <= 2'd0;  p2_nslot <= 2'd0;
+            f_kind  <= 2'd0;  f_nslot  <= 2'd0;
+            s_psps  <= 32'd0; s_pspd   <= 33'd0;
+            p_a     <= 36'd0; p_a2     <= 36'd0;  p_b <= 36'd0;
+            f_cost  <= 27'd0;
+        end
+        else if (i_exec && !o_busy) begin
+            // queue reset instant: the pipe is provably empty here (END was
+            // pushed, drained through W, and popped before o_busy fell, and
+            // GP_HALT pushes nothing after END) -- cleared for hygiene.
+            p1_vld <= 1'b0;
+            p2_vld <= 1'b0;
+            f_vld  <= 1'b0;
+        end
+        else begin
+            p1_vld  <= q_push;
+            p1_kind <= q_pkind;
+            p1_nslot<= q_pnslot;
+            if (q_push) begin
+                s_psps <= y_tsxc * y_ts_sy;
+                s_pspd <= y_tsdc * y_ts_dy;
+                p_a    <= {2'b0, c_tsrc[35:2]} + {3'd0, m_pdst};
+            end
+            p2_vld  <= p1_vld;
+            p2_kind <= p1_kind;
+            p2_nslot<= p1_nslot;
+            if (p1_vld) begin
+                p_b  <= {4'd0, s_psps} + {3'd0, s_pspd} + {24'd0, t_p_spr};
+                p_a2 <= p_a;
+            end
+            f_vld   <= p2_vld;
+            f_kind  <= p2_kind;
+            f_nslot <= p2_nslot;
+            if (p2_vld)
+                f_cost <= (p2_kind == 2'd1) ? f_sat : 27'd0;
+        end
+    end
 
     // cost pipeline registers (stage gates keyed to the draw word index;
     // pauses between words only widen the comb windows)
     wire        gp_dbody = i_push && (gp == GP_BODY) && (gp_kind == 2'd1);
-    wire [12:0] xc_tssx  = f_tspan(gd_sx[4:0], xc_cw);
-    wire [12:0] xc_tsdx  = f_tspan(x_cx0[4:0], xc_cw);
-    wire [12:0] yc_tssy  = f_tspan(gd_sy[4:0], yc_chh);
-    wire [12:0] yc_tsdy  = f_tspan(yc_cy0[4:0], yc_chh);
+    // H7b.8e: X spans use the pre-split form too (xs_*/xd_* registered at
+    // w6, off gd_sx and the same max() select that produces x_cx0); their
+    // f_tspan_p calls sit in the w8 arm off the REGISTERED x_cw
+    wire [4:0]  xc_cx0lo = (gd_dx > gc_minx) ? gd_dx[4:0] : gc_minx[4:0];
+    wire [12:0] xc8_tssx = f_tspan_p(xs_nz, xs_thr, {2'd0, x_cw});
+    wire [12:0] xc8_tsdx = f_tspan_p(xd_nz, xd_thr, {2'd0, x_cw});
+    wire [12:0] yc_tssy  = f_tspan_p(ys_nz, ys_thr, yc_chh);
+    wire [12:0] yc_tsdy  = f_tspan_p(yd_nz, yd_thr, yc_chh);
     wire [3:0]  mc_r4    = x_cw[1:0] * y_chh[1:0];   // src_px mod 4 in [1:0]
 
     // UPLOAD sizing product (w7 live word; see the parser below)
@@ -339,7 +456,12 @@ module blit_gov (
     always_ff @(posedge i_CLK or negedge i_RST_n) begin
         if (!i_RST_n) begin
             x_dxe   <= 16'd0;  x_cx0   <= 16'd0;
-            y_dye   <= 16'd0;
+            y_dye   <= 16'd0;  y_cy0   <= 16'd0;
+            ys_nz   <= 1'b0;   ys_thr  <= 6'd0;
+            yd_nz   <= 1'b0;   yd_thr  <= 6'd0;
+            xs_nz   <= 1'b0;   xs_thr  <= 6'd0;
+            xd_nz   <= 1'b0;   xd_thr  <= 6'd0;
+            y_gmc   <= 16'd0;
             x_rej   <= 1'b0;   x_cw    <= 14'd0;  x_dpw4 <= 12'd0;
             x_ts_sx <= 10'd0;  x_ts_dx <= 10'd0;
             y_rej   <= 1'b0;   y_chh   <= 13'd0;
@@ -347,7 +469,6 @@ module blit_gov (
             y_cwc   <= 22'd0;  y_dpwc  <= 20'd0;
             y_tsxc  <= 22'd0;  y_tsdc  <= 23'd0;
             m_psrc  <= 35'd0;  m_pdst  <= 33'd0;
-            m_psps  <= 32'd0;  m_pspd  <= 33'd0;
             m_rcs   <= 10'd0;
         end
         else if (gp_dbody) begin
@@ -355,30 +476,42 @@ module blit_gov (
                 4'd6: begin                  // w6 live: fold w-1 into dxe
                     x_dxe   <= gd_dx + {3'd0, i_word[12:0]};
                     x_cx0   <= (gd_dx > gc_minx) ? gd_dx : gc_minx;
+                    y_cy0   <= (gd_dy > gc_miny) ? gd_dy : gc_miny;
+                    ys_nz   <= (gd_sy[4:0] != 5'd0);
+                    ys_thr  <= 6'd32 - {1'b0, gd_sy[4:0]};
+                    xs_nz   <= (gd_sx[4:0] != 5'd0);
+                    xs_thr  <= 6'd32 - {1'b0, gd_sx[4:0]};
+                    xd_nz   <= (xc_cx0lo != 5'd0);
+                    xd_thr  <= 6'd32 - {1'b0, xc_cx0lo};
                 end
-                4'd7: begin                  // X stage + w7 live pre-add
+                4'd7: begin                  // X clamp stage + w7 live pre-add
                     x_rej   <= (gd_dx > gc_maxx) || (x_dxe < gc_minx);
                     x_cw    <= xc_cw[13:0];
                     x_dpw4  <= xc_dpw[13:2];
-                    x_ts_sx <= xc_tssx[9:0];
-                    x_ts_dx <= xc_tsdx[9:0];
                     y_dye   <= gd_dy + {4'd0, i_word[11:0]};
+                    yd_nz   <= (y_cy0[4:0] != 5'd0);
+                    yd_thr  <= 6'd32 - {1'b0, y_cy0[4:0]};
+                    y_gmc   <= gc_maxy - y_cy0 + 16'd1;
                 end
-                4'd8: begin                  // Y stage + coefficient DSPs
+                4'd8: begin                  // Y stage + X spans (H7b.8e:
+                                             // tspans off the REGISTERED
+                                             // x_cw -- no clamp in series)
                     y_rej   <= x_rej || (gd_dy > gc_maxy) || (y_dye < gc_miny);
                     y_chh   <= yc_chh[12:0];
                     y_ts_sy <= yc_tssy[9:0];
                     y_ts_dy <= yc_tsdy[9:0];
                     y_cwc   <= x_cw    * t_c_src4;
                     y_dpwc  <= x_dpw4  * t_c_dst4;
-                    y_tsxc  <= x_ts_sx * t_p_src;
-                    y_tsdc  <= x_ts_dx * t_rwwr;
+                    x_ts_sx <= xc8_tssx[9:0];
+                    x_ts_dx <= xc8_tsdx[9:0];
                 end
-                4'd9: begin                  // M stage (emit edge)
+                4'd9: begin                  // M stage (emit edge; the span
+                                             // DSPs moved here -- their
+                                             // products land in P1)
                     m_psrc  <= y_cwc   * y_chh;
                     m_pdst  <= y_dpwc  * y_chh;
-                    m_psps  <= y_tsxc  * y_ts_sy;
-                    m_pspd  <= y_tsdc  * y_ts_dy;
+                    y_tsxc  <= x_ts_sx * t_p_src;
+                    y_tsdc  <= x_ts_dx * t_rwwr;
                     m_rcs   <= mc_r4[1:0] * t_c_src4;
                 end
                 default: ;
@@ -559,8 +692,8 @@ module blit_gov (
                 q_lvl <= 13'd0;
             end
             else begin
-                if (q_push) begin
-                    q_mem[q_wp] <= {q_pkind, q_pnslot, wr_cost};
+                if (f_vld) begin
+                    q_mem[q_wp] <= {f_kind, f_nslot, f_cost};
                     q_wp        <= q_wp + 12'd1;
 `ifndef SYNTHESIS
                     if (q_lvl >= 13'(QDEPTH)) $fatal(1, "[blit_gov] cost queue overflow");
@@ -568,8 +701,8 @@ module blit_gov (
                 end
                 if (q_pop)
                     q_rp <= q_rp + 12'd1;
-                q_lvl <= q_lvl + (q_push ? 13'd1 : 13'd0)
-                               - (q_pop  ? 13'd1 : 13'd0);
+                q_lvl <= q_lvl + (f_vld ? 13'd1 : 13'd0)
+                               - (q_pop ? 13'd1 : 13'd0);
             end
         end
     end
@@ -619,10 +752,11 @@ module blit_gov (
             o_retire  <= 1'b0;
             q_pop     <= 1'b0;
 
-            // per-op debug tap (arrival side)
-            o_dbg_vld  <= q_push;
-            o_dbg_kind <= q_pkind;
-            o_dbg_cost <= wr_cost;
+            // per-op debug tap (arrival side; tracks the RAM write edge --
+            // same (kind, cost) sequence as before, instants +2 i_CLK)
+            o_dbg_vld  <= f_vld;
+            o_dbg_kind <= f_kind;
+            o_dbg_cost <= f_cost;
 
             // time base: 3 half-VCLK per CKIO, free-running since reset
             if (i_CKIO_PCEN)

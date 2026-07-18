@@ -28,10 +28,10 @@ measurement or another item · `N/A`.
 | Area | State |
 |---|---|
 | Board-level sim (SH-3 HS3 core + U4 NOR + U1 SDRAM + U2 NAND + U13 CPLD, shared bus, Verilator) | **DONE** — boots Ibara U4, executes from flash, CKIO/BSC verified vs SH7709S manual; **H0 done: CPU now clears the VBLANK loop, runs the attract sequencer, and issues double-buffered blitter EXECs** |
-| Blitter RTL | **H0+H2+H3+H4+H5+H6 done** — CS6 register file `sim/CV1k_blit/blit_regs.sv` (I-1.1) + BREQ/BACK fetch unit `sim/CV1k_blit/blit_fetch.sv` (I-4.1, 40 KB attribute FIFO, fifo_study-frozen depths, runtime-paced) + draw engine `sim/CV1k_blit/blit_draw.sv` (I-1.5/6/7, 4 px/clk native speed, pixel-exact vs golden over all 8 attract traces end-to-end) + timing governor `sim/CV1k_blit/blit_gov.sv` (I-2.1/2.2/2.3/2.5: runtime-loadable cost tables, governed BUSY + IRQ1, 512-chunk fetch window, steal phase anchored on the real scanline; anchors 93/189/12,090 VCLK + 17.5 µs + 58.77 µs + 163.91 µs incl. 3 steals all hit in the board sim) + video scanout `sim/CV1k_blit/blit_video.sv` (I-3.1/2/3: 60.0184 Hz sync gen, per-line scroll latch, real line-fetch steal, vsync IRQ2, 240p capture pixel-exact vs the golden crop) live; **H6 conformance DONE 2026-07-14** (`sim/run_h6_conformance.sh`, NO RTL change — RTL trace-equivalent to the P-stage C++ engine over all 8 traces / 80,859 execs: pixel+cost+timeline-binding, and the governor timeline proven BIT-IDENTICAL under execution-plane feed jitter); **H7 steps 1+2 DONE 2026-07-15** — core repackaged into `sim/CV1k_blit/` behind ONE instance `blit_top.sv` (pure code motion; video px stream + gov table port now real boundary ports) and `blit_draw` grew the OUTPUT-ONLY descriptor sideband + `i_rd_vld` read-stall port (tied 1 = bit-identical; full-H6 + FASTBOOT-22M re-accepted, footprint checker `tb/blit_dsc_check.sv` clean over 9.13 G src beats / 26.1 G wr lanes); **H7 steps 3+4 DONE 2026-07-15** — NEW `sim/CV1k_blit/blit_batch.sv` (K=8-objline train batcher: strictly serial R/W train port exactly as the DES charges, single-buffered 16 KB pixel-lane staging, ONE drain-writes-before-any-read rule = waitpipe/strict/W→R ordering, descriptor-counted serve with one parked read = the whole `i_rd_vld` protocol, strict/oversize fallback) proven TRANSPARENT — all 8 FULL traces pixel/cost/bind-exact with gold/vram/gov hashes BIT-IDENTICAL to the frozen H6 logs incl. seeded port jitter (`sim/run_h7a_step3.sh`); NEW `sim/CV1k_blit/ddr3_harness.sv` (train arbiter video>batch>NAND-stub on the MiSTer DDRAM face) + `blit_video` PREFETCH param (1-hline line-train prefetch, timing outputs untouched, board default bit-identical) + `tb/tb_h7` stat-timed stack (ddr3_stat.h DDRAM slave @ target clocks, paced feed, per-op lateness monitor): 8 traces × 2 HPS-tail seeds × 300 execs pixel-exact, ZERO ops > 1 hline (worst +19.8 µs = study's +9.83 µs + documented BURSTCNT=1 write cost; others ≤ +1.7 µs), final frames through prefetch+arbitration PIXEL-EXACT (`sim/run_h7a_step4.sh`); latent H3 `blit_draw` S3 mode-bank clobber found & fixed (inert unstalled — every frozen hash unchanged, FASTBOOT 22M re-accepted); **H7 step 5 DONE 2026-07-15** — NEW `sim/CV1k_nand.sv` (synthesizable NAND read-path frontend, drop-in for the vendor pin roles, serves the DDR3-resident U2 image via the harness `i_nd_*` client) + board `+define+CV1K_NAND` swap (`CV1k_nand` + `CV1k_ddr3_harness` + `sim/ddr3_beh.sv`): unit accept 19,589 bytes byte-exact vs the raw dump, and the FASTBOOT boot's NAND read stream BYTE-IDENTICAL between the vendor `nand_model` and CV1k_nand (H7a accept 5); sim renamed to a `CV1k_*` board layer (`CV1k_cpld`/`CV1k_sdram_control`/`CV1k_ddr3_harness`/`CV1k_nand`); NEXT = **H7b sim-first plan of record agreed 2026-07-16** (Part 0b §"H7b build order"); **H7b.1 file split DONE 2026-07-16** (`ikacore_CV1k.sv` portable top + `ikacore_CV1k_emu.sv` module emu + RTL reset sequencer; all three board configs byte-identical to pre-refactor baselines, emu lint + port parity green); **H7b.D diag ROMs sim-side DONE 2026-07-17** (`sim/diag/` — diag-mini 788 B boot smoke + diag-1k 1,568 B 1,024-gradient-circle/wave soak, PIXEL-EXACT vs blitgold and vram_hash-identical across vendor/MISTER arms; the H7b.2+ default smoke workload); **H7b.2 stack+clocks DONE 2026-07-17** (blit domain @153.6 with the 2-FF PCEN3 enable + `[pcen23]` same-instant checker; blit_top→blit_batch→ONE shared CV1k_ddr3_harness→DDRAM face in every arm, blit_vram_beh out; vendor+MISTER FASTBOOT CPU traces BYTE-IDENTICAL to the pre-change datum, EXEC streams/IRQ2 instants identical, diag VRAM byte-identical via the DDR3 write-back overlay, NAND stream byte-identical, anchors ALL PASS on the FASTBOOT build; IRQ1 1–6 CKIO early = the governor's documented pop-per-clock quantization shrinking at 153.6); **H7b.3 MiSTer TB DONE 2026-07-17** (`tb/ikacore_CV1k_tb.sv` + C++ main on the exact 614.4 MHz grid + region-mapped stat DdrSlave — fastboot ibara boots the full final stack incl. CV1k_nand-from-DDR3, VRAM AND the scanout-frame capture PIXEL-EXACT vs blitgold at stat timing seed 1; findings: harness needs 1 idle cycle between read bursts [H7b.8 f2sdram check], diag-mini's clear src wrapped into dst = strict-path 9 ms/frame at real latency — ROM fixed to src row 3776); **H7b.4 ioctl DONE 2026-07-17** (`CV1k_ioctl.sv` byte-counter MRA decoder — NAND/YMZ→DDR3 8-byte packer behind a download-gated DDRAM mux, u4×2→pump NOR window rebased to 0; `+mra` boot mode in both TBs; truncated CI smoke + full 152 MiB stream byte-exact incl. the 0xdf3d probe; FOUND+FIXED the CKIO-phase parity hazard — a download-end POR release put CKIO rises on 153.6 FALLING edges [pcen23 caught it], so downloads now hold RESETM while POR stays anchored to the TB/emu release instant [ckio_ph is POR-only], blit/glue hold on the new sys_rst_n; emu reset policy refined: ioctl_download must NOT drive rst_hard or the pump loader is dead; H7b.8 items: soft-reset parity determinism + idle-grid refresh windows for real seconds-long downloads); **H7b.5 YMZ client DONE 2026-07-17** (harness client 3, video>batch>NAND>YMZ, single-train; `+ymzdump` in-core probe: u23/u24 readback byte-exact under diag load); **H7b.6 video face DONE 2026-07-17** (blit_video porch-split o_hs/o_vs + o_ce_pix, provisional widths, counters untouched; top exports o_CE_PIXEL + 5→8 o_VGA_*; emu video stage live; VGA_HS 3256/248, VGA_VS 853,072/9768 CKIO exact; FACE-EXACT vs o_PX in every run); **H7b.7 regression DONE 2026-07-17** (`run_h7b.sh` 4-cell matrix {fastboot,+mra}×{ibara,diag-1k} at stat seed 1 + walltime snapshot A 62s/B 89s/C,D ~13min; load-mode equivalence = the ioctl-loaded boot pixel-exact vs golden on its OWN stream + first-EXEC prefix + IRQ2 cadence — NOT whole-run byte-equality: the stat slave's real-ns doubles aren't translation-invariant [TICK_NS 625/96 × CLK_NS 2.5 tie every 312.5 ns → one NAND-R/B# poll iteration flips 3.4 s in] and the authentic list-builder-vs-vsync race does the rest; NAND stream vs vendor datum; FIFO high-water 20,470/20,480 = the boot-upload brim by design); **H7b.8 SIM-SIDE + FIT SKELETON DONE 2026-07-17** (srcs/ Quartus project live — rtl/ = `sim/scripts/sync_srcs.sh` mechanical copy, emu glue keeps the ikacore_CV1k_emu.sv basename; STATIC exact PLL via hand-authored advanced physical params [fracn VCO 1228.799999994 MHz, C0/8=153.6 · C1/12=102.4 · C2/12 +77 taps = +7833 ps ≈ −72° SDRAM_CLK lead; NO runtime retune — MGMT port = the PERMANENT OSD phase nudge only, ±16 × 101.7 ps, CONF_STR P2 O[13:9]]; SDC = SDRAM IO CL2 nominals + phase-led read multicycle 2/1 + path-based 11.7 ns DQ→blit_fetch + 6.2 ns CKIO-grid crossing bounds + 3.0 ns ckio_ph→p3_q + rtc32k; Ibara MRA `srcs/mra/Ibara.mra`; FIRST FIT 5CSEBA6U23I7: FITS 28,317/41,910 ALM (68%) · DSP 50/112 after blit_draw DSP→logic balancing (blender alone inferred 72) · M10K 22%; timing frontier enumerated = gov q_pcost cone c153 −13.2 TNS −75k, D-bus input cones c102 −12.2 TNS −18.6k, SDRAM_CLK −0.23/−0.59, reset-release recovery −3.2; pump serial-argmax −21.3 outlier FIXED same session [balanced tree, 2M-vector fuzz identical, datum sha unchanged]; w_dl download idle-grid refresh window CLOSED [+refage through a 4 MiB download: worst age 57.6 ms < 64 ms, 23,665 pairs/64 ms ≥ 18,432 demand, 0 violations; loader↔pair interlock on o_IOCTL_WAIT]; FASTBOOT datum 4b42d934… byte-identical throughout; full matrix re-run on the final tree ALL PASS [A 66.3 s/B 94.6 s/C 805.3 s/D 784.6 s]); **H7b.8 TIMING-CLOSURE RTL ROUND DONE 2026-07-17** (Part V entry — the four deep cones rebuilt bit-exact [gov q_pcost staged pipeline + upload 14×13 DSP · draw ALU retime · batch pre-decode + aged-head split], SDRAM DQ read path redesigned to the jtframe recipe [pump dq_n negedge capture bank = only pad-timed endpoint, altddio_out SDRAM_CLK, C2 preset 1526 ps, sim-model beat-shift, IOE packing + MAX_FANOUT OE/DQM duplication] — dq_n capture CLOSED −0.07/+12.79; LATENT loader-tRP bug found by matrix cell C and fixed [m_cool 1-edge pair-close cooldown; ACT was 20.0 ns after a maintenance PRE < tRP 21]; fit #4 = 27,582 ALM [66%] · DSP 50/112 · c153 −13.2 → −6.86 · c102 −12.2 → −7.23 · SDRAM_CLK hold +5.7; datum 4b42d934… byte-identical through every step; matrix ALL PASS 38 accepts) → next: gov Y-stage pre-regs + pump maintenance address-gen pipeline + dq_n beat-1 fan-out/D-bus consumer analysis (designed, Part V), then the hardware half: f2sdram burst-gap, soft-reset parity checker + POR re-roll, on-target capture accept |
+| Blitter RTL | **H0+H2+H3+H4+H5+H6 done** — CS6 register file `sim/CV1k_blit/blit_regs.sv` (I-1.1) + BREQ/BACK fetch unit `sim/CV1k_blit/blit_fetch.sv` (I-4.1, 40 KB attribute FIFO, fifo_study-frozen depths, runtime-paced) + draw engine `sim/CV1k_blit/blit_draw.sv` (I-1.5/6/7, 4 px/clk native speed, pixel-exact vs golden over all 8 attract traces end-to-end) + timing governor `sim/CV1k_blit/blit_gov.sv` (I-2.1/2.2/2.3/2.5: runtime-loadable cost tables, governed BUSY + IRQ1, 512-chunk fetch window, steal phase anchored on the real scanline; anchors 93/189/12,090 VCLK + 17.5 µs + 58.77 µs + 163.91 µs incl. 3 steals all hit in the board sim) + video scanout `sim/CV1k_blit/blit_video.sv` (I-3.1/2/3: 60.0184 Hz sync gen, per-line scroll latch, real line-fetch steal, vsync IRQ2, 240p capture pixel-exact vs the golden crop) live; **H6 conformance DONE 2026-07-14** (`sim/run_h6_conformance.sh`, NO RTL change — RTL trace-equivalent to the P-stage C++ engine over all 8 traces / 80,859 execs: pixel+cost+timeline-binding, and the governor timeline proven BIT-IDENTICAL under execution-plane feed jitter); **H7 steps 1+2 DONE 2026-07-15** — core repackaged into `sim/CV1k_blit/` behind ONE instance `blit_top.sv` (pure code motion; video px stream + gov table port now real boundary ports) and `blit_draw` grew the OUTPUT-ONLY descriptor sideband + `i_rd_vld` read-stall port (tied 1 = bit-identical; full-H6 + FASTBOOT-22M re-accepted, footprint checker `tb/blit_dsc_check.sv` clean over 9.13 G src beats / 26.1 G wr lanes); **H7 steps 3+4 DONE 2026-07-15** — NEW `sim/CV1k_blit/blit_batch.sv` (K=8-objline train batcher: strictly serial R/W train port exactly as the DES charges, single-buffered 16 KB pixel-lane staging, ONE drain-writes-before-any-read rule = waitpipe/strict/W→R ordering, descriptor-counted serve with one parked read = the whole `i_rd_vld` protocol, strict/oversize fallback) proven TRANSPARENT — all 8 FULL traces pixel/cost/bind-exact with gold/vram/gov hashes BIT-IDENTICAL to the frozen H6 logs incl. seeded port jitter (`sim/run_h7a_step3.sh`); NEW `sim/CV1k_blit/ddr3_harness.sv` (train arbiter video>batch>NAND-stub on the MiSTer DDRAM face) + `blit_video` PREFETCH param (1-hline line-train prefetch, timing outputs untouched, board default bit-identical) + `tb/tb_h7` stat-timed stack (ddr3_stat.h DDRAM slave @ target clocks, paced feed, per-op lateness monitor): 8 traces × 2 HPS-tail seeds × 300 execs pixel-exact, ZERO ops > 1 hline (worst +19.8 µs = study's +9.83 µs + documented BURSTCNT=1 write cost; others ≤ +1.7 µs), final frames through prefetch+arbitration PIXEL-EXACT (`sim/run_h7a_step4.sh`); latent H3 `blit_draw` S3 mode-bank clobber found & fixed (inert unstalled — every frozen hash unchanged, FASTBOOT 22M re-accepted); **H7 step 5 DONE 2026-07-15** — NEW `sim/CV1k_nand.sv` (synthesizable NAND read-path frontend, drop-in for the vendor pin roles, serves the DDR3-resident U2 image via the harness `i_nd_*` client) + board `+define+CV1K_NAND` swap (`CV1k_nand` + `CV1k_ddr3_harness` + `sim/ddr3_beh.sv`): unit accept 19,589 bytes byte-exact vs the raw dump, and the FASTBOOT boot's NAND read stream BYTE-IDENTICAL between the vendor `nand_model` and CV1k_nand (H7a accept 5); sim renamed to a `CV1k_*` board layer (`CV1k_cpld`/`CV1k_sdram_control`/`CV1k_ddr3_harness`/`CV1k_nand`); NEXT = **H7b sim-first plan of record agreed 2026-07-16** (Part 0b §"H7b build order"); **H7b.1 file split DONE 2026-07-16** (`ikacore_CV1k.sv` portable top + `ikacore_CV1k_emu.sv` module emu + RTL reset sequencer; all three board configs byte-identical to pre-refactor baselines, emu lint + port parity green); **H7b.D diag ROMs sim-side DONE 2026-07-17** (`sim/diag/` — diag-mini 788 B boot smoke + diag-1k 1,568 B 1,024-gradient-circle/wave soak, PIXEL-EXACT vs blitgold and vram_hash-identical across vendor/MISTER arms; the H7b.2+ default smoke workload); **H7b.2 stack+clocks DONE 2026-07-17** (blit domain @153.6 with the 2-FF PCEN3 enable + `[pcen23]` same-instant checker; blit_top→blit_batch→ONE shared CV1k_ddr3_harness→DDRAM face in every arm, blit_vram_beh out; vendor+MISTER FASTBOOT CPU traces BYTE-IDENTICAL to the pre-change datum, EXEC streams/IRQ2 instants identical, diag VRAM byte-identical via the DDR3 write-back overlay, NAND stream byte-identical, anchors ALL PASS on the FASTBOOT build; IRQ1 1–6 CKIO early = the governor's documented pop-per-clock quantization shrinking at 153.6); **H7b.3 MiSTer TB DONE 2026-07-17** (`tb/ikacore_CV1k_tb.sv` + C++ main on the exact 614.4 MHz grid + region-mapped stat DdrSlave — fastboot ibara boots the full final stack incl. CV1k_nand-from-DDR3, VRAM AND the scanout-frame capture PIXEL-EXACT vs blitgold at stat timing seed 1; findings: harness needs 1 idle cycle between read bursts [H7b.8 f2sdram check], diag-mini's clear src wrapped into dst = strict-path 9 ms/frame at real latency — ROM fixed to src row 3776); **H7b.4 ioctl DONE 2026-07-17** (`CV1k_ioctl.sv` byte-counter MRA decoder — NAND/YMZ→DDR3 8-byte packer behind a download-gated DDRAM mux, u4×2→pump NOR window rebased to 0; `+mra` boot mode in both TBs; truncated CI smoke + full 152 MiB stream byte-exact incl. the 0xdf3d probe; FOUND+FIXED the CKIO-phase parity hazard — a download-end POR release put CKIO rises on 153.6 FALLING edges [pcen23 caught it], so downloads now hold RESETM while POR stays anchored to the TB/emu release instant [ckio_ph is POR-only], blit/glue hold on the new sys_rst_n; emu reset policy refined: ioctl_download must NOT drive rst_hard or the pump loader is dead; H7b.8 items: soft-reset parity determinism + idle-grid refresh windows for real seconds-long downloads); **H7b.5 YMZ client DONE 2026-07-17** (harness client 3, video>batch>NAND>YMZ, single-train; `+ymzdump` in-core probe: u23/u24 readback byte-exact under diag load); **H7b.6 video face DONE 2026-07-17** (blit_video porch-split o_hs/o_vs + o_ce_pix, provisional widths, counters untouched; top exports o_CE_PIXEL + 5→8 o_VGA_*; emu video stage live; VGA_HS 3256/248, VGA_VS 853,072/9768 CKIO exact; FACE-EXACT vs o_PX in every run); **H7b.7 regression DONE 2026-07-17** (`run_h7b.sh` 4-cell matrix {fastboot,+mra}×{ibara,diag-1k} at stat seed 1 + walltime snapshot A 62s/B 89s/C,D ~13min; load-mode equivalence = the ioctl-loaded boot pixel-exact vs golden on its OWN stream + first-EXEC prefix + IRQ2 cadence — NOT whole-run byte-equality: the stat slave's real-ns doubles aren't translation-invariant [TICK_NS 625/96 × CLK_NS 2.5 tie every 312.5 ns → one NAND-R/B# poll iteration flips 3.4 s in] and the authentic list-builder-vs-vsync race does the rest; NAND stream vs vendor datum; FIFO high-water 20,470/20,480 = the boot-upload brim by design); **H7b.8 SIM-SIDE + FIT SKELETON DONE 2026-07-17** (srcs/ Quartus project live — rtl/ = `sim/scripts/sync_srcs.sh` mechanical copy, emu glue keeps the ikacore_CV1k_emu.sv basename; STATIC exact PLL via hand-authored advanced physical params [fracn VCO 1228.799999994 MHz, C0/8=153.6 · C1/12=102.4 · C2/12 +77 taps = +7833 ps ≈ −72° SDRAM_CLK lead; NO runtime retune — MGMT port = the PERMANENT OSD phase nudge only, ±16 × 101.7 ps, CONF_STR P2 O[13:9]]; SDC = SDRAM IO CL2 nominals + phase-led read multicycle 2/1 + path-based 11.7 ns DQ→blit_fetch + 6.2 ns CKIO-grid crossing bounds + 3.0 ns ckio_ph→p3_q + rtc32k; Ibara MRA `srcs/mra/Ibara.mra`; FIRST FIT 5CSEBA6U23I7: FITS 28,317/41,910 ALM (68%) · DSP 50/112 after blit_draw DSP→logic balancing (blender alone inferred 72) · M10K 22%; timing frontier enumerated = gov q_pcost cone c153 −13.2 TNS −75k, D-bus input cones c102 −12.2 TNS −18.6k, SDRAM_CLK −0.23/−0.59, reset-release recovery −3.2; pump serial-argmax −21.3 outlier FIXED same session [balanced tree, 2M-vector fuzz identical, datum sha unchanged]; w_dl download idle-grid refresh window CLOSED [+refage through a 4 MiB download: worst age 57.6 ms < 64 ms, 23,665 pairs/64 ms ≥ 18,432 demand, 0 violations; loader↔pair interlock on o_IOCTL_WAIT]; FASTBOOT datum 4b42d934… byte-identical throughout; full matrix re-run on the final tree ALL PASS [A 66.3 s/B 94.6 s/C 805.3 s/D 784.6 s]); **H7b.8 TIMING-CLOSURE RTL ROUND DONE 2026-07-17** (Part V entry — the four deep cones rebuilt bit-exact [gov q_pcost staged pipeline + upload 14×13 DSP · draw ALU retime · batch pre-decode + aged-head split], SDRAM DQ read path redesigned to the jtframe recipe [pump dq_n negedge capture bank = only pad-timed endpoint, altddio_out SDRAM_CLK, C2 preset 1526 ps, sim-model beat-shift, IOE packing + MAX_FANOUT OE/DQM duplication] — dq_n capture CLOSED −0.07/+12.79; LATENT loader-tRP bug found by matrix cell C and fixed [m_cool 1-edge pair-close cooldown; ACT was 20.0 ns after a maintenance PRE < tRP 21]; fit #4 = 27,582 ALM [66%] · DSP 50/112 · c153 −13.2 → −6.86 · c102 −12.2 → −7.23 · SDRAM_CLK hold +5.7; datum 4b42d934… byte-identical through every step; matrix ALL PASS 38 accepts); **H7b.8b SDRAM pad register bank DONE 2026-07-17** (Part V entry — closure-round step 1: maintenance argmax/row selection pre-registered one edge ahead of dispatch [p_hi_*/p_lo_* + fire-edge b_elig re-check, same fire instants] + qsf ALLOW_SYNCH_CTRL_USAGE OFF on the pump o_S_* regs [fit-#4 latent finding: warning 176279 clear+load secondaries kept A[8]/[9]/[11]/[12] + all 16 OE SynDups OUT of the IOEs — the template's *|SDRAM_* pattern only matched pin names]; fit #5 = every pad reg IOE-packed, c102 −7.35 → −5.93 [worst now the SH-3 cache CPU cone; pump residual −3.26 ≈ field target], SDRAM_CLK −3.69 → −1.74 UNIFORM IOE clock-to-out [OSD sweep class], c153 −6.83 unchanged, ALM 27,388 [65 %]; datum 4b42d934… byte-identical, anchors PASS, 847 ms ddpsdoj +refage BIT-IDENTICAL to the §9 oracle [57.616 ms / 288,683 pairs], download refage pair-count-identical, matrix ALL PASS 37 accepts [A 65.7 / B 95.2 / C 819.0 / D 808.9 s]); **fitter settings axis verified closed 2026-07-17** (fit #6 AGGRESSIVE PERFORMANCE = bit-identical no-op — every preset constituent already pinned, Info 16304; fit #7 MUX_RESTRUCTURE-Off A/B = c153 −6.83→−8.89 blit_draw blender + 2,772 ALM for c102 +0.11 → ON restored; c102 is logic-depth-limited, frontier = CPU cache cone + dq_n half-period fan-out) → **H7b.8c round 1 DONE 2026-07-17** (user directive: SH-3 c102 ≥ −3.5; Part V entry): gov Y-stage pre-regs + y_gmc (zero stages, gov exact), blit_draw B2r raw-capture stage (+1, latitude), batch f_fitcap threshold rewrite, and the PROVEN dq_n→{cpu,dmac} false path (BSC one-external-cycle invariant) — c102 −5.93 → −5.31 TNS −9.0k, c153 TNS −44.4k, datum/anchors/matrix ALL PASS; settings axis: bias backfires, SEED 3 kept, PEM 4.0 trialing → next: c102 placement sweeps to the floor, then HS3-side decision (tag cone / rd_buf — user-owned); c153 q_mem write-port sum (gov-strict reassociation); then the hardware half: f2sdram burst-gap, soft-reset parity checker + POR re-roll, on-target capture accept → **H7b.8c round 2 DONE 2026-07-18** (Part V entry — the SH-3 early-transaction sideband, docs/sh3_sideband.md §11 HS3-side / §12 ikacore-side): pump strobe-queue + CAS shadow predictor + oracle (S2/S3) → CPU early gear (S4) → blit_fetch announce + linear predictor + shared m_dispatch refresh (S5) → live-DQ serve arm DELETED, dq_n false paths retired (S6); every step FASTBOOT datum 4b42d934… byte-identical + anchors exact + 847 ms refage metric-identical + matrix 40/40; the dq_n half-period wall is GONE (dq_n fans only to rd_hi_e/rd_lo/nor_data); + RDW-arc SDC false path (from HS3 §6 ref flow) → **c102 −5.31 → −3.613** (SHIPPED seed 1, c153 −6.203, SDRAM_CLK −1.745), 0.11 ns from the −3.5 mission; SHELVED bit-exact c153 gov reassociation (−6.20→−5.45 but placement-antagonistic); frontier = blit_fetch→pump o_S_A CKIO-granular crossing over-constrained by the 6.2 ns blanket (~13 ns phantom, both endpoints CKIO_PCEN/pcen_d-gated) → next decision: grid-multicycle (phase proof) vs double-pump scheduler restructure (user-flagged) → **H7b.8d DONE 2026-07-18 (Part V entry): BOTH — output-stage restructure (flat one-hot pad stage + fire-select plane; q_mpre/q_mhi/q_mlo exact next-value pair-dispatch select; q_ipall/q_iref/q_imrs init fires; full pre-8d chain kept as a translate_off shadow oracle, chain==flat re-proven every run) + the TRUE-budget SDC (phase proof corrected: launch = CKIO-coincident PCEN edge, capture = mid-CKIO c102 edge ⇒ 9.766 ns REAL, not ~19.5; register-level set_max_delay 9.76; register-clean slot-A is provably impossible — tRCD 21 ns vs the geared CAS) + recovery false-path extensions (u_batch/u_harness/u_nand/u_cpld + raw ioctl_download, dl_hold_q release-quantizer proof).  Datum byte-identical ×3 steps, 847 ms refage BIT-identical, matrix ALL PASS, 19 fits: crossing MET on all 10 final seeds (+0.09..+0.74), pump cones ≤ −1.5 (that path HS3-launched), SHIPPED SEED 10 c102 −3.456 / c153 −6.205 / SDRAM_CLK −1.746; c102 frontier = HS3 CPU forwarding/cache cone (−3.46..−4.44 across seeds, placement σ≈0.3) — next c102 work is HS3-side (fwd cone, tag cone, BSC grid-pin decode registration)** → **H7b.8e c153 BLITTER CAMPAIGN DONE 2026-07-18 (Part V entry): three RTL rounds — R1 gov q_mem P/F write pipe (shelved reassociation APPLIED + staged; visibility +2) · fetch 14×13 upload mult · bb_wfifo registered almost-full · blit_video line_buf REGISTER-FILE→256×64 M10K (face-capture write + 1-ahead read addr, o_px instants identical) · harness oq_room_q · nand cur_word_q — R2 skid head register (EXACT write-through/refill + staleness $fatal) · harness return relay rq_* (vid/bat/ymz +1, NAND kept RAW for the R/B# poll datum) · gov X distribute + tspan pre-splits · batch pf fitcap bank · draw B3i delay stage — R3 gov single-op-per-window reshuffle (x_ts@w8 off registered x_cw, span DSPs@w9, products P1, partials P2, sat F, RAM w9+4; visibility +3) · fetch fifo_room_q · batch pf_L/pf_st push fold; Quartus function-call-part-select gotcha re-hit (Error 10170) and fixed. EVERY round FASTBOOT datum 4b42d934… BYTE-IDENTICAL + anchors exact/in-band; matrix ALL PASS ×2 (38 accepts, round-1 + final trees). 5-seed sweep → SHIPPED SEED 2: **c153 −6.205 → −3.919 / c102 −3.879** (HS3 fwd→cache re-roll of the same frontier cone; pump/SDRAM_CLK/dq_n untouched classes). Residual c153 ladder: draw blend corridor −3.92 · fetch parser −3.70 · batch push-decode −3.48 · gov win_f −3.33 · af stall fan −3.32 · video y_v −2.49 · nand raw-return −2.15 — next levers documented in Part V.** |
 | VRAM (MT46V16M16 DDR) model in sim | **behavioral backend live (H3)** — `sim/blit_vram_beh.sv` (64 MB flat-pixel, 3 channels, per-pixel write lanes) serves the draw engine in board sim + trace TB; the vendor DDR model `sim/models/mt46v16m16.v` stays for I-4.2, the MiSTer DDR3 adapter (I-4.3) respins the same channels to ready/valid |
 | Golden pixel model (MAME port) | **DONE 2026-07-13 (H1+H1b)** — `sim/blitgold/` C++ port of MAME `cv1k_v`; 7 unit vectors pass + pixel-correct attract frames from ibarao/futaribl/ddpdfk `.blit` traces (3 games). H1b closed the loop: a `+blitdump` testbench emitter backdoor-walks the op list from the U1 SDRAM on each EXEC; replaying **our own** board-sim output renders a coherent Ibara boot/loading frame |
-| PCB measurements | **none taken** — flex PCB probe plan frozen Rev A (`docs/pcb_probe_plan.md`); **long-lead** (sourcing + PCB design), will arrive late — plan is to finish the RTL prototype (H0–H6) before the rig exists; board data later lands in the runtime-loadable governor tables |
+| PCB measurements | **none taken** — flex PCB probe plan frozen Rev B (`docs/pcb_probe_plan.md`; Rev A + A.1/A.2 integrated 2026-07-18); **long-lead** (sourcing + PCB design), will arrive late — plan is to finish the RTL prototype (H0–H6) before the rig exists; board data later lands in the runtime-loadable governor tables |
 | DDR3 scheduling study (P-stage) | **DONE 2026-07-13** — `sim/blitstudy/` (FINDINGS.md); frozen: K=8 objlines, 1 thread, ~24 KB ping-pong staging |
 
 ---
@@ -600,6 +600,490 @@ Params updated: P-xx old→new (Part II row edited, Conf set to [M-nn])
 
 ## Part V — Update log (newest first)
 
+- 2026-07-18  [claude]  **H7b.8e — the c153 BLITTER CAMPAIGN (user-ordered
+  "proceed with the c153 campaign"): worst c153 −6.205 → −3.919 SHIPPED (2.29 ns) across
+  three RTL rounds, every round datum-byte-identical + anchors PASS, the
+  matrix re-proven on rounds 1 and 3 trees.**  Field target c153 ≈ −1.9;
+  the campaign attacked the enumerated cone ladder top-down (organized
+  slack report, srcs/sta_cones.log per-cone panel flow — kept as the
+  campaign's measurement instrument alongside srcs/sta_tns.log bucketing).
+
+  **Round 1 (fit #1: c153 −6.205 → −4.929, all six sim-accepted then
+  matrix 38/38):**
+  * `blit_gov` q_mem write-port: the 5-term 36-bit sum + saturate comb
+    into the M10K datain (the −6.2 wall, ≥4000 paths / 113 endpoints /
+    endpoint-TNS −678) became a P/F register pipe — balanced partials at
+    w9+1, saturate + kind mux registered at w9+2, RAM write + pointers at
+    w9+3.  APPLIES the previously shelved pair-tree reassociation
+    (bit-exact mod 2^36, no partial wraps) and then cuts it at register
+    boundaries.  Entries become pop-visible +2 i_CLK; the pop schedule is
+    engine-bound / CKIO-quantized at every contractual point (datum
+    byte-identical on first try — the +2 is invisible).
+  * `blit_fetch` UPLOAD sizing: the live 26×26 payload multiply off the
+    skid word (−5.77) rebuilt to the governor's H7b.8 recipe — w_dimx1
+    (dimx+1) pre-registered at word 6, single 14×13 `w_px` DSP at word 7.
+  * `bb_wfifo` registered almost-full (`o_af`, exact next-value off the
+    conserved total count; AF_TH parameter) — o_wr_rdy timing-identical,
+    the count adder + threshold compare out of the draw stall cone.
+  * `blit_video` PREFETCH line store: the 1024×16 REGISTER-FILE line_buf
+    (f2sdram → 1008 scattered `asdata` loads, 9.0 ns of pure routing =
+    −4.99) became a 256×64 simple-dual-port M10K (`line_mem`) + a
+    face-capture write stage (lfq_*, +1 on fill with a full-hline budget)
+    + a one-cycle-ahead registered read address (hcnt/sel/lat_sx_d
+    next-values replicate their own update rules) + lane mux behind the
+    RAM — o_px instants IDENTICAL; ~16k register bits returned to the
+    fitter (map: "1155 registers lost all their fanouts").
+  * `CV1k_ddr3_harness` oq room: registered `oq_room_q` off the pre-edge
+    pointers (threshold 28; checked-push bound occ ≤ 29 + 2 room-exempt
+    video = 31 < 32, the identical guarantee; real occupancy ≤ ~20 so the
+    flag never deasserts) — the pointer subtract out of the issue/WE cone.
+  * `CV1k_nand` stream read: `cur_word_q` registered page-word (col_ctr
+    only moves on RE#/E0h grid strobes ≥ 3 i_CLK apart; staleness $fatal
+    guards the claim) — the 33×64 array + byte mux out of the dout cone.
+
+  **Round 2 (fit #2: c153 → −4.194; video −2.37, harness −1.14 at/near
+  target):**
+  * `blit_fetch` skid head register `skid_hq` — EXACT (not +1):
+    write-through on push-to-empty / push-under-departing-head, array
+    refill `skid[rp+1]` on advance-with-backlog (a same-edge push appends
+    at rp+lvl ≥ rp+2, so the refill source always pre-exists); per-pop
+    staleness $fatal.  Kills the skid-async-read launch shared by the
+    fetch w_need (−4.55) and gov gp_need snoop (−4.93) cones.
+  * `CV1k_ddr3_harness` return relay: DOUT + READY + the head TAG
+    captured together (`rq_*`) and routed to the video/batch/YMZ clients
+    (+1 with train-level slack; tag capture makes burst-boundary routing
+    exact); oq bookkeeping stays RAW, and the NAND client stays RAW —
+    its fill completion drives R/B#, CPU-polled on the CKIO grid, so a
+    +1 there would gamble the frozen datum.
+  * `blit_gov` X-stage: clamp subtracts DISTRIBUTED over the select
+    (both cw/dpw arms in parallel with the compare, exact mod 2^16 — the
+    Y-stage recipe mirrored) + xs_*/xd_* f_tspan_p pre-splits registered
+    at w6 (xd_* off the same max() select that produces x_cx0).
+  * `blit_batch` pf bank v1: the two f_fitcap compare trees computed at
+    push time into per-slot 4-bit side registers.
+  * `blit_draw` B3i: a plain 1:1 delay stage between ALU1 and ALU2
+    (values identical +1; pipe 5→6, hazard enumerations extended) — the
+    two serial 5×6 / ×2115 blend multiplies get a retimer boundary.
+    (draw −5.08 → −4.13 → −3.73 across the rounds.)
+
+  **Round 3 (fit #3 / sweep band c153 −3.92..−4.22):**
+  * `blit_gov` single-op-per-window reshuffle: x_ts spans move to w8 off
+    the REGISTERED x_cw (no clamp in series), the span coefficient DSPs
+    to w9, their products to P1 (s_psps/s_pspd + the p_a partial), p_b at
+    P2, saturate at F, RAM write at w9+4 — NO window carries more than
+    one DSP or two adder levels; pop visibility +3 total (still
+    engine-bound; datum byte-identical again).
+  * `blit_fetch` fifo_room_q: registered exact next-value of the BREQ
+    room compare (bb_wfifo o_af pattern) — timing-identical.
+  * `blit_batch` pf bank v2: the min/K-cap/strict fold joins the push-side
+    computation (pf_L/pf_st per slot, PARALLEL 4-bit registers — the dq
+    entry datain fan is untouched, which is what made the H7b.8 fit-#3
+    full-decode −7.8 regression; lv_blen0/after0 keep the live tail).
+  * Quartus gotcha re-hit and fixed: `f_tspan_p(...)[9:0]` — Quartus 17
+    rejects part-selecting a function call (Error 10170); assigned via
+    xc8_* wires (the documented gotcha, Verilator accepts it silently).
+
+  **Verification per round: FASTBOOT datum 4b42d934… BYTE-IDENTICAL after
+  every step (incl. the +2/+3 queue-visibility and all engine-side +1s);
+  anchors 93/189/12,090 VCLK + phased 12,090 + 163.91 µs steal chain
+  EXACT, fetch-bound anchors moved inside their ±3% bands (17.83→17.60 µs,
+  57.68→57.83 µs — the draw/batch +1s feed back into fetch FIFO drain
+  pacing, legitimately); matrix ALL PASS on the round-1 tree (38) and the
+  final tree (38).  c102 held HS3-frontier-bound throughout (−3.9..−4.1
+  at seed 10 on the perturbed netlists — the documented placement σ; the
+  ship seed sweep below re-rolls it).**
+
+  SHIP (srcs @ SEED 2, reproduced bit-exact from the sweep copy):
+  **c153 −3.919 / c102 −3.879 / SDRAM_CLK −1.708 / recovery c153 −2.735 /
+  recovery c102 +0.181 / dq_n pad −0.090 / hold +0.249 / removal +0.711.**
+  Seed sweep (panel minima c153/c102): s1 −3.995/−4.024 · **s2
+  −3.919/−3.879 (ship)** · s3 −3.953/−4.026 (rec −3.67) · s7
+  −4.217/−3.875 · s10 −3.990/−4.057.  c102 −3.456 (8d) → −3.879: a
+  ~0.4 ns placement re-roll of the SAME HS3 fwd→cache frontier cone
+  (fwd_lane_b_agu → rsp_inst at seed 2) under the perturbed netlist —
+  the queued HS3-side fwd/tag work owns that cone and will re-roll it
+  again; the pump stays past its own target (dq_n→rd_lo half-period
+  wander −2.6..−3.5, multicycle-clean, no RTL change).
+
+  Residual c153 ladder at ship: draw dimx_e→blend-mult −3.919 (the
+  corridor, now the c153 wall) · fetch skid_half→w_need parser −3.695 ·
+  batch s_xlo→pf_st push-decode −3.482 (the −7.8-lite: DRAW S-regs →
+  pd_snw → fitcap → pf regs, came in tolerable but is now batch's worst
+  — watch) · gov last_mark→win_f chunk-marking −3.333 · wfifo
+  o_af→draw-mult stall fan −3.315 · video hcnt→y_v scroll add −2.487 ·
+  nand raw-return (kept raw for datum safety) −2.153 · BSC↔NAND
+  crossings −1.97/−1.95 under the 6.2 blanket.  Next session candidates: draw blend corridor (second
+  retimer stage or per-bank operand pre-split), fetch w_need parser
+  decode (w_need_is1 next-value flag), the gov m_rcs/tspan tails if
+  surfaced, NAND raw-return cone (early-terminate compensation would
+  need a −1-word finish detect against the relayed stream), and the
+  BSC↔NAND cross-domain arcs under the 6.2 blanket (same CKIO-granular
+  phantom class 8d retired for fetch→pump — per-arc proofs available).
+
+- 2026-07-18  [claude]  **H7b.8d — double-pump scheduler output-stage
+  restructure + the TRUE-budget SDC for the blit_fetch→pump crossing
+  (user directive: "redesign the double pump SDRAM scheduler and closely
+  examine the sdc to improve SH3 slack as much as possible"): c102
+  −3.613 → −3.456, the crossing MET on every seed, and every pump-side
+  cone is structurally sub-critical — the c102 frontier is now purely
+  the HS3 CPU forwarding/cache cone (user-owned).**
+  * **The phase proof that reframed the mission**: yesterday's frontier
+    note estimated the blit_fetch→pump budget at one CKIO (~19.5 ns).
+    The RTL says otherwise: blit_fetch's pump-facing registers advance
+    ONLY under `i_CKIO_PCEN` (launch = the CKIO-coincident c153 edge),
+    and the pump's earliest capture is the MID-CKIO c102 edge ("cmd regs
+    load the pins at 2N+1") ⇒ the TRUE uniform setup budget is ONE c102
+    PERIOD (9.766 ns) — not 19.5, not the 6.2 blanket.  A register-level
+    `set_max_delay 9.76` (launch set enumerated: o_bus_drive/o_A/o_CS_n/
+    o_RAS_n/o_CAS_n/o_WE/o_DQM/o_SB_COL/o_SB_LEN/st.*/run_left → u_pump)
+    carries the full PCEN-gating proof; same-instant coincident-edge
+    samples are the HOLD side (set_min_delay 0, as the blanket).
+  * **Register-clean is provably IMPOSSIBLE for the slot-A arm** — the
+    honest boundary of the user-flagged restructure: the BSC dispatches
+    with zero pin warning, and tRCD 21 ns > 2 fast edges means a slot-A
+    ACT delayed one more edge violates tRCD against its geared CAS
+    (instant pinned by the CL2 serve).  So the terminal shape is: thin
+    pin translate (~2 LUT) + everything else register-sourced, under the
+    true-budget SDC.  (Module header carries the arithmetic.)
+  * **The restructure (sim/CV1k_sdram_control.sv, three steps, each
+    FASTBOOT datum 4b42d934… BYTE-IDENTICAL + anchors cost-exact + zero
+    oracle messages)**:
+    1. **Flat pad stage + fire-select plane**: one wire per arm
+       (f_i*/arm_*), one-hot by construction ($onehot0 tripwire); pads
+       load from a single AND-OR whose data legs are registers or the
+       grid pins; the serial else-chain is GONE from every pad D-cone.
+       m_dispatch dissolved into the same plane (guards verbatim);
+       bookkeeping keyed on the same wires, NBA order preserved.
+    2. **q_mpre/q_mhi/q_mlo** — the pair-dispatch deep select (windows →
+       pick → guards, the −4.1 route-stretched cone of fit #8d-1) is
+       pre-registered one edge ahead by an EXACT next-value plane (not
+       8b's stale-pick-plus-recheck: window _ff regs at the fire edge =
+       raw pins now; counters/FSMs/guards replicated 1:1 on the same arm
+       wires).  Fire edge keeps one LUT: ladder bits + the grid-pin term.
+       q-vs-live $fatal assert on every edge.
+    3. **q_ipall/q_iref/q_imrs** — the init fires (32-bit icnt compares,
+       the last deep pad cone, −3.0) get the same treatment.  A
+       multicycle here would be UNSOUND (icnt moves every edge; a
+       mid-transition compare sample could double-fire REF inside tRFC).
+  * **The shadow oracle**: the ENTIRE pre-8d priority chain is
+    replicated verbatim (translate_off) as sh_* and compared against the
+    flat pads every edge — chain==flat is re-proven by every sim run.
+  * **SDC audit (beyond the 9.76 line)**: reset-release false paths
+    extended to every sys_rst_n endpoint the OLD lines missed
+    (u_batch/u_harness/u_u2_nand/u_u13_cpld — fit-8d-1 recovery worst
+    was ld_go→u_batch|wfifo; u_ioctl extended to u_blit+u_batch ONLY —
+    the stream has REAL arcs into the harness/NAND); NEW proven cut for
+    the raw hps_io ioctl_download→blit-core recovery arcs (release edge
+    is ALWAYS the dl_hold_q quantizer's: cpu_go = cpu_por_go & ~dl_hold
+    & ~dl_hold_q — the raw fall cannot release while q holds).
+  * **Accepts (every step)**: MISTER FASTBOOT 2M datum byte-identical
+    (NOTE for future sessions: the datum lives on tb_cv1k's MISTER arm —
+    `MISTER=1 FASTBOOT=1 build_sim.sh; Vtb_cv1k +maxinsn=2000000` — NOT
+    the H7b.3 MiSTer TB, whose stat-slave timing is legitimately
+    non-translation-invariant); anchors 10 PASS (93/189/12090 exact);
+    847 ms ddpsdoj +refage BIT-IDENTICAL (288,683 pairs / 57.616 ms);
+    download refage pair-count-identical (136,312 / 57.600); full 4-cell
+    matrix ALL PASS on step-1 (40) and step-2 (38) trees + step-3 tree
+    (final); emu lint + port parity PASS.
+  * **Fit ledger (19 fits: 1 first + 3 step-1 seeds + 4 step-2-config seeds + 10 step-3 seeds + the srcs/ ship reproduction,
+    parallel docker seed farms)**: step-1 seeds {1,2,3,5} = c102
+    {−4.13, −3.65, −3.85, −3.59} — crossing met/-0.17, m-arm cone
+    swings −2.4..−4.1 with placement → step 2.  Step-2+recovery-SDC
+    seeds = {−3.66, −4.62, −3.18, −4.27} — icnt→pads −3.0 surfaced as
+    the pads worst → step 3 (the lucky −3.18 roll carried the REAL
+    init-compare hazard; not shippable).  Step-3 final seeds {1..10} =
+    {−4.44, −3.89, −4.06, −3.62, −3.82, −4.11, −4.43, −3.71, −3.59,
+    **−3.456**}: crossing +0.09..+0.74 MET ×10, pads ≤ −0.38..−2.4
+    (worst remaining = HS3 BSC ord_cs/ord_done comb-decoding into the
+    grid pins through the slot-A translate, −1.2..−1.5 class — an
+    HS3-side pin-registration candidate), HS3 CPU cone = the frontier
+    on 9/10 seeds (fwd_lane/fwd_dep/tag/cache-state, −3.46..−4.44,
+    σ≈0.3 placement noise; 1/10 = dq_n half-period route outlier).
+  * **SHIPPED = SEED 10: c102 −3.456 / c153 −6.205 (TNS −58.2k, gov
+    class unchanged) / SDRAM_CLK −1.746 setup +5.70 hold (OSD-sweep
+    class, identical) / recovery −3.594 = the KNOWN hps_io cfg[1]→
+    blit_gov framework family (fit-#5 watch item, placement-rolled;
+    future candidate: emu reset-path release-sync proof) / ALM 27,801
+    (66 %) / zero 176279**; qsf SEED 10; reproduced in srcs/ proper.
+  * **Where the next c102 nanoseconds live (all HS3-side, user-owned)**:
+    the int_pipe forwarding cone (fwd_lane_*/fwd_dep_*→rsp_inst/idex,
+    §10-class), the cache tag/GPR-address cone, and registering the BSC
+    grid-pin decodes (ord_* → CS3_n class) at their launch regs.
+    Ikacore-side structural work on c102 is COMPLETE: every pump cone
+    ≤ −1.5 with the frontier at the CPU, and the −1.5 itself launches
+    in HS3.
+  sideband (docs/sh3_sideband.md §11 HS3-side / §12 ikacore-side): the
+  dq_n half-period wall is GONE, c102 −5.31 → −3.613 (0.11 ns from the
+  −3.5 mission target), and the entire remaining gap is now ONE
+  over-constrained CKIO-granular crossing → the double-pump scheduler
+  structure is the next decision (user-flagged).**
+  * **Context**: the HS3 maintainer landed the sideband on branch
+    `sideband` — a dedicated `o_SB_*` port (5 signals / 34 bits: REQ pulse,
+    WR, ADDR[28:0], SIZE[1:0], BURST) that announces every committed CS3
+    transaction one c102 cycle after the internal accept, PLUS the R3
+    read-ahead tail late-select and the R4 cache-index slice twin (their
+    §6 best OOC fit −2.15 ns). §11 of the doc is their authoritative
+    implementation report + spec amendments A1–A5; §12 is our consumer side.
+  * **The consumer (this session, S1–S6, each FASTBOOT datum 4b42d934…
+    BYTE-IDENTICAL + governor anchors exact)**:
+    1. **S1** re-drop HS3 `sideband` tree — datum identical (their R7
+       no-behavioral-change holds in-system).
+    2. **S2/S3** wire `o_SB_*` → pump: a depth-2 **strobe queue** + a **CAS
+       shadow predictor** (MCR 0x543C ⇒ t_rcd=2, RASD=0, wrap order, READA
+       on the last beat — all deterministic post-ACTV) + a translate_off
+       **oracle** that `$fatal`s on any queue/row/bank/column/READA/
+       completeness deviation.  Proves R1/R2/tRCD + the AMX-0111 map (bank
+       a[22:21] / row a[20:10] / col a[9:2]) on real pins, every run.
+    3. **S4 CPU early gear** — each predicted CAS issues one fast edge
+       BEFORE its pin decode (the "fire" filler edge), so both CL2 beats
+       land in posedge registers (`rd_hi_e`/`rd_lo`) a full c102 period
+       before the BSC capture.  Anchors exact (93/189/12090 VCLK).
+    4. **S5 blit gear** — `blit_fetch` grew a 13-bit **announce**
+       (`o_SB_COL[7:0]`+`o_SB_LEN[4:0]` on its ACTV edge) → the pump gains
+       a linear predictor mode, so blit trains gear too.  Integration find:
+       the refresh-pair dispatch used to run on leftover FILLER edges — the
+       gear now occupies those — so it was extracted to a shared
+       `m_dispatch` task also called on module-idle slot-A edges (else the
+       blit-window refresh supply silently starves).  Anchors 10 PASS,
+       847 ms `+refage` replay **metric-identical** (57.616 ms / 288,683
+       pairs — the phase move changed no scheduler decision; supply is
+       deficit-limited, not edge-limited).
+    5. **S6 delete the live arm** — with every CAS geared, the live-DQ
+       serve arm `{rd_hi, dq_n}` is DELETED; dq_n now fans ONLY to
+       `rd_hi_e`/`rd_lo`/`nor_data` (three pump-local half-period hops by
+       the IOE column) and reaches no D-bus / BSC / blitter path.  The two
+       H7b.8c dq_n→{cpu,dmac} `set_false_path` lines are RETIRED as
+       structurally moot.  Matrix 40/40 ALL PASS, download-refage PASS,
+       emu lint clean.
+  * **The RDW-arc SDC exception** (adopted from the HS3 reference OOC flow
+    — HS3_Core_Hardware.md §6 runs carry exactly this; their §11.7
+    "PORT_B_WRITE_ENABLE_REG launch class cannot exist in a faithful
+    build" is DEFINED by it): `set_false_path` on the M10K mixed-port
+    we/datain launch registers (cache tag/data/LRU + GPR LVT banks).
+    Sound — a write-port we/datain input reg has no real launch arc (write
+    completes next cycle, colliding read never consumed, write-through
+    bypass supplies it).  Without it the c102 headline was the tag-RAM
+    `~PORT_B_WRITE_ENABLE_REG` → hit-compare → GPR-address arc (−4.64).
+  * **Fit ledger (5CSEBA6U23I7, slow 1100 mV 85 °C)**:
+    - #16 sideband tree, seed 1: c102 **−4.696** / c153 −6.203 (dq_n wall
+      gone; new headline = the RDW launch class).
+    - #17 + RDW exception, seed sweep: c102 **−3.613** (seed 1) / −3.937
+      (2) / −3.974 (3).  **SHIPPED = seed 1, c102 −3.613, TNS −6432.851,
+      c153 −6.203, SDRAM_CLK −1.745** (reproduced bit-exact on the final
+      revert-synced tree).
+  * **SHELVED c153 lever** (proven, NOT shipped): a bit-exact
+    reassociation of the gov `c_sum` (balance the 4 positive products,
+    fold the subtracted source term last) closed the c153 worst cone
+    (−6.20 → −5.45, TNS −53k → −32k) and re-proved datum + all anchors —
+    but across seeds 1–5 the netlist perturbation re-rolled placement and
+    cost c102 0.5–1.5 ns (best combined c102 −4.20).  Bad trade for the
+    c102 mission; documented in the blit_gov C-stage comment for one-line
+    reapply when c153 becomes the focus.  (Textbook "perturbation-chaotic
+    plateau" — HS3 §6.)
+  * **FRONTIER FINDING (the next-steps lead)**: the c102 worst of BOTH the
+    shipped (−3.613) and the combined (−5.15) fits is the SAME family —
+    `blit_top|blit_fetch|{o_bus_drive,o_RAS_n} → CV1k_sdram_control|
+    o_S_A[7]`, **launch counter[0] (c153) / latch counter[1] (c102)**: a
+    c153→c102 crossing bounded by the blanket `set_max_delay 6.2`.  BUT
+    both endpoints are proven CKIO-granular (blit_fetch bus regs advance
+    only under `i_CKIO_PCEN`, blit_own = o_bus_drive; the pump captures
+    o_S_A only on `pcen_d` = the CKIO grid edge), so the REAL budget is one
+    CKIO period (~19.5 ns), not 6.2.  Arrival 19.7 ns ⇒ the path is ~0.2 ns
+    critical at its true granularity but shows −5.15 under the ~13 ns
+    over-constraint.  The sideband gear DEEPENED the o_S_A priority mux
+    (added the pr_fire arm + m_dispatch on slot-A), which is why this
+    surfaced now.  **Two paths forward, for the structural discussion**:
+    (a) give this proven-CKIO-granular crossing its real budget via a
+    path-specific multicycle/max_delay — needs the exact c153/c102 phase
+    proof to set the cycle count safely; (b) restructure the double-pump
+    scheduler so o_S_A is register-clean by construction (user-flagged:
+    "we might need to completely change the structure of the double-pump
+    SDRAM scheduler").  Deferred to the discussion by design.
+
+- 2026-07-17  [claude]  **H7b.8c "SH-3 ≥ −3.5 ns" campaign, round 1 (user
+  directive: maximize c102, every lever except the governor's clock; pump/
+  refresh/blitter may take latency — DDR3 headroom; HS3 = read-only IP; no
+  LogicLock in Lite): c102 −5.93 → −5.31 (TNS −14.8k → −9.0k), c153 TNS
+  −55.4k → −44.4k, via four bit-exact RTL deltas + ONE PROVEN FALSE PATH;
+  full matrix ALL PASS on the final tree.**
+  * **Settings axis (all A/B'd, all reverted except seed)**: packing pair
+    QII_AUTO_PACKED_REGISTERS "SPARSE AUTO" + ALM_REGISTER_PACKING_EFFORT
+    LOW (fit #9) = c102 −6.02 / c153 TNS −74k — neutral-to-negative,
+    reverted.  Fitter-only +1.5 ns intra-c102 uncertainty (fit #10, the
+    TimeQuestInfo(nameofexecutable) guard works) = c102 −5.93 → **−7.92**
+    — blanket uncertainty marks thousands of easy paths failing and the
+    TNS-driven fitter DILUTES effort (a healthy cache-tag→GPR cone
+    surfaced at −7.8); reverted, lesson in the SDC comment.  SEED 3 beats
+    seed 1 by 0.66 ns on c102 (kept).  PLACEMENT_EFFORT_MULTIPLIER 4.0 =
+    fit #15.
+  * **RTL deltas** (each proven: FASTBOOT datum 4b42d934… BYTE-IDENTICAL,
+    anchors PASS with all cost values EXACT — 93/189/12090 VCLK — and a
+    same-tree baseline A/B rebuild reproducing every anchor metric to the
+    tick; final 4-cell matrix ALL PASS incl. both 152 MiB streams,
+    own-boot pixel-exact, prefix + IRQ2-cadence equivalence):
+    1. **gov Y-stage pre-regs** (blit_gov): y_cy0 = max(gd_dy, gc_miny)
+       registered at w6, f_tspan off≠0/straddle terms pre-decoded into
+       ys_nz/ys_thr (w6) + yd_nz/yd_thr (w7) with the threshold form
+       part > 32−off (f_tspan_p, value-identical incl. the off=0 edge);
+       ZERO extra stages — the governor contract stays exact by
+       construction.  Cone gc_miny→y_ts_* −6.9 → −5.27.
+    2. **gov y_gmc parallel-sub** (blit_gov): chh's clamp arm pre-
+       subtracted at w7 (y_gmc = gc_maxy − y_cy0 + 1; subtraction
+       distributes over the select exactly, mod 2^16) → the w8 window
+       runs compare ∥ subtract instead of in series.  Residual → −4.34.
+    3. **blit_draw B2r raw-capture stage** (+1 pipe stage, user latitude;
+       write lands one fast cycle later, per-pixel values identical, the
+       governor timeline is a pure function of arrivals and its law is
+       untouched): read returns captured RAW at the same adv edge that
+       used to consume them comb; ALU1 (tint, the f_mulop double
+       multiply) now runs register→register.  The batch-RAM→Mult14→
+       Mult15 family (fit #8's c153 worst, −6.8, dozens of paths) is
+       GONE from the frontier; dsc_check clean over 172,652 src beats /
+       173,931 wr lanes; strict-mode beats cost +1 cycle/px (rare,
+       latency-bound path; matrix stat cells clean).
+    4. **blit_batch f_fitcap strength reduction**: k·nw ≤ cap ⟺
+       nw ≤ floor(cap/k) (exact for integers; caps are localparams) —
+       the shifted-adder compare tree collapses to eight parallel
+       constant-threshold compares + priority encode.  The dq_rp →
+       sv_after load cone (−6.78, exposed once the blender fell) is gone.
+  * **THE FALSE PATH (fit #14, +0.57 ns worst / −5.4k TNS on c102)**:
+    dq_n → {cpu_core, dmac} is functionally unreachable.  Proof chain,
+    all four links verified in source: (1) live dq_n reaches D only
+    under o_G_RDATA_OE = rdg_sh[2]|[3] (CV1k_sdram_control.sv:197,
+    ikacore_CV1k.sv:516 — the OE-gated mux is the ONLY D driver from the
+    pump grid arm) = only during SD-engine CS3 grid read beats; (2) the
+    BSC's only LIVE i_D_I → rsp_rdata forwards are the OWN_GEN ordinary-
+    completion arms (bsc.sv:420-424); (3) the shared external bus admits
+    ONE cycle at a time — ordinary accepts gate on !(ord_busy || … ||
+    eng_busy || eng_go) and the engine waits in E_IDLE for an open
+    ordinary cycle (bsc.sv:321-328); (4) SD-engine read consumers are
+    served from the REGISTERED rd_buf.  Two set_false_path lines in the
+    SDC (full proof in the comment block); the REAL dq_n endpoints stay
+    timed: pump rd_hi/rd_word/nor_data, BSC rd_buf, DQ→blit_fetch bound.
+  * **Fit ledger** (slow 1100 mV, flow corner): #8 baseline c153 −6.83
+    TNS −55.4k / c102 −5.93 TNS −14.8k · #9 packing −7.22/−6.02 · #10
+    bias −6.86/−7.92 · #11 half-RTL −6.83/−6.12 · #12 all-RTL −6.19
+    −41.1k/−6.54 · #13 seed 3 −6.50/−5.88 · #14 +false-path −6.53
+    −44.4k/−5.31 −9.0k · #15 PEM 4.0 = BIT-IDENTICAL to #14
+    (PLACEMENT_EFFORT_MULTIPLIER is a no-op under STANDARD FIT — the
+    multiplier only scales Auto Fit's budget) · seed sweep at the final
+    config: seed 1 c153 −6.80 / **c102 −4.96 TNS −9.7k** (WINNER, kept),
+    seed 5 −5.10.  Lottery spread ±0.35.  ALM ~27.4-27.8k (66 %),
+    SDRAM_CLK −1.74 stable, HDMI positive, zero 176279 throughout.
+    **Campaign total: c102 −5.93 → −4.96.**
+  * **c102 frontier after #14 (all REAL now)**: dq_n → BSC rd_buf, the
+    genuine CL2 half-period capture (rel 4.878, ~10 ns of route for
+    ~1.5 ns of logic — pin bank → BSC placement distance), −5.27; the
+    CPU cache-tag family sits just above −5.3.  Both are placement-
+    bound; PEM/seed sweeps are the remaining sanctioned levers.  An
+    honest read: −3.5 likely needs either placement luck or HS3-side
+    work (tag-cone retime / rd_buf region choices — user-owned IP,
+    SH3Test-provable).
+  * **c153 after the round**: worst −6.53 = gov q_mem WRITE-PORT sum
+    (the C-stage 36-bit 5-term saturating add into the cost-queue M10K
+    at w9+1 — governor-strict, needs an exactness-preserving
+    reassociation or DSP absorb, NOT a stage); then draw S-setup
+    (dimx_e→Mult18) and ALU2 select ~−5.2, gov residual −4.34.
+  * Tree uncommitted for review: sim/{blit_gov,blit_draw,blit_batch}.sv
+    + srcs/rtl sync + qsf (SEED 3, PEM 4.0, packing comments) + sdc
+    (bias post-mortem, false-path block).
+
+- 2026-07-17  [claude]  **Fitter settings axis VERIFIED CLOSED (user-ordered
+  pre-check before the gov Y-stage): OPTIMIZATION_MODE "AGGRESSIVE
+  PERFORMANCE" is a strict no-op for this project, and its one real delta
+  (MUX_RESTRUCTURE default Off) is a net loss — explicit ON restored.**
+  * **Fit #6** (ONLY the mode flipped HIGH PERFORMANCE EFFORT → AGGRESSIVE
+    PERFORMANCE): BIT-IDENTICAL to fit #5 — every TimeQuest slack line
+    diffs clean (c102 −5.930 / c153 −6.826 / SDRAM_CLK −1.743 / recovery
+    −3.667·−0.368 / ALM 27,388), same physical-synthesis retiming
+    estimates to the ps.  Reason (Quartus Info 16304 says it outright):
+    the qsf already explicitly pins EVERY constituent of the preset —
+    FITTER_EFFORT "STANDARD FIT", OPTIMIZATION_TECHNIQUE SPEED, all five
+    PHYSICAL_SYNTHESIS_* ON, the router knobs — and the mode's ONLY
+    differing default, Restructure Multiplexers = Off, was overridden by
+    the template's explicit `MUX_RESTRUCTURE ON`.  The fitter has been at
+    maximum settings-effort since fit #1.
+  * **Fit #7** (single-variable A/B: the MUX_RESTRUCTURE line removed so
+    the mode default Off governs): c102 −5.821 (worst +0.11; TNS −14.8k →
+    −11.0k), c102 recovery +0.450 MET, HDMI +0.412 MET, c153 recovery
+    −2.98 — but c153 setup −6.83 → **−8.89** (all six worst paths = ONE
+    blit_draw blender cone b3_sr[2][2] → b4_data, restructured worse) and
+    ALM 27,388 → 30,160 (72 %).  Mux restructuring is load-bearing for
+    the mux-heavy blender; 2.06 ns of c153 + 2,772 ALMs to buy 0.11 ns of
+    c102 worst is the wrong trade.  Notable: under this config c102's
+    frontier is ENTIRELY the dq_n beat-1 half-period fan-out
+    (relationship 4.878 ns: dq_n[11] → cache rsp_rdata −5.79, → dmac
+    wdata_q −5.62, → cache di_q / bsc rd_buf) — the queued step-3 item;
+    the full-period CPU cone dropped below it.  Zero 176279 in both fits
+    (pad-bank IOE packing robust to restructuring).
+  * **Disposition**: `MUX_RESTRUCTURE ON` restored explicitly (qsf
+    comment records the A/B); OPTIMIZATION_MODE stays "AGGRESSIVE
+    PERFORMANCE" per user instruction — with ON it is PROVEN
+    bit-identical to the old mode, so nothing is lost.  Fit #8 =
+    baseline regeneration on the restored config.  **Verdict for the
+    SH-3 clock: c102 ≈ −5.8/−5.9 is logic-depth-limited (CPU cache cone
+    + dq_n fan-out), not fitter-effort-limited — no settings combination
+    reaches the −2.9 field target; the remaining nanoseconds live in the
+    queued RTL items.**  No RTL touched; datum untouched (no sim change).
+
+- 2026-07-17  [claude]  **H7b.8b SDRAM pad register bank DONE (step 1 of
+  the user-ordered closure round) — c102 pump maintenance tail ELIMINATED
+  from the frontier (−7.23 → −3.26 pump-internal), SDRAM_CLK output
+  residual −3.63 → −1.74 with EVERY pad register IOE-packed, ALM 27,582 →
+  27,388; datum/anchors/both refage oracles/matrix ALL re-proven.**
+  Two moves, both minimal — the jtcps shape was already 90 % present:
+  * **Pre-registered maintenance selection** (`CV1k_sdram_control.sv`):
+    fit-#4 STA named the c102 worst as cool/m_bank → b_elig → argmax
+    trees → hi_pick → sel_bank → ptr mux → o_S_A[7] (17.4 ns data delay,
+    the last 4.7 ns = routing into the already-packed IOE register).  The
+    row/bank argmax + sweep-row lookup now land in p_hi_*/p_lo_*
+    registers refreshed EVERY edge from the same trees; the fire edge
+    applies the window/guard terms live (same fire instants) and
+    re-checks b_elig on the registered bank.  Staleness proof: a fire can
+    only slip one edge (cool-expiry / fresh-tick races) or land on a
+    different owed row, never outside the proven windows — deficits and
+    sweep pointers of a registered pick cannot decay in the one-edge gap
+    because m_credit requires m_open, m_open masks that bank in b_elig,
+    and its cooldown blocks the fire-edge re-check.
+  * **IOE packing unblocked** (qsf, ONE line): fit #4 had silently left
+    o_S_A[8]/[9]/[11]/[12] (+ the DQM SynDups) and ALL 16 o_S_DQ_OE
+    SynDups in the fabric — warning 176279 "cannot simultaneously use
+    clear and load signals" (sync-reset + NOP-default secondaries; IOE
+    FFs have none).  The sys template's ALLOW_SYNCH_CTRL_USAGE OFF
+    targets `*|SDRAM_*` = PIN names and never matched the pump registers.
+    `ALLOW_SYNCH_CTRL_USAGE OFF -to "*|CV1k_sdram_control:u_pump|o_S_*"`
+    folds the secondaries into the D LUTs; fit #5 packs every pad
+    register (zero 176279, 53 Packed-Register rows incl. all 22
+    previously-failing).  NO RTL pad restructure was needed — registered
+    outputs + the DQM alias + MAX_FANOUT duplication already WERE the
+    jtframe pattern.
+  * **Fit #5** (same flow/seed): c102 −7.35 → −5.93 TNS −14.8k, worst
+    now the SH-3 idex_is_data_agu → cache rsp_inst CPU cone (the
+    SH3Test-benchmark class, its own frontier item); pump residual −3.26
+    = lst.LS_IDLE → o_S_A slot-B priority mux (13.5 ns), ≈ the −2.9
+    field target — left per "don't over-engineer".  SDRAM_CLK setup
+    −3.69 → −1.74, hold +5.7 held; the residual is now UNIFORM IOE
+    clock-to-out (worst data delay 3.07 ns, all pads within ~0.15 ns) =
+    the documented OSD-phase-sweep-owns-it class; NO new SDC algebra.
+    c153 −6.83 (unchanged as expected; gov Y-stage is next).  Watch
+    items: HDMI OSD path −0.28 (framework shadowmask/osd placement
+    noise, was +0.35 — reseed candidate); recovery class shifted (c153
+    −3.63 now via hps_io cfg[1] → blit_gov, c102 −0.33 pk_be_acc → CPU
+    EXC_ACCESS_ADDR) — same family, designed disposition unchanged.
+  * **Accepts (all green)**: MISTER FASTBOOT 2M datum 4b42d934…
+    BYTE-IDENTICAL; 10 blit anchors + pcen23 PASS; 4 MiB ival=8 download
+    +refage PASS (worst 57.600 ms, 136,312 pairs = EXACTLY the
+    pre-change count); 847 ms ddpsdoj +refage replay PASS with worst age
+    57.616 ms / 288,683 pairs BIT-IDENTICAL to the standing §9 oracle —
+    the one-edge-stale pick never diverged over the whole replay; full
+    4-cell matrix ALL PASS 37 accepts (A 65.7 s / B 95.2 s / C 819.0 s /
+    D 808.9 s incl. both in-TB 152 MiB streams).
+  NEXT (user order unchanged): (2) gov Y-stage pre-regs (c153 −6.83
+  cone; +1–2 stages latitude granted, golden VALUES contractual), then
+  (3) dq_n beat-1 fan-out / D-bus consumer analysis, then the hardware
+  half (f2sdram burst gap, soft-reset parity checker + POR re-roll,
+  on-target capture + module phase sweep).
+
 - 2026-07-17  [claude]  **H7b.8 timing-closure RTL round DONE — the four
   deep cones rebuilt bit-exact (c153 −13.2 → −6.86, c102 −12.2 → −7.23),
   the SDRAM DQ read path redesigned to the jtframe recipe (capture
@@ -695,6 +1179,29 @@ Params updated: P-xx old→new (Part II row edited, Conf set to [M-nn])
     compute latency; the contract point stays "q_mem content when the
     governor pops it", re-proven per step by the FASTBOOT datum as
     always.
+  * **ORDERING (user, 2026-07-17): START the next round with the SDRAM
+    pad register bank**, replicating the field-proven jtcps CPS2
+    96 MHz shape (years of multi-board verification; our 102.4 is
+    close).  Distilled from jtframe_sdram64.v + sdram_clk96.sdc
+    (github.com/jotego/jtframe hdl/sdram + cores/cps2 macros
+    JTFRAME_SDRAM96/JTFRAME_180SHIFT):
+      - EVERY pad leaves from a register: `sdram_a` is an `output reg`
+        loaded from a pre-computed `next_a`; `cmd <= next_cmd` (the
+        {nCS,nRAS,nCAS,nWE} bundle registered as one 4-bit value);
+        `dq_pad` write data registered; MiSTer DQM = the registered
+        A[12:11] themselves (`assign {dqmh,dqml} = sdram_a[12:11]`,
+        with A[12:11] carrying the write mask on write cycles) — the
+        selection/mux logic all lands in next_* ONE EDGE AHEAD.
+      - SDC is minimal: SDRAM_CLK = `-phase 180` generated clock on
+        the port + multicycle-2 setup/hold on the dq_ff/DQ/DQM pairs.
+        NO set_input/output_delay algebra — the phase window (their
+        hardware-swept 3.5–8.25 ns) + the trim owns the margins.
+    For us: pump o_S_A/BA/cmd/DQM/DQ-out become a registered pad bank
+    fed by next_* selection one edge early — absorbing BOTH the c102
+    maintenance address-gen tail (~17 ns) AND the SDRAM_CLK −3.63
+    output residual in one simple move.  Do NOT over-engineer (user:
+    "the answer might be surprisingly close at hand").  Then gov
+    Y-stage pre-regs, then dq_n beat-1 consumer analysis.
 - 2026-07-17  [claude]  **H7b.8 sim-side + fit skeleton DONE — srcs/
   Quartus project live, static exact PLL, SDC, first fitted numbers,
   Ibara MRA, and the download idle-grid refresh window (carry-over

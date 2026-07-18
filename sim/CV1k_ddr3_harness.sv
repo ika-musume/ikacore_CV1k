@@ -128,18 +128,50 @@ module CV1k_ddr3_harness #(
     reg [7:0]  oq_left /*verilator public_flat_rd*/;
     reg        oq_head_v /*verilator public_flat_rd*/;
 
-    wire [4:0] oq_occ  = oq_wp - oq_rp;          // entries incl. the head
-    wire       oq_room = (oq_occ < 5'd30);
+    // H7b.8e: the room check is a REGISTERED flag off the pre-edge pointers
+    // (threshold 28 vs the old live-compare 30: one gap-window push keeps
+    // the checked-push bound at occ <= 29, +2 room-exempt video entries =
+    // 31 < 32 -- the identical guarantee, with the pointer subtract out of
+    // the issue/WE cone).  Real occupancy never exceeds ~20 (16 batch + 2
+    // video + NAND/YMZ splits), so the flag never actually deasserts.
+    reg        oq_room_q;
     wire [2:0] ret_own = oq[oq_rp][10:8];
 
-    assign o_lf_dvld  = DDRAM_DOUT_READY && oq_head_v && (ret_own == OWN_VID);
-    assign o_lf_data  = DDRAM_DOUT;
-    assign o_prd_dvld = DDRAM_DOUT_READY && oq_head_v && (ret_own == OWN_BAT);
-    assign o_prd_data = DDRAM_DOUT;
+    // H7b.8e: the f2sdram return pair is RELAYED through one register stage
+    // (data + valid + the head TAG captured together, so a burst-boundary
+    // head advance cannot re-route the delayed word) before the video /
+    // batch / YMZ clients consume it -- the framework's DOUT/DOUT_READY
+    // launch (HPS-corner placement + clock-network skew) stops reaching
+    // their capture registers directly.  Those clients' fills shift +1
+    // i_CLK with train-level slack; the oq bookkeeping stays on the RAW
+    // pair.  The NAND client also stays RAW: its fill completion drives
+    // R/B#, which the CPU polls on the CKIO grid -- a +1 there would
+    // perturb the frozen FASTBOOT datum.
+    reg         rq_vld;
+    reg  [63:0] rq_data;
+    reg  [2:0]  rq_own;
+
+    always_ff @(posedge i_CLK or negedge i_RST_n) begin
+        if (!i_RST_n) begin
+            rq_vld  <= 1'b0;
+            rq_data <= 64'd0;
+            rq_own  <= 3'd0;
+        end
+        else begin
+            rq_vld  <= DDRAM_DOUT_READY && oq_head_v;
+            rq_data <= DDRAM_DOUT;
+            rq_own  <= ret_own;
+        end
+    end
+
+    assign o_lf_dvld  = rq_vld && (rq_own == OWN_VID);
+    assign o_lf_data  = rq_data;
+    assign o_prd_dvld = rq_vld && (rq_own == OWN_BAT);
+    assign o_prd_data = rq_data;
     assign o_nd_dvld  = DDRAM_DOUT_READY && oq_head_v && (ret_own == OWN_ND);
     assign o_nd_data  = DDRAM_DOUT;
-    assign o_ym_dvld  = DDRAM_DOUT_READY && oq_head_v && (ret_own == OWN_YMZ);
-    assign o_ym_data  = DDRAM_DOUT;
+    assign o_ym_dvld  = rq_vld && (rq_own == OWN_YMZ);
+    assign o_ym_data  = rq_data;
 
     // ---------------------------------------------------------------------
     // pending video request (latched; served between trains)
@@ -200,6 +232,7 @@ module CV1k_ddr3_harness #(
         if (!i_RST_n) begin
             own <= OWN_NONE;
             oq_wp <= '0; oq_rp <= '0;
+            oq_room_q <= 1'b0;
             oq_left <= '0; oq_head_v <= 1'b0;
             vid_pend <= 1'b0; vid_y <= '0; vid_x0 <= '0;
             bp_v <= 1'b0; bp_addr <= '0; bp_left <= '0;
@@ -211,6 +244,8 @@ module CV1k_ddr3_harness #(
             DDRAM_DIN <= '0; DDRAM_BE <= '0;
         end
         else begin
+            oq_room_q <= ((oq_wp - oq_rp) < 5'd28);
+
             // latch the video request (one outstanding; a second request
             // before service means a dropped line - the prefetch budget is
             // sized so this cannot happen, assert it)
@@ -306,7 +341,7 @@ module CV1k_ddr3_harness #(
                     bp_addr <= VRAM_BASE_W + {6'd0, i_prd_addr};
                     bp_left <= i_prd_len;
                 end
-                if (bp_v && !DDRAM_RD && !DDRAM_WE && oq_room) begin
+                if (bp_v && !DDRAM_RD && !DDRAM_WE && oq_room_q) begin
                     DDRAM_RD       <= 1'b1;
                     DDRAM_ADDR     <= bp_addr;
                     DDRAM_BURSTCNT <= bp_burst;
@@ -336,7 +371,7 @@ module CV1k_ddr3_harness #(
                     np_addr <= i_nd_addr;
                     np_left <= i_nd_len;
                 end
-                if (np_v && !DDRAM_RD && oq_room) begin
+                if (np_v && !DDRAM_RD && oq_room_q) begin
                     DDRAM_RD       <= 1'b1;
                     DDRAM_ADDR     <= np_addr;
                     DDRAM_BURSTCNT <= np_burst;
@@ -356,7 +391,7 @@ module CV1k_ddr3_harness #(
                     yp_addr <= i_ym_addr;
                     yp_left <= i_ym_len;
                 end
-                if (yp_v && !DDRAM_RD && oq_room) begin
+                if (yp_v && !DDRAM_RD && oq_room_q) begin
                     DDRAM_RD       <= 1'b1;
                     DDRAM_ADDR     <= yp_addr;
                     DDRAM_BURSTCNT <= yp_burst;

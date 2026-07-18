@@ -129,8 +129,13 @@ module CV1k_nand #(
     // between accesses DQ floats and never fights the CPU on the shared bus
     // (CLE=A0/ALE=A1 mean the chip stays selected across non-NAND cycles).
     //------------------------------------------------------------------
-    wire [63:0] cur_word  = page_buf[col_ctr[11:3]];
-    wire [7:0]  page_byte = cur_word[{col_ctr[2:0], 3'b000} +: 8];
+    // H7b.8e: the page-register word is READ THROUGH A REGISTER refreshed
+    // every cycle -- col_ctr only changes on RE#-fall / E0h-command edges,
+    // which are CKIO-grid strobes >= 3 i_CLK apart, so cur_word_q always
+    // equals the live read at every consuming re_fall (asserted below);
+    // the 33x64 array + byte mux leave the single-cycle dout cone.
+    reg  [63:0] cur_word_q;
+    wire [7:0]  page_byte = cur_word_q[{col_ctr[2:0], 3'b000} +: 8];
     wire [7:0]  status_byte = busy ? 8'h00 : {i_Wp_n, 2'b11, 5'b0_0000};
     wire        out_mode  = (mode == M_STREAM || mode == M_ID || mode == M_STATUS);
 
@@ -191,7 +196,12 @@ module CV1k_nand #(
             end
 
             // ---- clock a byte onto DQ on RE# fall; short hold past RE# rise ----
+            cur_word_q <= page_buf[col_ctr[11:3]];
             if (re_fall && !i_Ce_n && out_mode) begin
+`ifndef SYNTHESIS
+                if (mode == M_STREAM && cur_word_q != page_buf[col_ctr[11:3]])
+                    $fatal(2, "[CV1k_nand] stale cur_word_q at RE# fall t=%0t", $time);
+`endif
                 case (mode)
                     M_STREAM: begin dout_reg <= page_byte; col_ctr <= col_ctr + 12'd1; end
                     M_ID:     begin dout_reg <= id_byte(id_ptr);

@@ -307,6 +307,9 @@ wire        RD_WR, RAS3L_n, RAS3U_n, CASL_n, CASU_n, RD_n;
 wire [3:0]  WE_n;
 wire        CKE, CKIO, BACK_n, BUS_OE;
 wire        CKIO_PCEN;                       // i_CLK cycle in which CKIO rises
+wire        sb_req, sb_wr, sb_burst;         // SH-3 early-transaction sideband
+wire [28:0] sb_addr;                         //   (docs/sh3_sideband.md sect.3/11)
+wire [1:0]  sb_size;
 
 // U13 CPLD + U2 NAND nets
 wire [3:0]  cpld_D;                          // CPLD drive value for D[3:0]
@@ -324,6 +327,8 @@ wire        pth_irq1_n;                      // blitter-done IRQ1 on PTH[1] (gov
 // blitter bus-mastering nets (H2: BREQ/BACK tenure, fig 10.41)
 wire        blit_breq_n, blit_own;
 wire        blit_ref_win;                    // blit_fetch refresh-window sideband
+wire [7:0]  bf_sb_col;                       // blit_fetch early-gear announce
+wire [4:0]  bf_sb_len;                       //   (train col + CAS beats @ACTV)
 wire [25:0] bf_A;
 wire        bf_CS_n, bf_RAS_n, bf_CAS_n, bf_WE;
 wire [3:0]  bf_DQM;
@@ -398,8 +403,14 @@ HS3 #(
     .i_BREQ_n(blit_breq_n), .o_BACK_n(BACK_n), .o_BUS_OE(BUS_OE),
 
     // generic memory port - observation only here (physical pins answer)
-    .o_MEM_REQ(), .o_MEM_WRITE(), .o_MEM_BURST(), .o_MEM_SIZE(),
+    .o_MEM_REQ(), .o_MEM_WR(), .o_MEM_BURST(), .o_MEM_SIZE(),
     .o_MEM_ADDR(), .o_MEM_CS_n(), .o_MEM_WSTRB(),
+
+    // early-transaction sideband (docs/sh3_sideband.md sect.3 + sect.11):
+    // registered 1-cycle pulse one c102 after the internal accept edge,
+    // fields held between pulses.  Consumed by CV1k_sdram_control.
+    .o_MON_REQ(sb_req), .o_MON_WR(sb_wr), .o_MON_ADDR(sb_addr),
+    .o_MON_SIZE(sb_size), .o_MON_BURST(sb_burst),
     // NOTE: i_MEM_READY is ORed into the BSC generic-completion term
     // (gen_ext_done = i_MEM_RSP_VALID | i_MEM_READY, bsc.sv l.334). It must
     // be 0 so generic (area-0 NOR) reads complete on the physical wait-state
@@ -487,7 +498,9 @@ assign o_SDRAM_CKE    = 1'b0;
 assign o_SDRAM_DQ_O   = 16'h0000;
 assign o_SDRAM_DQ_OE  = 1'b0;
 wire _unused_vendor = &{1'b0, i_IOCTL_DOWNLOAD, i_IOCTL_WR, i_IOCTL_ADDR,
-                        i_IOCTL_DATA, i_IOCTL_INDEX, i_SDRAM_DQ_I, 1'b0};
+                        i_IOCTL_DATA, i_IOCTL_INDEX, i_SDRAM_DQ_I,
+                        sb_req, sb_wr, sb_addr, sb_size, sb_burst,
+                        bf_sb_col, bf_sb_len, 1'b0};
 
 `else  // MISTER_SDRAM
 //==================================================================
@@ -552,6 +565,17 @@ CV1k_sdram_control u_pump (
     .i_BACK_n     (BACK_n),
     .i_BLIT_WIN   (blit_ref_win),
     .i_ORD_CS_n   ((CS4_n & CS5_n & CS6_n) | ~BUS_OE),
+    // SH-3 early-transaction sideband (same c102 domain, no CDC); the CPU
+    // manual reset flushes queued-undispatched strobes (sect.11.3.6 / A4)
+    .i_CPU_RST_n  (i_RST_n),
+    .i_SB_REQ     (sb_req),
+    .i_SB_WR      (sb_wr),
+    .i_SB_ADDR    (sb_addr),
+    .i_SB_SIZE    (sb_size),
+    .i_SB_BURST   (sb_burst),
+    // blit_fetch early-gear announce (rides its ACTV pins)
+    .i_BF_SB_COL  (bf_sb_col),
+    .i_BF_SB_LEN  (bf_sb_len),
     // HPS ioctl: since H7b.4 the pump sees only the u4 sub-stream of the
     // MRA layout, rebased to 0 by the CV1k_ioctl decoder below (the pump's
     // own <4 MiB window check + {odd,even} halfword assembly unchanged)
@@ -801,6 +825,8 @@ blit_top #(
     .o_BF_DQM    (bf_DQM),
     .i_D_BUS     (D),                  // resolved shared bus (fetch reads)
     .o_REF_WIN   (blit_ref_win),       // CV1k_sdram_control hidden-refresh window
+    .o_SB_COL    (bf_sb_col),          // early-gear announce -> pump predictor
+    .o_SB_LEN    (bf_sb_len),
 
     // interrupts
     .i_IRQ1_EN   (irq1_en),

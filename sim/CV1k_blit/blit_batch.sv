@@ -121,22 +121,24 @@ module blit_batch #(
 
     // ---------------------------------------------------------------------
     // descriptor FIFO (depth 4; the engine holds at most ~2 ops in flight).
-    // H7b.8 Fmax respin, round 2.  The push-time decode stores only the
-    // ADD-class geometry (span word counts, bpr, the sy0-pre-added src_lo0)
-    // -- fit #3 showed a full push-time decode (incl. the fit-cap compare
-    // tree) forms a one-cycle cone from DRAW's S-stage registers across the
-    // hierarchy into the entry registers (-7.8).  The fit-cap products
-    // (L / strict fold / first blen-after split) are computed from the head
-    // in TWO forms:
-    //   * lv_* comb  -- live, used ONLY for the c_*/sv_* register loads at
-    //     ld_fire (a plain register-datain cone, no roll arithmetic);
-    //   * hd_* regs  -- refreshed from lv_* every cycle, i.e. valid for any
-    //     head that has existed for >= 1 cycle.  The serve/roll path uses
-    //     hd_* exclusively: a read request can only coincide with ld_fire
-    //     when the load was HELD BACK (parked read / active train), and a
-    //     held load's head is aged by construction -- asserted below.
-    // Values are bit-identical in every reachable case (both forms are the
-    // same pure function of the stored entry).
+    // H7b.8 Fmax respin, round 2 + H7b.8e round 3.  The dq ENTRY stores
+    // only the ADD-class geometry (span word counts, bpr, the sy0-pre-added
+    // src_lo0) -- the H7b.8 fit #3 lesson stands: folding the fit-cap tree
+    // into the ENTRY registers formed a one-cycle cone from DRAW's S-stage
+    // registers across the hierarchy into the wide datain fan (-7.8).
+    // H7b.8e moves the fit-cap chain to push time DIFFERENTLY: the results
+    // land in 4-bit PARALLEL side registers per slot (pf_L / pf_st below),
+    // so the dq datain fan is untouched and the head decode lv_L/lv_strict
+    // becomes a slot-register read.  lv_blen0/lv_after0 keep the live
+    // compare/subtract tail off pf_L + the dh_rows slice.  The aged hd_*
+    // copies and the compose invariant are unchanged:
+    //   * lv_* -- used ONLY for the c_*/sv_* register loads at ld_fire;
+    //   * hd_* regs -- refreshed every cycle, valid for any head that has
+    //     existed for >= 1 cycle; the serve/roll path uses hd_* exclusively
+    //     (a request can only coincide with ld_fire when the load was HELD
+    //     BACK, and a held load's head is aged -- asserted below).
+    // Values are bit-identical in every reachable case (all forms are the
+    // same pure function of the descriptor fields).
     // ramstyle "logic": 4 entries read combinationally at the head -- as
     // registers the head mux is ~1 ns; inferred M10K costs ~3 ns + bypass.
     // ---------------------------------------------------------------------
@@ -150,7 +152,8 @@ module blit_batch #(
     wire            dh_wait   = dhead[103];
     wire            dh_flipy  = dhead[102];
     wire            dh_blend  = dhead[101];
-    wire            dh_strictr= dhead[100];       // raw dsc strict (pre-fold)
+    wire            dh_strictr= dhead[100];       // raw dsc strict (pre-fold;
+                                                   // folded at push since 8e)
     wire            dh_px1    = dhead[99];
     wire [12:0]     dh_rows   = dhead[98:86];
     wire [10:0]     ld_snw    = dhead[85:75];
@@ -172,31 +175,51 @@ module blit_batch #(
     wire [10:0] pd_snw = 11'(({12'd0, pd_sal} + {1'b0, i_dsc_npx} + 15'd6) >> 2);
     wire [10:0] pd_dnw = 11'(({12'd0, pd_dal} + {1'b0, i_dsc_npx} + 15'd3) >> 2);
 
-    // largest k <= 8 with k*nw <= cap (0 = one row does not fit -> strict)
+    // largest k <= 8 with k*nw <= cap (0 = one row does not fit -> strict).
+    // H7b.8c strength reduction: k*nw <= cap  <=>  nw <= floor(cap/k) for
+    // positive integers (k*floor(cap/k) <= cap covers the always-true side),
+    // and cap is a localparam constant -- so the old shifted-adder compare
+    // tree collapses to eight PARALLEL constant-threshold compares plus a
+    // priority encode.  Bit-exact for every nw/cap.
     function automatic logic [3:0] f_fitcap(input logic [10:0] nw,
                                             input int unsigned cap);
-        logic [13:0] c;
-        c = 14'(cap);
-        if      ({nw, 3'b000}                                  <= c) f_fitcap = 4'd8;
-        else if ({1'b0, nw, 2'b00} + {2'b00, nw, 1'b0} + {3'b000, nw} <= c) f_fitcap = 4'd7;
-        else if ({1'b0, nw, 2'b00} + {2'b00, nw, 1'b0}         <= c) f_fitcap = 4'd6;
-        else if ({1'b0, nw, 2'b00} + {3'b000, nw}              <= c) f_fitcap = 4'd5;
-        else if ({1'b0, nw, 2'b00}                             <= c) f_fitcap = 4'd4;
-        else if ({2'b00, nw, 1'b0} + {3'b000, nw}              <= c) f_fitcap = 4'd3;
-        else if ({2'b00, nw, 1'b0}                             <= c) f_fitcap = 4'd2;
-        else if ({3'b000, nw}                                  <= c) f_fitcap = 4'd1;
-        else                                                         f_fitcap = 4'd0;
+        logic [13:0] nwx;
+        nwx = {3'b000, nw};
+        if      (nwx <= 14'(cap / 8)) f_fitcap = 4'd8;
+        else if (nwx <= 14'(cap / 7)) f_fitcap = 4'd7;
+        else if (nwx <= 14'(cap / 6)) f_fitcap = 4'd6;
+        else if (nwx <= 14'(cap / 5)) f_fitcap = 4'd5;
+        else if (nwx <= 14'(cap / 4)) f_fitcap = 4'd4;
+        else if (nwx <= 14'(cap / 3)) f_fitcap = 4'd3;
+        else if (nwx <= 14'(cap / 2)) f_fitcap = 4'd2;
+        else if (nwx <= 14'(cap / 1)) f_fitcap = 4'd1;
+        else                          f_fitcap = 4'd0;
     endfunction
 
     wire [13:0] pd_bpr  = i_dsc_px1 ? i_dsc_npx : 14'(({1'b0, i_dsc_npx} + 15'd3) >> 2);
     wire [24:0] pd_srclo0 = ({i_dsc_sy0, 13'd0} + pd_srcoff) & 25'h1FFFFFF;
 
     // head fit-cap products, live form (see the FIFO header note)
-    wire [3:0] lv_fit_s = f_fitcap(ld_snw, SRC_CAP_W);
-    wire [3:0] lv_fit_d = dh_blend ? f_fitcap(ld_dnw, DST_CAP_W) : 4'(K_ROWS);
-    wire [3:0] lv_fit   = (lv_fit_s < lv_fit_d) ? lv_fit_s : lv_fit_d;
-    wire [3:0] lv_L     = (lv_fit > 4'(K_ROWS)) ? 4'(K_ROWS) : lv_fit;
-    wire       lv_strict= dh_strictr || (lv_L == 4'd0);
+    // H7b.8e: the two f_fitcap encodes are computed ONCE at push time (off
+    // the registered i_dsc_* descriptor taps, in the push window) and
+    // stored per slot -- the live head decode keeps only the min/cap/
+    // subtract tail, so the dq read no longer feeds the compare trees.
+    // Values identical: pd_snw/pd_dnw/i_dsc_blend are exactly what the
+    // stored ld_snw/ld_dnw/dh_blend would decode to.  (The H7b.8 "full
+    // decode at push" regression moved the WHOLE chain into the dq datain
+    // fan; this is the front half only, in parallel registers.)
+    reg  [3:0] pf_L  [0:3];
+    reg        pf_st [0:3];
+    wire [3:0] lv_L     = pf_L[dq_rp];
+    wire       lv_strict= pf_st[dq_rp];
+    // push-side forms of the min/cap/strict tail (same values the stored-
+    // field decode would produce; H7b.8e round 3)
+    wire [3:0] pd_fit_s = f_fitcap(pd_snw, SRC_CAP_W);
+    wire [3:0] pd_fit_d = i_dsc_blend ? f_fitcap(pd_dnw, DST_CAP_W)
+                                      : 4'(K_ROWS);
+    wire [3:0] pd_fit   = (pd_fit_s < pd_fit_d) ? pd_fit_s : pd_fit_d;
+    wire [3:0] pd_L     = (pd_fit > 4'(K_ROWS)) ? 4'(K_ROWS) : pd_fit;
+    wire       pd_strict= i_dsc_strict || (pd_L == 4'd0);
     wire [3:0]  lv_blen0  = ({9'd0, lv_L} < dh_rows) ? lv_L : dh_rows[3:0];
     wire [12:0] lv_after0 = ({9'd0, lv_L} < dh_rows)
                             ? (dh_rows - {9'd0, lv_L}) : 13'd0;
@@ -253,6 +276,7 @@ module blit_batch #(
     // well inside the engine's op-to-op request gap (the one residual
     // coincidence, load edge == new op's first request, is composed by the
     // effective context below).
+    wire unused_dh = dh_strictr;
     wire ld_fire = (!cur_v || sv_done) && (dq_cnt != 3'd0)
                    && !pend_v && !rd_active;
 
@@ -334,6 +358,8 @@ module blit_batch #(
                               i_dsc_strict, i_dsc_px1, i_dsc_rows,
                               pd_snw, pd_dnw, pd_bpr,
                               pd_srclo0, i_dsc_dst0[24:0]};
+                pf_L [dq_wp] <= pd_L;
+                pf_st[dq_wp] <= pd_strict;
                 dq_wp  <= dq_wp + 2'd1;
                 dq_cnt <= dq_cnt + 3'd1;
 `ifndef SYNTHESIS
@@ -516,7 +542,9 @@ module blit_batch #(
     wire [92:0] wf_head;
     wire [10:0] wf_cnt;
 
-    bb_wfifo #(.LOG2(WF_LOG2), .W(93)) u_wfifo (
+    wire wf_af;
+    bb_wfifo #(.LOG2(WF_LOG2), .W(93),
+               .AF_TH((1 << WF_LOG2) - 8)) u_wfifo (
         .i_CLK   (i_CLK),
         .i_RST_n (i_RST_n),
         .i_push  (wf_push),
@@ -524,9 +552,12 @@ module blit_batch #(
         .i_pop   (wf_pop),
         .o_vld   (wf_vld),
         .o_head  (wf_head),
-        .o_cnt   (wf_cnt)
+        .o_cnt   (wf_cnt),
+        .o_af    (wf_af)
     );
-    assign o_wr_rdy = (wf_cnt < 11'((1 << WF_LOG2) - 8));
+    // H7b.8e: registered almost-full, timing-identical to the old comb
+    // compare (exact next-value inside bb_wfifo)
+    assign o_wr_rdy = !wf_af;
 
     wire [24:0] wh_a  = wf_head[92:68];
     wire [3:0]  wh_m  = wf_head[67:64];
@@ -880,7 +911,8 @@ endmodule
 //============================================================================
 module bb_wfifo #(
     parameter int unsigned LOG2 = 10,
-    parameter int unsigned W    = 93
+    parameter int unsigned W    = 93,
+    parameter int unsigned AF_TH = 0    // o_af = (count >= AF_TH); 0 = unused
 )(
     input  wire          i_CLK,
     input  wire          i_RST_n,
@@ -889,7 +921,8 @@ module bb_wfifo #(
     input  wire          i_pop,
     output reg           o_vld,
     output reg  [W-1:0]  o_head,
-    output wire [10:0]   o_cnt
+    output wire [10:0]   o_cnt,
+    output reg           o_af           // registered almost-full (H7b.8e)
 );
     localparam int unsigned DEPTH = 1 << LOG2;
 
@@ -901,10 +934,20 @@ module bb_wfifo #(
 
     wire refill = (!o_vld || i_pop) && (cnt != '0);
 
+    // H7b.8e: exact next-value almost-full -- o_af during any cycle equals
+    // (o_cnt >= AF_TH) of that same cycle (total count is conserved across
+    // the mem/head handoff: refill moves an entry, push/pop add/remove one),
+    // so consumers see IDENTICAL timing to the old comb compare while the
+    // count adder + threshold compare come off a register.
+    wire [LOG2:0] tot_nx = (cnt + {{LOG2{1'b0}}, o_vld})
+                         + ((LOG2+1)'(i_push ? 1 : 0))
+                         - ((LOG2+1)'((i_pop && o_vld) ? 1 : 0));
+
     always_ff @(posedge i_CLK or negedge i_RST_n) begin
         if (!i_RST_n) begin
             wp <= '0; rp <= '0; cnt <= '0;
             o_vld <= 1'b0;
+            o_af  <= 1'b0;
         end
         else begin
             if (i_push) begin
@@ -922,6 +965,7 @@ module bb_wfifo #(
             o_vld <= refill || (o_vld && !i_pop);
             cnt <= cnt + ((LOG2+1)'(i_push ? 1 : 0))
                        - ((LOG2+1)'(refill ? 1 : 0));
+            o_af <= (AF_TH != 0) && (tot_nx >= (LOG2+1)'(AF_TH));
         end
     end
 

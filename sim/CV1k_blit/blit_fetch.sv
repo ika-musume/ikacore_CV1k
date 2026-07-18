@@ -98,7 +98,16 @@ module blit_fetch #(
     // unit guarantees it will issue no PALL and no ACT for >= 5 more CKIO
     // cycles (only CAS reads to its already-open bank).  Derived from the
     // train position, so the guarantee holds for short remainder trains too.
-    output wire        o_REF_WIN
+    output wire        o_REF_WIN,
+
+    // early-transaction announce (CV1k_sdram_control early gear, docs/
+    // sh3_sideband.md S5): train start column + CAS-beat count, driven at
+    // the same CKIO enable edge as the S_ACTV pins and stable through the
+    // train.  The pump's predictor needs the column one fast edge before
+    // each pin CAS decode - the ACTV instant is 2 CKIO ahead of the first
+    // CAS (gap_cnt tRCD below), which more than covers it.
+    output reg  [7:0]  o_SB_COL,        // cur_addr[9:2] at ACTV
+    output reg  [4:0]  o_SB_LEN         // run_left at ACTV (1..16 CAS beats)
 );
 
     //------------------------------------------------------------------
@@ -128,7 +137,12 @@ module blit_fetch #(
     wire        end_seen;                // END parsed: no more chunks
     wire        walk_fault;
     wire [15:0] fifo_level;
-    wire        fifo_room = (FIFO_WORDS[15:0] - fifo_level) > 16'd40; // >=1 chunk + skid
+    // H7b.8e: registered almost-full off the exact next-value of f_lvl --
+    // fifo_room sees IDENTICAL per-cycle values to the old live compare
+    // (same bb_wfifo o_af pattern), with the 16-bit subtract/compare out
+    // of the BREQ decision cone
+    reg         fifo_room_q;
+    wire        fifo_room = fifo_room_q;
     wire        upl_fill;                // walker mid-UPLOAD: next chunk at upload cadence
 
     // 256-column row: longwords to the 1 KB boundary from cur_addr
@@ -169,6 +183,8 @@ module blit_fetch #(
             rd_pipe     <= 3'b000;
             pend_exec   <= 1'b0;
             pend_list   <= 29'd0;
+            o_SB_COL    <= 8'd0;
+            o_SB_LEN    <= 5'd0;
         end
         else begin
             o_done <= 1'b0;
@@ -262,6 +278,8 @@ module blit_fetch #(
                         o_A     <= 26'd0;
                         o_A[14:13] <= cur_addr[22:21];       // BA
                         o_A[12:2]  <= cur_addr[20:10];       // row
+                        o_SB_COL   <= cur_addr[9:2];         // early-gear announce
+                        o_SB_LEN   <= run_left;              //   (rides the ACTV)
                         gap_cnt <= 2'd1;                     // tRCD = 2
                         st      <= S_RCD;
                     end
@@ -335,13 +353,23 @@ module blit_fetch #(
     reg  [2:0]  skid_wp, skid_rp;
     reg  [3:0]  skid_lvl;
     reg         skid_half;               // 0 = next word is [31:16] (BE first)
+    reg  [31:0] skid_hq;                 // H7b.8e: registered head longword
 
     wire        skid_pop_word;           // walker consumes one 16-bit word
 
+    // H7b.8e: skid_lw comes off the head REGISTER, maintained exactly:
+    // write-through on a push that becomes the head (empty queue, or the
+    // head departs this edge with no backlog), array refill on an advance
+    // with backlog.  The refill source skid[rp+1] always pre-exists (a
+    // same-edge push appends at rp+lvl >= rp+2 when lvl >= 2), so every
+    // window sees the same bits the old async read produced -- asserted
+    // below.  This takes the 8x32 array read + its bypass network out of
+    // the walker/snoop launch cone (it terminated in w_need/gp_need).
     always_ff @(posedge i_CLK or negedge i_RST_n) begin
         if (!i_RST_n) begin
             skid_wp  <= 3'd0;
             skid_lvl <= 4'd0;
+            skid_hq  <= 32'd0;
         end
         else begin
             if (i_CKIO_PCEN && cap_now) begin
@@ -355,10 +383,25 @@ module blit_fetch #(
             end
             else if (skid_pop_word && skid_half)
                 skid_lvl <= skid_lvl - 4'd1;
+
+            if (skid_pop_word && skid_half) begin
+                if (skid_lvl >= 4'd2)
+                    skid_hq <= skid[skid_rp + 3'd1];
+                else if (i_CKIO_PCEN && cap_now)
+                    skid_hq <= i_D;
+            end
+            else if ((i_CKIO_PCEN && cap_now) && skid_lvl == 4'd0)
+                skid_hq <= i_D;
+
+`ifndef SYNTHESIS
+            if (skid_pop_word && skid_hq !== skid[skid_rp])
+                $fatal(1, "[blit_fetch] skid_hq stale (rp=%0d lvl=%0d)",
+                       skid_rp, skid_lvl);
+`endif
         end
     end
 
-    wire [31:0] skid_lw    = skid[skid_rp];
+    wire [31:0] skid_lw    = skid_hq;
     wire        skid_avail = (skid_lvl != 4'd0);
     wire [15:0] skid_word  = skid_half ? skid_lw[15:0] : skid_lw[31:16];
 
@@ -372,7 +415,11 @@ module blit_fetch #(
                                          // (max payload 8192*4096 = 2^25)
     reg  [3:0]  w_idx;                   // header word index (UPLOAD dims)
     reg         w_upl;                   // current op is an UPLOAD
-    reg  [12:0] w_dimx;
+    reg  [13:0] w_dimx1;                 // dimx+1, pre-registered at word 6
+                                         // (H7b.8e: same recipe as the
+                                         // governor's gu_dimx1 -- keeps the
+                                         // payload sizing a single narrow
+                                         // 14x13 multiply off a register)
 
     assign end_seen   = (wst == W_END);
     assign walk_fault = (wst == W_FAULT);
@@ -389,6 +436,10 @@ module blit_fetch #(
     assign skid_pop_word = skid_avail && fifo_free && (wst != W_FAULT);
     wire fifo_push      = skid_pop_word && (wst != W_END);
 
+    // UPLOAD payload sizing off the live dimy word (14x13, <= 2^25)
+    wire [12:0] w_h1 = {1'b0, skid_word[11:0]} + 13'd1;
+    wire [26:0] w_px = w_dimx1 * w_h1;
+
     // governor arrival snoop (includes the END word - pushed while wst is
     // still W_HDR - and upload payload; nothing after END/fault)
     assign o_snoop_push = fifo_push;
@@ -400,12 +451,13 @@ module blit_fetch #(
             w_need    <= 26'd0;
             w_idx     <= 4'd0;
             w_upl     <= 1'b0;
-            w_dimx    <= 13'd0;
+            w_dimx1   <= 14'd0;
             skid_half <= 1'b0;
             skid_rp   <= 3'd0;
             f_wp      <= 16'd0;
             f_rp      <= 16'd0;
             f_lvl     <= 16'd0;
+            fifo_room_q <= 1'b1;
         end
         else begin
             // reset parser at fetch start (new list)
@@ -439,10 +491,9 @@ module blit_fetch #(
                         w_idx  <= (w_idx == 4'hF) ? 4'hF : w_idx + 4'd1;
                         w_need <= w_need - 26'd1;
                         if (w_upl && w_idx == 4'd6)       // header word 6: dimx
-                            w_dimx <= skid_word[12:0];
+                            w_dimx1 <= {1'b0, skid_word[12:0]} + 14'd1;
                         if (w_upl && w_idx == 4'd7)       // word 7: dimy -> payload
-                            w_need <= (26'(w_dimx) + 26'd1) *
-                                      (26'({14'd0, skid_word[11:0]}) + 26'd1);
+                            w_need <= w_px[25:0];         // (dimx+1)*(dimy+1)
                         else if (w_need == 26'd1)
                             wst <= W_HDR;
                     end
@@ -462,6 +513,10 @@ module blit_fetch #(
                                                            : f_rp + 16'd1;
             f_lvl <= f_lvl + (fifo_push ? 16'd1 : 16'd0)
                            - ((i_fifo_pop && o_fifo_valid) ? 16'd1 : 16'd0);
+            fifo_room_q <= (FIFO_WORDS[15:0]
+                            - (f_lvl + (fifo_push ? 16'd1 : 16'd0)
+                                     - ((i_fifo_pop && o_fifo_valid) ? 16'd1 : 16'd0)))
+                           > 16'd40;
         end
     end
 

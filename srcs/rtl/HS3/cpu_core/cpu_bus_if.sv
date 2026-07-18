@@ -29,6 +29,11 @@ interface LBus;
 logic           req_valid;      //request presented this cycle
 logic           req_ready;      //slave accepts the request (accept = valid && ready edge)
 logic   [31:0]  req_addr;       //shared AGU address: fetch PC (IF) or data EA (MA)
+/* Cache-index slice TWIN of req_addr[11:2] (int_pipe 12-bit AGU copy on private
+   (* preserve *) selects) - EQUAL every cycle (sim-asserted). The cache's RAM read
+   index consumes THIS so the fitter can place the whole slice at the RAM block,
+   cutting the shared-adder -> index route (Wall A/B legs). */
+logic   [11:2]  req_addr_idx;
 logic           req_fetch;      //role select - 1: instruction fetch (IF); 0: data access (MA)
 logic           req_write;      //1: store; a fetch/load is a read (MA only)
 logic   [1:0]   req_size;       //access size byte/word/long (data); WORD on a fetch
@@ -68,14 +73,14 @@ logic   [31:0]  rsp_rdata_miss; //registered miss/bypass/MMIO response word (ear
 logic           rsp_hit_d;      //post-alignment select (1 = live hit word)
 
 modport master (
-    output req_valid, req_addr, req_fetch, req_write, req_size, req_lock,
+    output req_valid, req_addr, req_addr_idx, req_fetch, req_write, req_size, req_lock,
            req_wdata, req_wstrb, rsp_ready,
     input  req_ready, rsp_valid, rsp_fetch, rsp_dfault, rsp_ifault, rsp_rdata, rsp_inst,
            rsp_inst_sib, rsp_pair, rsp_rdata_hit, rsp_rdata_miss, rsp_hit_d
 );
 
 modport slave (
-    input  req_valid, req_addr, req_fetch, req_write, req_size, req_lock,
+    input  req_valid, req_addr, req_addr_idx, req_fetch, req_write, req_size, req_lock,
            req_wdata, req_wstrb, rsp_ready,
     output req_ready, rsp_valid, rsp_fetch, rsp_dfault, rsp_ifault, rsp_rdata, rsp_inst,
            rsp_inst_sib, rsp_pair, rsp_rdata_hit, rsp_rdata_miss, rsp_hit_d

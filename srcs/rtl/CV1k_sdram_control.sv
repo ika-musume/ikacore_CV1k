@@ -25,10 +25,11 @@
 //   pump    : cmd regs load the pins at 2N+1 (mid-CKIO, pins stable), chip
 //             registers at 2N+2 - same instant, zero added delay.  The
 //             filler slot registers NOP at 2N+3.
-//   read    : BL2 READ registered at edge k -> beats capturable at k+3, k+4;
-//             with grid CL2 the BSC samples D at k+4 = the identical edge the
-//             32-bit part delivered the word.  hi half is registered at k+3,
-//             lo half passes combinationally into the BSC capture register.
+//   read    : every grid CAS is GEARED (sect.5.4 of the doc): the module
+//             READ fires one fast edge before its pin decode, beats land in
+//             dq_n at fire+1.5/fire+2.5 and in rd_hi_e/rd_lo at fire+2/+3,
+//             and the serve window spans the BSC capture at pin-CAS+4 = the
+//             identical edge the 32-bit part delivered the word.
 //
 // Memory map (chip 0, CS level 0):
 //   work RAM : BA = grid bank, RA = {1'b0, grid row[11:0]},
@@ -83,6 +84,27 @@
 // the loader holds in LS_IDLE - o_IOCTL_WAIT stalls the HPS - while a
 // pair is open).  Accept: +refage bound holds THROUGH a download and
 // pairs issue while streaming (H7b.8 sim run).
+//
+// H7b.8d output-stage restructure (timing closure; ZERO behavior change -
+// proven by the translate_off shadow oracle at the bottom of this file,
+// which replicates the pre-8d priority chain and $fatals on any pad
+// mismatch, every edge of every run):
+//   * ONE fire-select plane (f_i*/arm_* wires) encodes every arm's fire
+//     condition once, one-hot by construction; the old serial else-chain
+//     is gone from the pad D-cones.
+//   * The pad registers load from a flat AND-OR stage whose data legs
+//     are registers (pr_*/nor_addr/ld_*/wr_lo/p_*/m_bank) or the grid
+//     pins (slot-A translate + write strobes).  The pin legs are
+//     IRREDUCIBLE: the BSC dispatches with zero pin warning, and with
+//     tRCD = 21 ns > 2 fast edges (19.5 ns) a slot-A ACT delayed one
+//     more edge would violate tRCD against its geared CAS (whose instant
+//     is pinned by the CL2 grid serve) - so the translate must consume
+//     the pins in the same single-c102-period transfer it always has.
+//     That transfer's REAL budget is one c102 period (launch at the
+//     CKIO-coincident edge, capture at the mid-CKIO c102 edge); the
+//     project SDC carries the proof and the path-specific bound.
+//   * All state/bookkeeping updates are byte-for-byte the old ones,
+//     keyed on the same conditions via the shared arm wires.
 //============================================================================
 module CV1k_sdram_control #(
     parameter        NOR_BSWAP = 1'b0,       // 1: swap ioctl byte pairs (MAME dumps need 0)
@@ -118,6 +140,16 @@ module CV1k_sdram_control #(
     input  wire         i_BACK_n,            // SH-3 bus grant (0 = blit tenure)
     input  wire         i_BLIT_WIN,          // blit_fetch: >= 5 CKIO w/o PALL/ACT
     input  wire         i_ORD_CS_n,          // CS4&CS5&CS6, BUS_OE-qualified
+
+    //------ SH-3 early-transaction sideband (docs/sh3_sideband.md 3+11) ----
+    input  wire         i_CPU_RST_n,         // CPU manual reset: flush queue (A4)
+    input  wire         i_SB_REQ,            // registered 1-cycle pulse per unit
+    input  wire         i_SB_WR,
+    input  wire [28:0]  i_SB_ADDR,           // [28:26] = CS area
+    input  wire [1:0]   i_SB_SIZE,           // unused: reads serve full words
+    input  wire         i_SB_BURST,
+    input  wire [7:0]   i_BF_SB_COL,         // blit_fetch announce: train col
+    input  wire [4:0]   i_BF_SB_LEN,         //   + CAS beats, valid under ACTV
 
     //------ MiSTer HPS ioctl (active only while the CPU is held in reset) --
     input  wire         i_IOCTL_DOWNLOAD,
@@ -174,8 +206,19 @@ always @(posedge i_CLK) pcen_d <= i_CKIO_PCEN;
 //------------------------------------------------------------------
 reg [5:0] rdg_sh;                            // grid BL2 reads
 reg [4:0] rdn_sh;                            // NOR/engine BL2 reads (beat 0 only used)
-reg [15:0] rd_hi;                            // grid beat-0 (D[31:16]) capture
 reg [31:0] rd_word;                          // assembled word, held for the CKIO window
+
+// sideband early gear (sect.11 / S4-S6): EVERY grid CAS is predicted and
+// issues one fast edge BEFORE its pin decode (CPU ops from the strobe
+// queue, blit trains from the blit_fetch announce - the oracle $fatals on
+// any uncovered CAS), so both beats land in posedge registers a full
+// period before the BSC capture edge.  The serve mux launches register-
+// to-register only: the old live-DQ consistent-snapshot arm is DELETED,
+// and dq_n fans exclusively to the pump-local capture regs below (+
+// nor_data) - no half-period dq_n path leaves this module.
+reg [2:0]  cap_sh;                           // early-issue capture pipeline
+reg [15:0] rd_hi_e;                          // geared beat 0 (dq_n @fire+1.5)
+reg [15:0] rd_lo;                            // geared beat 1 (dq_n @fire+2.5)
 
 // DQ mid-window capture bank (H7b.8): every falling edge samples the pad.
 // Each CL2 beat is stable across the falling edge inside its drive window
@@ -183,8 +226,8 @@ reg [31:0] rd_word;                          // assembled word, held for the CKI
 // SDRAM_CLK phase preset centers tAC..tOH around this edge), so dq_n holds
 // beat k from E+k.5 to E+k+1.5 -- the SAME value every posedge consumer
 // previously read live off the pad, but launched from a register.  This is
-// the only pad-timed DQ endpoint; everything downstream (rd_hi/rd_word/
-// nor_data/the o_G_RDATA arm) is register-to-register.  Value-identical in
+// the only pad-timed DQ endpoint; everything downstream (rd_hi_e/rd_lo/
+// rd_word/nor_data) is register-to-register.  Value-identical in
 // RTL sim by construction (FASTBOOT datum re-proven).
 reg [15:0] dq_n;
 always @(negedge i_CLK) dq_n <= i_S_DQ_I;
@@ -192,9 +235,12 @@ always @(negedge i_CLK) dq_n <= i_S_DQ_I;
 // The BSC latches i_D_I exactly at fast edge E+4 (CKIO E+2: i_BCEN && rd_lat,
 // CL2 pipeline in bsc.sv). At that same edge this module commits its NBAs, so
 // the sample may resolve pre- or post-commit; both mux arms carry the word
-// either way: pre-commit rdg_sh[2]=1 selects {rd_hi, dq_n} (dq_n holds
-// beat 1 from E+3.5), post-commit rdg_sh[3]=1 selects the registered rd_word.
-assign o_G_RDATA    = rdg_sh[2] ? {rd_hi, dq_n} : rd_word;
+// either way: pre-commit rdg_sh[2]=1 selects the geared beat pair
+// {rd_hi_e, rd_lo} (posedge registers loaded at fire+2/fire+3, a full
+// period before the capture edge), post-commit rdg_sh[3]=1 selects the
+// registered rd_word.  Both arms are register launches - the serve is
+// register-to-register by construction, on every consumer.
+assign o_G_RDATA    = rdg_sh[2] ? {rd_hi_e, rd_lo} : rd_word;
 assign o_G_RDATA_OE = rdg_sh[2] | rdg_sh[3];
 
 //------------------------------------------------------------------
@@ -235,6 +281,160 @@ always @(posedge i_CLK) begin
         nor_wr_trap <= 1'b1;
     end else nor_wr_trap <= 1'b0;
 end
+
+//------------------------------------------------------------------
+// SH-3 early-transaction sideband: strobe queue + engine-op READ shadow
+// (docs/sh3_sideband.md sect.3, sect.6, sect.11 amendments A1-A5)
+//
+// One o_SB_REQ pulse = one committed external transaction unit (R1); every
+// CS3 SDRAM engine op is strobed (R2; exemptions = CBR refresh, self-
+// refresh, BREQ row-close PALL, MRS via SDMR - all pin-decoded, none is
+// an ACT).  The queue is 2 deep (11.4 Q3: measured outstanding bound 1,
+// +1 for a completing tail).  The head pops at the op's pin ACTV on a
+// CPU-owned grid (i_BACK_n high - blit-tenure ACTs are bf_*-driven and
+// must not pop).  A popped READ op arms the shadow predictor: with
+// MCR 0x543C (t_rcd = 2, RASD = 0) the engine's CAS edges are fully
+// deterministic after ACTV - READ0 exactly 2 CKIO on, then one CAS per
+// CKIO, columns wrapping round the line from the missed word (bsc.sv
+// E_RD), READA (A10) on the last beat only.  The shadow tracks those
+// edges one fast cycle AHEAD of the pin decode; the translate_off oracle
+// compares every predicted field against the pins and $fatals on any
+// deviation, so the contract (and this mapping) is re-proven by every
+// sim run.  Write ops pop but arm nothing: a yielded drain re-strobes at
+// its resume (A3) and its beat count is not promised.  The CPU manual
+// reset flushes queued-undispatched strobes (A4).
+//
+// addr bit map (AMX 0111, 8 MB x32, byte address a[22:2]):
+//   bank = a[22:21]   row = a[20:10] (pin i_G_A[10:0] at ACTV)
+//   col  = a[9:2]     (pin i_G_A[7:0] at CAS; a[3:2] = wrap pair)
+//------------------------------------------------------------------
+reg  [1:0]  sbq_v;                           // [0] = head
+reg  [22:0] sbq0, sbq1;                      // {wr, burst, a[22:2]}
+reg         pr_v;                            // READ op/train in flight (armed)
+reg         pr_lin;                          // 1 = blit train (linear col, no AP)
+reg  [2:0]  pr_dly;                          // fast edges to the next CAS decode
+reg  [4:0]  pr_left;                         // CAS edges remaining (CPU 4/1;
+                                             //   blit 1..16)
+reg  [5:0]  pr_colh;                         // a[9:4]
+reg  [1:0]  pr_beat;                         // a[3:2]: CPU wraps the pair, blit
+                                             //   carries into pr_colh
+reg  [1:0]  pr_ba;                           // bank captured at the ACTV pop
+
+wire        sb_cs3    = (i_SB_ADDR[28:26] == 3'b011);
+wire        sb_push   = i_SB_REQ && sb_cs3;
+wire [2:0]  g_cmd     = {i_G_RAS_n, i_G_CAS_n, i_G_WE_n};
+wire        slotA_cpu = pcen_d && init_done && i_BACK_n && !i_G_CS_n;
+wire        pop_act   = slotA_cpu && (g_cmd == CMD_ACT);
+// blit-tenure ACTV: the announce fields ride the same pins (no queue)
+wire        slotA_bf  = pcen_d && init_done && !i_BACK_n && !i_G_CS_n;
+wire        pop_bact  = slotA_bf && (g_cmd == CMD_ACT);
+// CAS decode edge (pr_dly counted out) / early-issue edge (one fast before)
+wire        pr_due    = pr_v && (pr_dly == 3'd0) && pcen_d;
+wire        pr_fire   = pr_v && (pr_dly == 3'd1) && !pcen_d;
+wire [7:0]  pr_col    = {pr_colh, pr_beat};
+wire        pr_ap     = !pr_lin && (pr_left == 5'd1);  // READA on the CPU last
+                                                       // beat; blit rows close
+                                                       // by explicit PALL
+// does the slot-A decode issue a module command this edge?  (CAS reads:
+// never - the geared issue went out on the previous filler; MRS: acked,
+// never forwarded)
+wire        slotA_cmd = !i_G_CS_n && ((g_cmd == CMD_ACT) || (g_cmd == CMD_WR) ||
+                                      (g_cmd == CMD_PRE) || (g_cmd == CMD_REF));
+
+// queue next-state fold: pop frees the slot the same-edge push may take
+// (no mixed bit/vector NBAs - see the rdg_sh note)
+reg  [1:0]  sbq_v_nx;
+reg  [22:0] sbq0_nx, sbq1_nx;
+always @* begin
+    sbq_v_nx = sbq_v; sbq0_nx = sbq0; sbq1_nx = sbq1;
+    if (pop_act) begin
+        sbq_v_nx = {1'b0, sbq_v[1]};
+        sbq0_nx  = sbq1;
+    end
+    if (sb_push) begin
+        if (!sbq_v_nx[0])      begin sbq0_nx = {i_SB_WR, i_SB_BURST, i_SB_ADDR[22:2]}; sbq_v_nx[0] = 1'b1; end
+        else if (!sbq_v_nx[1]) begin sbq1_nx = {i_SB_WR, i_SB_BURST, i_SB_ADDR[22:2]}; sbq_v_nx[1] = 1'b1; end
+        // overflow = A5 bound violated; trapped by the oracle below
+    end
+end
+
+always @(posedge i_CLK) begin
+    if (!i_RST_n || !i_CPU_RST_n) begin      // A4: manual reset drops the queue
+        sbq_v <= 2'b00; sbq0 <= 23'h0; sbq1 <= 23'h0;
+        pr_v <= 1'b0; pr_lin <= 1'b0; pr_dly <= 3'd0; pr_left <= 5'd0;
+        pr_colh <= 6'd0; pr_beat <= 2'd0; pr_ba <= 2'd0;
+    end else begin
+        sbq_v <= sbq_v_nx; sbq0 <= sbq0_nx; sbq1 <= sbq1_nx;
+        if (pr_v && (pr_dly != 3'd0)) pr_dly <= pr_dly - 3'd1;
+        if (pr_due) begin                    // one CAS consumed at this decode
+            pr_beat <= pr_beat + 2'd1;
+            if (pr_lin && (pr_beat == 2'd3)) // blit runs are linear: carry out
+                pr_colh <= pr_colh + 6'd1;   //   of the pair (never cross 1KB)
+            pr_left <= pr_left - 5'd1;
+            pr_dly  <= 3'd1;                 // next CAS one CKIO on
+            if (pr_left == 5'd1) pr_v <= 1'b0;
+        end
+        if (pop_act && sbq_v[0] && !sbq0[22]) begin
+            pr_v    <= 1'b1;                 // arm the shadow on a READ op
+            pr_lin  <= 1'b0;
+            pr_dly  <= 3'd3;                 // CAS decode at ACTV+2 CKIO (t_rcd)
+            pr_left <= sbq0[21] ? 5'd4 : 5'd1;
+            pr_colh <= sbq0[7:2];
+            pr_beat <= sbq0[1:0];
+            pr_ba   <= i_G_BA;
+        end
+        if (pop_bact) begin
+            pr_v    <= 1'b1;                 // arm on the announced blit train
+            pr_lin  <= 1'b1;
+            pr_dly  <= 3'd3;                 // blit_fetch S_RCD = same 2-CKIO gap
+            pr_left <= i_BF_SB_LEN;
+            pr_colh <= i_BF_SB_COL[7:2];
+            pr_beat <= i_BF_SB_COL[1:0];
+            pr_ba   <= i_G_BA;
+        end
+    end
+end
+
+wire _unused_sb = &{1'b0, i_SB_SIZE, i_SB_ADDR[25:23], 1'b0};
+
+// synthesis translate_off
+// sideband oracle (sect.11.6 shape, our side of the contract): every
+// deviation is a $fatal - the FASTBOOT datum, the refage replays and the
+// H7b matrix re-prove R1/R2/R3/A2/A3/A5 + the address map on every run.
+always @(posedge i_CLK) begin
+    if (i_RST_n && i_CPU_RST_n && init_done) begin
+        if (sb_push && (sbq_v == 2'b11) && !pop_act)
+            $fatal(1, "[sb] strobe queue overflow (A5 bound) @%0t", $time);
+        if (pop_act && !sbq_v[0])
+            $fatal(1, "[sb] unstrobed CS3 ACTV (R2) @%0t", $time);
+        if (pop_act && sbq_v[0] && (i_G_A[10:0] != sbq0[18:8]))
+            $fatal(1, "[sb] ACTV row %03x != strobe row %03x @%0t",
+                   i_G_A[10:0], sbq0[18:8], $time);
+        if (pop_act && sbq_v[0] && (i_G_BA != sbq0[20:19]))
+            $fatal(1, "[sb] ACTV bank %0d != strobe bank %0d @%0t",
+                   i_G_BA, sbq0[20:19], $time);
+        if (pop_act && pr_v)
+            $fatal(1, "[sb] ACTV while a READ shadow is live @%0t", $time);
+        if (pop_bact && pr_v)
+            $fatal(1, "[sb] blit ACTV while a READ shadow is live @%0t", $time);
+        if (pop_bact && (i_BF_SB_LEN == 5'd0))
+            $fatal(1, "[sb] blit ACTV with a zero-length announce @%0t", $time);
+        if (pr_due && !((pr_lin ? slotA_bf : slotA_cpu) && (g_cmd == CMD_RD)))
+            $fatal(1, "[sb] predicted CAS edge has no grid READ @%0t", $time);
+        if (pr_due && (i_G_A[7:0] != pr_col))
+            $fatal(1, "[sb] CAS col %02x != predicted %02x @%0t",
+                   i_G_A[7:0], pr_col, $time);
+        if (pr_due && (i_G_A[10] != pr_ap))
+            $fatal(1, "[sb] CAS A10 %b != predicted %b @%0t",
+                   i_G_A[10], pr_ap, $time);
+        if (pr_due && (i_G_BA != pr_ba))
+            $fatal(1, "[sb] CAS bank %0d != ACTV bank %0d @%0t",
+                   i_G_BA, pr_ba, $time);
+        if ((slotA_cpu || slotA_bf) && (g_cmd == CMD_RD) && !pr_due)
+            $fatal(1, "[sb] grid READ outside the shadow schedule @%0t", $time);
+    end
+end
+// synthesis translate_on
 
 //------------------------------------------------------------------
 // ioctl loader state (NOR window = stream bytes 0x000000-0x3FFFFF)
@@ -288,6 +488,16 @@ end
 reg        wr_beat2;                         // grid write lo-half pending
 reg [15:0] wr_lo;
 reg [1:0]  wr_lo_m;
+
+// synthesis translate_off
+// early-gear edge-ownership assert (companion to the sideband oracle above;
+// placed here because wr/ld_beat2 are declared at this point): a predicted
+// early CAS must never lose its filler edge to a pending write beat
+always @(posedge i_CLK) begin
+    if (i_RST_n && i_CPU_RST_n && init_done && pr_fire && (wr_beat2 || ld_beat2))
+        $fatal(1, "[sb] early CAS edge stolen by a write beat @%0t", $time);
+end
+// synthesis translate_on
 
 localparam [12:0] HI_TOP_B0 = 13'h17FF;      // bank 0 HI wrap (incl. NOR rows)
 localparam [12:0] HI_TOP    = 13'h0FFF;      // banks 1-3 HI wrap
@@ -394,14 +604,287 @@ wire        lfin  = (l23_d > l01_d);
 wire [12:0] lo_d  = lfin ? l23_d : l01_d;
 wire [1:0]  lo_b  = lfin ? {1'b1, l23} : {1'b0, l01};
 
-wire        hi_pick  = w_any && (hi_d != 13'd0);
-wire        lo_pick  = w_lo  && (lo_d != 13'd0);
+// H7b.8b pad register bank (jtcps CPS2 96 MHz shape): the argmax and its
+// sweep-row lookup are PRE-REGISTERED one edge ahead of dispatch, so the
+// pad registers' D cones end at p_* instead of walking cool/m_bank ->
+// b_elig -> compare trees -> ptr mux in the dispatch edge (fit #4 c102
+// worst path, 17.4 ns).  p_* refresh every edge from the same trees.
+// The fire edge re-applies the window/guard terms live (same instants as
+// before) and re-checks b_elig on the registered bank: the one-edge gap
+// can hide a grid ACT (ga_open) or an AP close (cool reload), and the
+// pre-reg pick may also be one edge stale after a cool expiry or a fresh
+// tick - a fire can only slip later or land on a different owed row,
+// never outside the proven windows.  Deficits/pointers of a registered
+// pick cannot decay in the gap: m_credit needs m_open, m_open masks the
+// bank in b_elig, and its cooldown blocks the re-check.
+reg        p_hi_v, p_lo_v;
+reg [1:0]  p_hi_b, p_lo_b;
+reg [12:0] p_hi_row, p_lo_row;
+
+wire        hi_pick  = w_any && p_hi_v && b_elig[p_hi_b];
+wire        lo_pick  = w_lo  && p_lo_v && b_elig[p_lo_b];
 wire        sel_v    = hi_pick || lo_pick;
 wire        sel_hi   = hi_pick;
-wire [1:0]  sel_bank = hi_pick ? hi_b : lo_b;
-wire [12:0] sel_row = sel_hi ? ptr_hi[sel_bank] : {2'b00, ptr_lo[sel_bank]};
+wire [1:0]  sel_bank = hi_pick ? p_hi_b : p_lo_b;
+wire [12:0] sel_row  = hi_pick ? p_hi_row : p_lo_row;
+
+// H7b.8d step 2: pre-registered pair-dispatch select (see the note at
+// the arm_m* wires below)
+reg q_mpre, q_mhi, q_mlo;
+// H7b.8d step 3: pre-registered init fires - the live f_i* compares
+// (32-bit icnt thresholds) fed the pad mux directly and were the last
+// deep pad cone (fit-8d2 seed 3: icnt[*] -> o_S_nWE -3.0).  A multicycle
+// would be UNSOUND (icnt moves every edge; a mid-transition compare
+// sample could double-fire a REF inside tRFC), so the fires get the same
+// exact next-value treatment as the pair dispatch.  State transitions
+// keep the live f_i* (fabric-local, never the frontier).
+reg q_ipall, q_iref, q_imrs;
+
+//------------------------------------------------------------------
+// H7b.8d fire-select plane: ONE encoding of every output arm's fire
+// condition, shared by the flat pad stage below and the bookkeeping
+// block.  These are exactly the old priority chain's arm conditions
+// unrolled into mutually-exclusive one-hot terms (the chain's else-
+// cascade becomes explicit !higher terms), so every command fires on
+// the identical edge with the identical fields - the translate_off
+// shadow oracle at the bottom of the file re-proves chain==flat on
+// every edge of every sim run.  No decision, guard, or window term
+// moved: the restructure is a pure re-expression of the pad D-cones
+// so each IOE register sees ONE shallow AND-OR stage (register- or
+// grid-pin-sourced data) instead of the serial arm cascade.
+//------------------------------------------------------------------
+// init sequencer fires (single encoding also drives ist/icnt/iref)
+wire f_ipall = (ist == IS_WAIT) && (icnt >= INIT_WAIT);
+wire f_iref  = ((ist == IS_PALL) && (icnt >= 32'd3)) ||
+               ((ist == IS_REF)  && (icnt >= 32'd8) && (iref < 4'd8));
+wire f_imrs  = (ist == IS_REF)  && (icnt >= 32'd8) && (iref >= 4'd8);
+// post-init arm ladder (chain order: wr_beat2 > ld_beat2 > pr_fire >
+// slot A > slot B engines > pair dispatch)
+wire arm_wrb  = init_done && wr_beat2;
+wire arm_ldb  = init_done && !wr_beat2 && ld_beat2;
+wire arm_prf  = init_done && !wr_beat2 && !ld_beat2 && pr_fire;
+wire slotA    = init_done && !wr_beat2 && !ld_beat2 && !pr_fire &&  pcen_d;
+wire slotB    = init_done && !wr_beat2 && !ld_beat2 && !pr_fire && !pcen_d;
+wire arm_tr     = slotA && slotA_cmd;        // grid translate (ACT/WR/PRE/REF)
+wire arm_tr_act = arm_tr && (g_cmd == CMD_ACT);
+wire arm_tr_wr  = arm_tr && (g_cmd == CMD_WR);
+wire arm_tr_pre = arm_tr && (g_cmd == CMD_PRE);
+wire arm_nact = slotB && (nst == NS_ACT);
+wire arm_nrd  = slotB && (nst == NS_RD);
+wire slotB_e  = slotB && (nst != NS_ACT) && (nst != NS_RD);
+wire arm_lact = slotB_e && (lst == LS_ACT);
+wire arm_lwr  = slotB_e && (lst == LS_WR);
+// pair-dispatch site (both old m_dispatch call sites folded) + guards.
+// H7b.8d step 2: the DEEP select cone (windows -> pick -> guards, all
+// c102-register functions) is PRE-REGISTERED one edge ahead into
+// q_mpre/q_mhi/q_mlo by the exact next-value plane below - NOT the
+// H7b.8b stale-pick-plus-recheck shape: every term is computed for the
+// fire edge from this edge's inputs (window _ff regs at the fire edge
+// are the raw pins now; counters/FSMs/guards are deterministic one
+// step ahead), so the fire decision is BIT-EXACT the old live one.
+// The fire edge keeps only the single-FF ladder bits and the grid-pin
+// term (irreducible, same reason as the translate arm) - one LUT.
+// The old live formulas remain below as m_site/m_can_* for the
+// translate_off q-vs-live assert and the shadow oracle.
+wire m_gate_f = init_done && !wr_beat2 && !ld_beat2 && !pr_fire &&
+                (pcen_d ? !slotA_cmd : 1'b1);
+wire arm_mpre = q_mpre && m_gate_f;
+wire arm_mhi  = q_mhi  && m_gate_f;          // pad data split: p_* regs feed
+wire arm_mlo  = q_mlo  && m_gate_f;          //   the AND-OR stage directly
+wire arm_mact = arm_mhi || arm_mlo;
+// oracle references (translate_off consumers only; pruned in synthesis)
+wire m_site   = (slotA && !slotA_cmd) ||
+                (slotB_e && (lst != LS_ACT) && (lst != LS_WR));
+wire m_can_pre = m_open && (m_cnt >= 3'd4);
+wire m_can_act = !m_open && sel_v && (ref_hold == 4'd0)
+                         && (act_gap == 2'd0) && !ld_go;
 
 integer sbi;                                 // scheduler bookkeeping loop var
+
+//------------------------------------------------------------------
+// H7b.8d step 2 - exact next-value plane for the pair-dispatch select.
+// Computes, at this edge, the value every deep select term will hold
+// DURING the next edge's evaluation window (i.e. the values the old
+// live cone would read at the fire edge):
+//   * window _ff regs at the fire edge = the RAW PINS now (back/bwin/
+//     ordn/cs0n/dl samplers reload every edge);
+//   * counters (ord/cs0, ref_hold, act_gap, m_cnt, cool) and FSMs
+//     (nst/lst, beats, rdg/rdn tails) are deterministic one step ahead
+//     - their update expressions are replicated 1:1, keyed on the SAME
+//     arm wires the bookkeeping block uses this edge;
+//   * the argmax trees feed p_* at this edge, so the pick guards pair
+//     tree combs (hi_d/hi_b/lo_d/lo_b) with next-edge b_elig - exactly
+//     the generation the old cone paired at the fire edge.
+// Every mismatch against the live formulas is a translate_off $fatal
+// (q-vs-live assert below) on top of the pad shadow oracle.
+//------------------------------------------------------------------
+wire rd_now      = slotA && !i_G_CS_n && (g_cmd == CMD_RD);
+wire ref_now     = slotA && !i_G_CS_n && (g_cmd == CMD_REF);
+wire pre_now     = slotA && !i_G_CS_n && (g_cmd == CMD_PRE);
+wire ap_close_now= (rd_now || arm_tr_wr) && i_G_A[10];
+
+wire wr_beat2_nx = arm_tr_wr || (wr_beat2 && !arm_wrb);
+wire ld_beat2_nx = arm_lwr   || (ld_beat2 && !arm_ldb);
+
+// nst / lst one step ahead (fire-site + bookkeeping-site transitions)
+reg [2:0] nst_nx;
+always @* begin
+    nst_nx = nst;
+    if      (arm_nact) nst_nx = NS_RCD;
+    else if (arm_nrd)  nst_nx = NS_CAP;
+    else if (init_done) begin
+        case (nst)
+            NS_IDLE: if (nor_read_req && (!nor_rdy || (nor_addr != i_N_A))) nst_nx = NS_ACT;
+            NS_RCD:  if (ncnt >= 2'd2)  nst_nx = NS_RD;
+            NS_CAP:  if (rdn_sh[1])     nst_nx = NS_IDLE;
+            default: ;
+        endcase
+    end
+end
+reg [2:0] lst_nx;
+always @* begin
+    lst_nx = lst;
+    if      (arm_lact) lst_nx = LS_RCD;
+    else if (arm_lwr)  lst_nx = LS_DAL;
+    else begin
+        case (lst)
+            LS_IDLE: if (ld_go && init_done && !m_open && !m_cool) lst_nx = LS_ACT;
+            LS_RCD:  if (lcnt >= 3'd2) lst_nx = LS_WR;
+            LS_DAL:  if (lcnt >= 3'd5) lst_nx = LS_IDLE;
+            default: ;
+        endcase
+    end
+end
+
+wire init_done_nx = init_done || ((ist == IS_MRS) && (icnt >= 32'd3));
+wire ld_go_nx     = (i_IOCTL_DOWNLOAD && i_IOCTL_WR)
+                    ? ((i_IOCTL_ADDR[0] && (i_IOCTL_ADDR < 27'h040_0000)) ? 1'b1 : ld_go)
+                    : ((lst != LS_IDLE) ? 1'b0 : ld_go);
+wire m_open_nx    = arm_mact ? 1'b1
+                  : (arm_mpre || ref_now ||
+                     (pre_now && (i_G_A[10] ? m_open : (i_G_BA == m_bank)))) ? 1'b0
+                  : m_open;
+wire [2:0] m_cnt_nx    = arm_mact ? 3'd0
+                       : ((m_open && (m_cnt != 3'd7)) ? m_cnt + 3'd1 : m_cnt);
+wire [1:0] m_bank_nx   = arm_mact ? (q_mhi ? p_hi_b : p_lo_b) : m_bank;
+wire [3:0] ref_hold_nx = ref_now ? 4'd8
+                       : ((ref_hold != 4'd0) ? ref_hold - 4'd1 : 4'd0);
+wire [1:0] act_gap_nx  = (arm_tr_act || arm_nact || arm_mact) ? 2'd2
+                       : ((act_gap != 2'd0) ? act_gap - 2'd1 : 2'd0);
+
+// per-bank ga_open / cool one step ahead (grid parse + credit reloads,
+// override order identical to the bookkeeping NBA order)
+reg [3:0] ga_open_nx;
+reg [2:0] cool_nx [0:3];
+always @* begin
+    ga_open_nx = ga_open;
+    for (sbi = 0; sbi < 4; sbi = sbi + 1)
+        cool_nx[sbi] = (cool[sbi] != 3'd0) ? cool[sbi] - 3'd1 : 3'd0;
+    if (arm_tr_act)                 ga_open_nx[i_G_BA] = 1'b1;
+    if (ap_close_now) begin         // RD/WR auto-precharge close
+        ga_open_nx[i_G_BA] = 1'b0;
+        cool_nx[i_G_BA]    = 3'd7;
+    end
+    if (pre_now) begin
+        if (i_G_A[10]) begin        // PALL
+            ga_open_nx = 4'b0;
+            for (sbi = 0; sbi < 4; sbi = sbi + 1) cool_nx[sbi] = 3'd3;
+        end else begin
+            ga_open_nx[i_G_BA] = 1'b0;
+            cool_nx[i_G_BA]    = 3'd3;
+        end
+    end
+    if (arm_mpre) cool_nx[m_bank] = 3'd3;    // pair-close credit
+end
+
+wire [3:0] b_elig_nx = {init_done_nx && !ga_open_nx[3] && (cool_nx[3] == 3'd0) && !(m_open_nx && (m_bank_nx == 2'd3)),
+                        init_done_nx && !ga_open_nx[2] && (cool_nx[2] == 3'd0) && !(m_open_nx && (m_bank_nx == 2'd2)),
+                        init_done_nx && !ga_open_nx[1] && (cool_nx[1] == 3'd0) && !(m_open_nx && (m_bank_nx == 2'd1)),
+                        init_done_nx && !ga_open_nx[0] && (cool_nx[0] == 3'd0) && !(m_open_nx && (m_bank_nx == 2'd0))};
+
+// windows one step ahead (fire-edge _ff samplers = raw pins now)
+wire [4:0] ord_cnt_nx = i_ORD_CS_n ? 5'd0 : ((ord_cnt == 5'h1F) ? ord_cnt : ord_cnt + 5'd1);
+wire [4:0] cs0_cnt_nx = i_N_CS_n   ? 5'd0 : ((cs0_cnt == 5'h1F) ? cs0_cnt : cs0_cnt + 5'd1);
+wire eng_quiet_nx = (nst_nx == NS_IDLE) && ({rdn_sh[3:0], arm_nrd} == 5'b0)
+                    && (lst_nx == LS_IDLE) && !ld_beat2_nx && !wr_beat2_nx
+                    && ({rdg_sh[1:0], rd_now} == 3'b0);
+wire w_blit_nx = i_BACK_n ? 1'b0 : i_BLIT_WIN;
+wire w_cs0_nx  = !i_N_CS_n   && (cs0_cnt_nx >= 5'd10) && (cs0_cnt_nx <= 5'd14);
+wire w_ord_nx  = !i_ORD_CS_n && (ord_cnt_nx >= 5'd2)  && (ord_cnt_nx <= 5'd6);
+wire w_dl_nx   = i_IOCTL_DOWNLOAD && eng_quiet_nx;
+wire w_any_nx  = (w_cs0_nx || w_ord_nx || w_dl_nx) && eng_quiet_nx;
+wire w_lo_nx   = w_blit_nx || w_any_nx;
+
+// pick guards on the SAME tree generation p_* is loading this edge
+wire hi_pick_nx = w_any_nx && (hi_d != 13'd0) && b_elig_nx[hi_b];
+wire lo_pick_nx = w_lo_nx  && (lo_d != 13'd0) && b_elig_nx[lo_b];
+wire sel_v_nx   = hi_pick_nx || lo_pick_nx;
+
+wire mpre_core_nx = m_open_nx && (m_cnt_nx >= 3'd4);
+wire mact_core_nx = !m_open_nx && sel_v_nx && (ref_hold_nx == 4'd0)
+                    && (act_gap_nx == 2'd0) && !ld_go_nx;
+// slot-B parity folds the engine decode; slot-A parity has none (the
+// grid-pin term stays live in m_gate_f - it cannot exist one edge early)
+wire site_ok_nx = i_CKIO_PCEN ? 1'b1
+                : ((nst_nx != NS_ACT) && (nst_nx != NS_RD) &&
+                   (lst_nx != LS_ACT) && (lst_nx != LS_WR));
+
+// init sequencer one step ahead (step 3): ist/icnt/iref updates
+// replicated 1:1 (the live f_i* chain in the bookkeeping block), fires
+// evaluated on the _nx values = the exact next-edge live evaluation
+reg [2:0]  ist_nx;
+reg [31:0] icnt_nx;
+reg [3:0]  iref_nx;
+always @* begin
+    ist_nx = ist; iref_nx = iref;
+    icnt_nx = init_done ? icnt : icnt + 32'd1;
+    if (!init_done) begin
+        if (f_ipall)     begin icnt_nx = 32'd0; ist_nx = IS_PALL; end
+        else if (f_iref) begin
+            icnt_nx = 32'd0;
+            if (ist == IS_PALL) begin iref_nx = 4'd1; ist_nx = IS_REF; end
+            else                iref_nx = iref + 4'd1;
+        end
+        else if (f_imrs) begin icnt_nx = 32'd0; ist_nx = IS_MRS; end
+        else if ((ist == IS_MRS) && (icnt >= 32'd3)) ist_nx = IS_DONE;
+    end
+end
+
+always @(posedge i_CLK) begin
+    if (!i_RST_n) begin
+        q_mpre <= 1'b0; q_mhi <= 1'b0; q_mlo <= 1'b0;
+        q_ipall <= 1'b0; q_iref <= 1'b0; q_imrs <= 1'b0;
+    end else begin
+        q_mpre <= site_ok_nx && mpre_core_nx;
+        q_mhi  <= site_ok_nx && mact_core_nx &&  hi_pick_nx;
+        q_mlo  <= site_ok_nx && mact_core_nx && !hi_pick_nx;
+        q_ipall <= (ist_nx == IS_WAIT) && (icnt_nx >= INIT_WAIT);
+        q_iref  <= ((ist_nx == IS_PALL) && (icnt_nx >= 32'd3)) ||
+                   ((ist_nx == IS_REF)  && (icnt_nx >= 32'd8) && (iref_nx < 4'd8));
+        q_imrs  <= (ist_nx == IS_REF)  && (icnt_nx >= 32'd8) && (iref_nx >= 4'd8);
+    end
+end
+
+// synthesis translate_off
+// q-vs-live assert: the pre-registered selects must equal the old live
+// cones at every fire evaluation (this is the step-2/3 exactness proof,
+// on top of the pad shadow oracle)
+always @(posedge i_CLK) if (i_RST_n) begin
+    if (arm_mpre != (m_site && m_can_pre))
+        $fatal(1, "[pad8d] q_mpre %b != live %b @%0t", arm_mpre, m_site && m_can_pre, $time);
+    if (arm_mact != (m_site && m_can_act))
+        $fatal(1, "[pad8d] q_mact %b != live %b @%0t", arm_mact, m_site && m_can_act, $time);
+    if (arm_mact && (arm_mhi != (m_site && m_can_act && hi_pick)))
+        $fatal(1, "[pad8d] q_mhi %b != live %b @%0t", arm_mhi, hi_pick, $time);
+    if (q_ipall != f_ipall)
+        $fatal(1, "[pad8d] q_ipall %b != live %b @%0t", q_ipall, f_ipall, $time);
+    if (q_iref != f_iref)
+        $fatal(1, "[pad8d] q_iref %b != live %b @%0t", q_iref, f_iref, $time);
+    if (q_imrs != f_imrs)
+        $fatal(1, "[pad8d] q_imrs %b != live %b @%0t", q_imrs, f_imrs, $time);
+end
+// synthesis translate_on
+
 
 // retire the open maintenance row: advance its sweep pointer, pay one unit
 // of deficit (net 0 if this edge also ticks), start the tRP/tRC cooldown.
@@ -424,18 +907,35 @@ begin
 end
 endtask
 
+// hidden-refresh pair dispatch (section 6.2 window rules): one ACT+PRE at
+// a time, guards identical from every call site.  Historically this ran
+// on leftover slot-B edges only; the sideband early gear (S5/S6) moved
+// mid-train CAS issue onto the fillers, so the dispatch ALSO runs on
+// module-idle slot-A edges (geared CAS decodes, MRS acks, CS-quiet
+// cells) - the supply edges the gear vacated.  Every window class stays
+// CKIO-granular, and every spacing guard (ref_hold, act_gap, m_cnt tRAS,
+// cool tRP/tRC) counts fast edges, so the phase move keeps the proofs.
+// H7b.8d: the old m_dispatch task is dissolved - both call sites fold
+// into the arm_mpre/arm_mact fire-select wires above (guards verbatim:
+// PRE = m_open && m_cnt>=4, tRAS met [our ACT hit the chip at fire+1, a
+// PRE here lands >= 5 chip clocks after it once m_cnt reads 4]; ACT =
+// sel_v && !ref_hold && !act_gap && !ld_go [a pending loader halfword
+// wins the slot - ld_go is never set outside a download]).  The pad
+// stage issues the commands; the bookkeeping lives in the main block.
+
 //------------------------------------------------------------------
-// main output sequencer - single always block, one command per fast edge.
-// priority: init > grid slot A > pending write beat 2 > engines (slot B)
-// > refresh scheduler (leftover slot-B edges)
+// main state/bookkeeping sequencer (H7b.8d: the pad registers moved to
+// the flat one-hot stage below - this block owns every OTHER register).
+// One command per fast edge, arm conditions = the fire-select plane
+// above (identical priority: init > wr beat 2 > ld beat 2 > geared CAS
+// > grid slot A > engines (slot B) > pair dispatch).
 //------------------------------------------------------------------
 always @(posedge i_CLK) begin
     if (!i_RST_n) begin
-        {o_S_nCS, o_S_nRAS, o_S_nCAS, o_S_nWE} <= {1'b0, CMD_NOP};
-        o_S_A <= 13'h0; o_S_BA <= 2'b00; o_S_CKE <= 1'b1;
-        o_S_DQ_O <= 16'h0; o_S_DQ_OE <= 1'b0;
         rdg_sh <= 6'b0; rdn_sh <= 5'b0;
-        rd_hi <= 16'h0; rd_word <= 32'h0;
+        rd_word <= 32'h0;
+        cap_sh <= 3'b0;
+        rd_hi_e <= 16'h0; rd_lo <= 16'h0;
         wr_beat2 <= 1'b0; wr_lo <= 16'h0; wr_lo_m <= 2'b00;
         ist <= IS_WAIT; icnt <= 32'd0; iref <= 4'd0;
         nst <= NS_IDLE; ncnt <= 2'd0; nor_addr <= 21'h0;
@@ -447,6 +947,9 @@ always @(posedge i_CLK) begin
         back_ff <= 1'b1; bwin_ff <= 1'b0; ordn_ff <= 1'b1; cs0n_ff <= 1'b1;
         dl_ff <= 1'b0;
         ord_cnt <= 5'd0; cs0_cnt <= 5'd0;
+        p_hi_v <= 1'b0; p_lo_v <= 1'b0;
+        p_hi_b <= 2'd0; p_lo_b <= 2'd0;
+        p_hi_row <= 13'h0; p_lo_row <= 13'h0;
         for (sbi = 0; sbi < 4; sbi = sbi + 1) begin
             cool[sbi]   <= 3'd0;
             ptr_lo[sbi] <= 11'd0;
@@ -455,12 +958,6 @@ always @(posedge i_CLK) begin
             def_hi[sbi] <= (sbi == 0) ? DEF_CAP_HI0 : DEF_CAP_HI;  // at window rate
         end
     end else begin
-        // defaults for this edge: NOP, DQM active (A[12:11]=00), bus released
-        {o_S_nCS, o_S_nRAS, o_S_nCAS, o_S_nWE} <= {1'b0, CMD_NOP};
-        o_S_A <= 13'h0; o_S_BA <= 2'b00;
-        o_S_DQ_OE <= 1'b0;
-        o_S_CKE <= init_done ? (pcen_d ? i_G_CKE : o_S_CKE) : 1'b1;
-
         // capture pipelines shift every edge.  With E = the CKIO edge opening
         // the grid READ cycle: issue @E+1, chip reg @E+2, CL2 beats on DQ at
         // their drive edges E+3/E+4; the word reaches o_G_RDATA at E+4 via
@@ -468,8 +965,10 @@ always @(posedge i_CLK) begin
         // (i_BCEN && rd_lat = CKIO E+2 = fast E+4, see doc section 5.1).
         rdg_sh <= {rdg_sh[4:0], 1'b0};
         rdn_sh <= {rdn_sh[3:0], 1'b0};
-        if (rdg_sh[1]) rd_hi   <= dq_n;                   // CL2 beat 0 (dq_n @E+2.5)
-        if (rdg_sh[2]) rd_word <= {rd_hi, dq_n};          // CL2 beat 1 (dq_n @E+3.5)
+        cap_sh <= {cap_sh[1:0], 1'b0};
+        if (cap_sh[1]) rd_hi_e <= dq_n;                   // geared beat 0 (fire+1.5)
+        if (cap_sh[2]) rd_lo   <= dq_n;                   // geared beat 1 (fire+2.5)
+        if (rdg_sh[2]) rd_word <= {rd_hi_e, rd_lo};
 
         //--------------------------------------------------------------
         // refresh-scheduler bookkeeping (every edge; guard decrements sit
@@ -499,86 +998,77 @@ always @(posedge i_CLK) begin
         end
         if (hi0_tick && (def_hi[0] < DEF_CAP_HI0)) def_hi[0] <= def_hi[0] + 13'd1;
 
+        // pre-registered maintenance pick (see the p_* note above): the
+        // trees see this edge's pre-commit state, the fire edge re-checks
+        p_hi_v   <= (hi_d != 13'd0);
+        p_hi_b   <= hi_b;
+        p_hi_row <= ptr_hi[hi_b];
+        p_lo_v   <= (lo_d != 13'd0);
+        p_lo_b   <= lo_b;
+        p_lo_row <= {2'b00, ptr_lo[lo_b]};
+
         //--------------------------------------------------------------
         if (!init_done) begin
             // JEDEC init for chip 0 while the whole system is in reset
+            // (commands issue from the pad stage on the f_i* fires; the
+            // icnt-pace/tRFC/tMRD spacing is the f_i* thresholds verbatim)
             icnt <= icnt + 32'd1;
-            case (ist)
-                IS_WAIT: if (icnt >= INIT_WAIT) begin
-                    {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_PRE;
-                    o_S_A <= 13'h0400;                        // A10: precharge all
-                    icnt <= 32'd0; ist <= IS_PALL;
-                end
-                IS_PALL: if (icnt >= 32'd3) begin
-                    {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_REF;
-                    icnt <= 32'd0; iref <= 4'd1; ist <= IS_REF;
-                end
-                IS_REF: if (icnt >= 32'd8) begin              // tRFC 63 ns < 8 edges
-                    if (iref >= 4'd8) begin
-                        {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_MRS;
-                        o_S_A <= MRS_BL2_CL2;
-                        icnt <= 32'd0; ist <= IS_MRS;
-                    end else begin
-                        {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_REF;
-                        icnt <= 32'd0; iref <= iref + 4'd1;
-                    end
-                end
-                IS_MRS: if (icnt >= 32'd3) ist <= IS_DONE;    // tMRD 2
-                default: ;
-            endcase
+            if (f_ipall)      begin icnt <= 32'd0; ist <= IS_PALL; end
+            else if (f_iref)  begin
+                icnt <= 32'd0;
+                if (ist == IS_PALL) begin iref <= 4'd1; ist <= IS_REF; end
+                else                iref <= iref + 4'd1;      // tRFC 63 ns < 8 edges
+            end
+            else if (f_imrs)  begin icnt <= 32'd0; ist <= IS_MRS; end
+            else if ((ist == IS_MRS) && (icnt >= 32'd3)) ist <= IS_DONE;  // tMRD 2
         end
         //--------------------------------------------------------------
-        else if (wr_beat2) begin
-            // grid write lo half: NOP command + data + byte strobes on A[12:11]
-            // (never collides with slot A: it always lands on the filler edge)
-            o_S_A     <= {wr_lo_m[1], wr_lo_m[0], 11'h0};
-            o_S_DQ_O  <= wr_lo;
-            o_S_DQ_OE <= 1'b1;
-            wr_beat2  <= 1'b0;
-        end
+        // grid write lo half (arm_wrb: NOP + data + byte strobes on
+        // A[12:11] from the pad stage; never collides with slot A - it
+        // always lands on the filler edge)
+        if (arm_wrb) wr_beat2 <= 1'b0;
         //--------------------------------------------------------------
-        else if (ld_beat2) begin
-            // loader write beat 2: fully masked (single-halfword write).
-            // Outranks slot A: the beat can land on a pcen edge, and the grid
-            // is structurally silent during download (CPU held in reset).
-            o_S_A     <= {2'b11, 11'h0};
-            o_S_DQ_OE <= 1'b1;
-            ld_beat2  <= 1'b0;
-        end
+        // loader write beat 2 (arm_ldb: fully masked single-halfword
+        // write from the pad stage).  Outranks slot A: the beat can land
+        // on a pcen edge, and the grid is structurally silent during
+        // download (CPU held in reset).
+        if (arm_ldb) ld_beat2 <= 1'b0;
         //--------------------------------------------------------------
-        else if (pcen_d) begin
-            // slot A: translate whatever the grid drove this CKIO cycle
+        // sideband early gear (sect.11, arm_prf): the strobed op's next
+        // CAS, one fast edge before its pin decode - command from the
+        // pad stage.  The filler edge is structurally free mid-op (no
+        // window class opens during a CPU SDRAM transaction, wr/ld beats
+        // can't reach into a read train - oracle-asserted).  AP
+        // bookkeeping stays at the pin decode.
+        if (arm_prf) cap_sh <= {cap_sh[1:0], 1'b1};
+        //--------------------------------------------------------------
+        if (slotA) begin
+            // slot A: parse whatever the grid drove this CKIO cycle (the
+            // ACT/WR/PRE/REF translate itself issues from the pad stage)
             if (!i_G_CS_n) begin
                 case ({i_G_RAS_n, i_G_CAS_n, i_G_WE_n})
-                    CMD_ACT: begin
-                        {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_ACT;
-                        o_S_A  <= {1'b0, i_G_A};              // 12-bit row pass-through
-                        o_S_BA <= i_G_BA;                     // (B board drives bit 11 = 0)
-                        ga_open[i_G_BA] <= 1'b1;
+                    CMD_ACT: begin                            // 12-bit row pass-through
+                        ga_open[i_G_BA] <= 1'b1;              // (B board drives bit 11 = 0)
                         act_gap <= 2'd2;
                         if (m_open && (i_G_BA == m_bank))
                             $display("[CV1k_sdram_control] ERROR: grid ACT bank %0d over open maintenance row @%0t",
                                      i_G_BA, $time);
                     end
                     CMD_RD: begin                             // one grid CAS -> one BL2 pair
-                        {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_RD;
-                        o_S_A  <= {2'b00, i_G_A[10], 1'b0, i_G_A[7:0], 1'b0};
-                        o_S_BA <= i_G_BA;
-                        // whole-vector re-assign: a bit-select NBA after the
-                        // vector-shift NBA is silently dropped by Verilator
-                        rdg_sh <= {rdg_sh[4:0], 1'b1};
+                        // sideband-geared (oracle-enforced): the module CAS
+                        // went out one fast edge ago on the filler (pr_fire);
+                        // this edge runs the serve/OE window + AP bookkeeping
+                        // - whole-vector re-assign (a bit-select NBA after
+                        // the vector-shift NBA is silently dropped)
+                        rdg_sh  <= {rdg_sh[4:0], 1'b1};
                         if (i_G_A[10]) begin                  // auto-precharge: the normal
                             ga_open[i_G_BA] <= 1'b0;          // close (MCR 0x543C RASD=0 -
                             cool[i_G_BA] <= 3'd7;             // every op ends with AP)
                         end
                     end
                     CMD_WR: begin
-                        {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_WR;
-                        o_S_A  <= {i_G_DQM[3], i_G_DQM[2],    // beat-0 byte strobes on A[12:11]
-                                   i_G_A[10], 1'b0, i_G_A[7:0], 1'b0};
-                        o_S_BA <= i_G_BA;
-                        o_S_DQ_O <= i_G_WDATA[31:16];         // hi half rides the command beat
-                        o_S_DQ_OE <= 1'b1;
+                        // hi half rides the command beat (pad stage);
+                        // beat-0 byte strobes on A[12:11]
                         wr_beat2 <= 1'b1;
                         wr_lo    <= i_G_WDATA[15:0];
                         wr_lo_m  <= i_G_DQM[1:0];
@@ -587,10 +1077,9 @@ always @(posedge i_CLK) begin
                             cool[i_G_BA] <= 3'd7;
                         end
                     end
-                    CMD_PRE: begin                            // PRE / PALL (A10 forwarded)
-                        {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_PRE;
-                        o_S_A  <= {2'b00, i_G_A[10:0]};       // bit 11 dropped: precharge only
-                        o_S_BA <= i_G_BA;                     // reads A10+BA, and A[12:11]=00
+                    CMD_PRE: begin                            // PRE / PALL (A10 forwarded,
+                                                              // bit 11 dropped: precharge
+                                                              // reads A10+BA, A[12:11]=00)
                         if (i_G_A[10]) begin                  // keeps the DQM pins quiet
                             ga_open <= 4'b0;                  // PALL closes everything,
                             for (sbi = 0; sbi < 4; sbi = sbi + 1)
@@ -616,7 +1105,6 @@ always @(posedge i_CLK) begin
                         end
                     end
                     CMD_REF: begin
-                        {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_REF;
                         ref_hold <= 4'd8;                     // tRFC guard (63 ns < 8 edges)
                         if (m_open) begin                     // BSC PALLs before REF, so a
                             m_open <= 1'b0;                   // live pair here is a bug
@@ -629,80 +1117,38 @@ always @(posedge i_CLK) begin
             end
         end
         //--------------------------------------------------------------
-        else begin
-            // slot B: engines (mutually exclusive by construction - NOR runs
-            // only inside CS0 cycles, the loader only while the CPU is reset)
-            case (nst)
-                NS_ACT: begin
-                    {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_ACT;
-                    o_S_A  <= {2'b10, nor_addr[20:10]};       // NOR window rows 0x1000-0x17FF
-                    o_S_BA <= 2'b00;
-                    ncnt <= 2'd0; nst <= NS_RCD;
-                    act_gap <= 2'd2;
-                    if (m_open && (m_bank == 2'd0))           // window sizing keeps pairs
-                        $display("[CV1k_sdram_control] ERROR: NOR ACT with bank-0 maintenance row open @%0t", $time);
-                end
-                NS_RD: begin
-                    {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_RD;
-                    o_S_A  <= {2'b00, 1'b1, nor_addr[9:0]};   // A10: auto-precharge
-                    o_S_BA <= 2'b00;
-                    rdn_sh <= {rdn_sh[3:0], 1'b1};            // whole-vector (see rdg_sh note)
-                    nst <= NS_CAP;
-                end
-                default: begin
-                    case (lst)
-                        LS_ACT: begin        // halfword latched by construction once LS_ACT is reached
-                            {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_ACT;
-                            o_S_A  <= {2'b10, ld_a[20:10]};
-                            o_S_BA <= 2'b00;
-                            lcnt <= 3'd0; lst <= LS_RCD;
-                        end
-                        LS_WR: begin
-                            {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_WR;
-                            o_S_A  <= {2'b00, 1'b1, ld_a[9:0]};   // unmasked beat 0, auto-precharge
-                            o_S_BA <= 2'b00;
-                            o_S_DQ_O <= ld_hw;
-                            o_S_DQ_OE <= 1'b1;
-                            ld_beat2 <= 1'b1;                 // beat 1 masked next edge
-                            lcnt <= 3'd0; lst <= LS_DAL;
-                        end
-                        default: begin
-                            //------------------------------------------
-                            // refresh scheduler (lowest priority): one
-                            // hidden ACT+PRE pair at a time on leftover
-                            // slot-B edges, section 6.2 window rules
-                            //------------------------------------------
-                            if (m_open) begin
-                                // tRAS: our ACT hit the chip at fire+1; a PRE
-                                // here lands >= 5 chip clocks after it once
-                                // m_cnt (which starts the edge AFTER the
-                                // fire) reads 4.  A10=0, A[12:11]=00.
-                                if (m_cnt >= 3'd4) begin
-                                    {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_PRE;
-                                    o_S_A  <= 13'h0;
-                                    o_S_BA <= m_bank;
-                                    m_credit;
-                                end
-                            end
-                            else if (sel_v && (ref_hold == 4'd0)
-                                           && (act_gap == 2'd0)
-                                           && !ld_go) begin
-                                // !ld_go: a pending loader halfword wins the
-                                // slot (w_dl windows only - ld_go is never
-                                // set outside a download); the pair waits
-                                {o_S_nRAS, o_S_nCAS, o_S_nWE} <= CMD_ACT;
-                                o_S_A  <= sel_row;
-                                o_S_BA <= sel_bank;
-                                m_open <= 1'b1;
-                                m_bank <= sel_bank;
-                                m_hi   <= sel_hi;
-                                m_cnt  <= 3'd0;
-                                act_gap <= 2'd2;
-                            end
-                        end
-                    endcase
-                end
-            endcase
+        // slot B: engines (mutually exclusive by construction - NOR runs
+        // only inside CS0 cycles, the loader only while the CPU is reset);
+        // commands issue from the pad stage on the arm_* fires
+        if (arm_nact) begin                                   // NOR rows 0x1000-0x17FF
+            ncnt <= 2'd0; nst <= NS_RCD;
+            act_gap <= 2'd2;
+            if (m_open && (m_bank == 2'd0))                   // window sizing keeps pairs
+                $display("[CV1k_sdram_control] ERROR: NOR ACT with bank-0 maintenance row open @%0t", $time);
+        end
+        if (arm_nrd) begin                                    // A10: auto-precharge
+            rdn_sh <= {rdn_sh[3:0], 1'b1};                    // whole-vector (see rdg_sh note)
+            nst <= NS_CAP;
+        end
+        if (arm_lact) begin  // halfword latched by construction once LS_ACT is reached
+            lcnt <= 3'd0; lst <= LS_RCD;
+        end
+        if (arm_lwr) begin   // unmasked beat 0, auto-precharge
+            ld_beat2 <= 1'b1;                                 // beat 1 masked next edge
+            lcnt <= 3'd0; lst <= LS_DAL;
+        end
+        //--------------------------------------------------------------
+        // hidden-refresh pair dispatch bookkeeping (arm_mpre/arm_mact =
+        // both old call sites: module-idle slot-A edges + leftover slot-B
+        // edges, section 6.2 rules; commands from the pad stage)
+        //--------------------------------------------------------------
+        if (arm_mpre) m_credit;                               // A10=0, A[12:11]=00
+        if (arm_mact) begin                                   // bank/region from the
+            m_open <= 1'b1;                                   // q-selected p_* pick
+            m_bank <= q_mhi ? p_hi_b : p_lo_b;                // (single source with
+            m_hi   <= q_mhi;                                  // the pad stage)
+            m_cnt  <= 3'd0;
+            act_gap <= 2'd2;
         end
 
         //--------------------------------------------------------------
@@ -756,6 +1202,215 @@ always @(posedge i_CLK) begin
 end
 
 //------------------------------------------------------------------
+// H7b.8d flat pad stage: the IOE registers, one shallow AND-OR each.
+//
+// Every arm's data is a register bank (pr_*/nor_addr/ld_*/wr_lo/p_*/
+// m_bank) or the grid pins (arm_tr / arm_wrb strobes - irreducible:
+// the BSC dispatches with zero pin warning and tRCD=21 ns pins the
+// slot-A ACT instant to pins+1 fast edge, so a pre-registered plan
+// stage would either shift the chip schedule [breaks tRCD against the
+// geared CAS, proven H7b.8d analysis] or consume a surface that does
+// not exist yet.  The pin arcs run launch(CKIO-coincident c153/c102
+// edge) -> capture(next c102 edge) = one full c102 period; the SDC
+// carries the proof).  The one-hot selects are the fire-select plane -
+// no serial arm cascade reaches any pad D input.
+// CMD_MRS is 3'b000: its "term" is the absence of 1-contributions
+// while cmd_any holds off the NOP fold - do not add a term for it.
+//------------------------------------------------------------------
+wire cmd_pre_t = q_ipall | arm_mpre;                          // (q_i* = step-3 pre-
+wire cmd_ref_t = q_iref;                                      //  registered init fires)
+wire cmd_rd_t  = arm_prf | arm_nrd;
+wire cmd_act_t = arm_nact | arm_lact | arm_mhi | arm_mlo;
+wire cmd_wr_t  = arm_lwr;
+wire cmd_any   = cmd_pre_t | cmd_ref_t | q_imrs | cmd_rd_t | cmd_act_t
+               | cmd_wr_t | arm_tr;
+
+wire [12:0] pad_a =
+      ({13{q_ipall  }} & 13'h0400)                            // A10: precharge all
+    | ({13{q_imrs   }} & MRS_BL2_CL2)
+    | ({13{arm_wrb  }} & {wr_lo_m[1], wr_lo_m[0], 11'h0})
+    | ({13{arm_ldb  }} & {2'b11, 11'h0})
+    | ({13{arm_prf  }} & {2'b00, pr_ap, 1'b0, pr_col, 1'b0})
+    | ({13{arm_tr_act}} & {1'b0, i_G_A})
+    | ({13{arm_tr_wr }} & {i_G_DQM[3], i_G_DQM[2], i_G_A[10], 1'b0, i_G_A[7:0], 1'b0})
+    | ({13{arm_tr_pre}} & {2'b00, i_G_A[10:0]})
+    | ({13{arm_nact }} & {2'b10, nor_addr[20:10]})
+    | ({13{arm_nrd  }} & {2'b00, 1'b1, nor_addr[9:0]})
+    | ({13{arm_lact }} & {2'b10, ld_a[20:10]})
+    | ({13{arm_lwr  }} & {2'b00, 1'b1, ld_a[9:0]})
+    | ({13{arm_mhi  }} & p_hi_row)
+    | ({13{arm_mlo  }} & p_lo_row);
+
+wire [1:0] pad_ba =
+      ({2{arm_prf}} & pr_ba)
+    | ({2{arm_tr_act | arm_tr_wr | arm_tr_pre}} & i_G_BA)
+    | ({2{arm_mhi }} & p_hi_b)
+    | ({2{arm_mlo }} & p_lo_b)
+    | ({2{arm_mpre}} & m_bank);
+
+wire [2:0] pad_cmd =
+      ({3{cmd_pre_t}} & CMD_PRE)
+    | ({3{cmd_ref_t}} & CMD_REF)
+    | ({3{cmd_rd_t }} & CMD_RD)
+    | ({3{cmd_act_t}} & CMD_ACT)
+    | ({3{cmd_wr_t }} & CMD_WR)
+    | ({3{arm_tr   }} & g_cmd)
+    | {3{~cmd_any}};                                          // idle = NOP (111)
+
+wire        pad_dq_we = arm_wrb | arm_tr_wr | arm_lwr;
+wire [15:0] pad_dq =
+      ({16{arm_wrb  }} & wr_lo)
+    | ({16{arm_tr_wr}} & i_G_WDATA[31:16])                    // hi half rides the cmd beat
+    | ({16{arm_lwr  }} & ld_hw);
+wire        pad_oe = arm_wrb | arm_ldb | arm_tr_wr | arm_lwr;
+
+always @(posedge i_CLK) begin
+    if (!i_RST_n) begin
+        {o_S_nCS, o_S_nRAS, o_S_nCAS, o_S_nWE} <= {1'b0, CMD_NOP};
+        o_S_A <= 13'h0; o_S_BA <= 2'b00; o_S_CKE <= 1'b1;
+        o_S_DQ_O <= 16'h0; o_S_DQ_OE <= 1'b0;
+    end else begin
+        o_S_nCS <= 1'b0;                     // chip-address bit: chip 0 always
+        {o_S_nRAS, o_S_nCAS, o_S_nWE} <= pad_cmd;
+        o_S_A     <= pad_a;                  // defaults fold to 0 = DQM active
+        o_S_BA    <= pad_ba;
+        o_S_DQ_OE <= pad_oe;
+        if (pad_dq_we) o_S_DQ_O <= pad_dq;   // DQ_O holds between drive beats
+        o_S_CKE   <= init_done ? (pcen_d ? i_G_CKE : o_S_CKE) : 1'b1;
+    end
+end
+
+// synthesis translate_off
+//------------------------------------------------------------------
+// H7b.8d equivalence oracles.
+// (1) fire-select one-hot: the flat arms must never overlap (the old
+//     else-chain made overlap unreachable; here it is a proven invariant).
+// (2) shadow pads: the ORIGINAL priority chain, replicated verbatim as
+//     sh_* registers (pad writes only - state is read from the live
+//     regs), compared against the flat stage every edge.  Chain==flat
+//     is thereby re-proven by every sim run, over every workload.
+//------------------------------------------------------------------
+always @(posedge i_CLK) if (i_RST_n) begin
+    if (!$onehot0({f_ipall, f_iref, f_imrs, arm_wrb, arm_ldb, arm_prf,
+                   arm_tr, arm_nact, arm_nrd, arm_lact, arm_lwr,
+                   arm_mpre, arm_mact}))
+        $fatal(1, "[pad8d] fire-select overlap @%0t: %b", $time,
+               {f_ipall, f_iref, f_imrs, arm_wrb, arm_ldb, arm_prf,
+                arm_tr, arm_nact, arm_nrd, arm_lact, arm_lwr,
+                arm_mpre, arm_mact});
+end
+
+reg [12:0] sh_a;
+reg [1:0]  sh_ba;
+reg        sh_ncs, sh_cke, sh_oe;
+reg [2:0]  sh_cmd;
+reg [15:0] sh_dqo;
+reg        sh_arm;                           // compare enable (post-reset)
+
+always @(posedge i_CLK) begin
+    if (!i_RST_n) begin
+        sh_ncs <= 1'b0; sh_cmd <= CMD_NOP;
+        sh_a <= 13'h0; sh_ba <= 2'b00; sh_cke <= 1'b1;
+        sh_dqo <= 16'h0; sh_oe <= 1'b0;
+        sh_arm <= 1'b0;
+    end else begin
+        sh_arm <= 1'b1;
+        // ---- the pre-H7b.8d output chain, verbatim ----
+        sh_ncs <= 1'b0; sh_cmd <= CMD_NOP;
+        sh_a <= 13'h0; sh_ba <= 2'b00;
+        sh_oe <= 1'b0;
+        sh_cke <= init_done ? (pcen_d ? i_G_CKE : sh_cke) : 1'b1;
+        if (!init_done) begin
+            case (ist)
+                IS_WAIT: if (icnt >= INIT_WAIT) begin
+                    sh_cmd <= CMD_PRE; sh_a <= 13'h0400;
+                end
+                IS_PALL: if (icnt >= 32'd3) sh_cmd <= CMD_REF;
+                IS_REF: if (icnt >= 32'd8) begin
+                    if (iref >= 4'd8) begin sh_cmd <= CMD_MRS; sh_a <= MRS_BL2_CL2; end
+                    else sh_cmd <= CMD_REF;
+                end
+                default: ;
+            endcase
+        end
+        else if (wr_beat2) begin
+            sh_a <= {wr_lo_m[1], wr_lo_m[0], 11'h0};
+            sh_dqo <= wr_lo; sh_oe <= 1'b1;
+        end
+        else if (ld_beat2) begin
+            sh_a <= {2'b11, 11'h0}; sh_oe <= 1'b1;
+        end
+        else if (pr_fire) begin
+            sh_cmd <= CMD_RD;
+            sh_a <= {2'b00, pr_ap, 1'b0, pr_col, 1'b0};
+            sh_ba <= pr_ba;
+        end
+        else if (pcen_d) begin
+            if (!i_G_CS_n) begin
+                case (g_cmd)
+                    CMD_ACT: begin sh_cmd <= CMD_ACT; sh_a <= {1'b0, i_G_A}; sh_ba <= i_G_BA; end
+                    CMD_WR: begin
+                        sh_cmd <= CMD_WR;
+                        sh_a <= {i_G_DQM[3], i_G_DQM[2], i_G_A[10], 1'b0, i_G_A[7:0], 1'b0};
+                        sh_ba <= i_G_BA;
+                        sh_dqo <= i_G_WDATA[31:16]; sh_oe <= 1'b1;
+                    end
+                    CMD_PRE: begin sh_cmd <= CMD_PRE; sh_a <= {2'b00, i_G_A[10:0]}; sh_ba <= i_G_BA; end
+                    CMD_REF: sh_cmd <= CMD_REF;
+                    default: ;
+                endcase
+            end
+            if (!slotA_cmd) begin
+                if (m_open) begin
+                    if (m_cnt >= 3'd4) begin
+                        sh_cmd <= CMD_PRE; sh_a <= 13'h0; sh_ba <= m_bank;
+                    end
+                end
+                else if (sel_v && (ref_hold == 4'd0) && (act_gap == 2'd0) && !ld_go) begin
+                    sh_cmd <= CMD_ACT; sh_a <= sel_row; sh_ba <= sel_bank;
+                end
+            end
+        end
+        else begin
+            case (nst)
+                NS_ACT: begin sh_cmd <= CMD_ACT; sh_a <= {2'b10, nor_addr[20:10]}; sh_ba <= 2'b00; end
+                NS_RD:  begin sh_cmd <= CMD_RD;  sh_a <= {2'b00, 1'b1, nor_addr[9:0]}; sh_ba <= 2'b00; end
+                default: begin
+                    case (lst)
+                        LS_ACT: begin sh_cmd <= CMD_ACT; sh_a <= {2'b10, ld_a[20:10]}; sh_ba <= 2'b00; end
+                        LS_WR: begin
+                            sh_cmd <= CMD_WR; sh_a <= {2'b00, 1'b1, ld_a[9:0]}; sh_ba <= 2'b00;
+                            sh_dqo <= ld_hw; sh_oe <= 1'b1;
+                        end
+                        default: begin
+                            if (m_open) begin
+                                if (m_cnt >= 3'd4) begin
+                                    sh_cmd <= CMD_PRE; sh_a <= 13'h0; sh_ba <= m_bank;
+                                end
+                            end
+                            else if (sel_v && (ref_hold == 4'd0) && (act_gap == 2'd0) && !ld_go) begin
+                                sh_cmd <= CMD_ACT; sh_a <= sel_row; sh_ba <= sel_bank;
+                            end
+                        end
+                    endcase
+                end
+            endcase
+        end
+    end
+end
+
+always @(posedge i_CLK) if (sh_arm) begin
+    if ({sh_ncs, sh_cmd, sh_a, sh_ba, sh_oe, sh_cke} !=
+        {o_S_nCS, o_S_nRAS, o_S_nCAS, o_S_nWE, o_S_A, o_S_BA, o_S_DQ_OE, o_S_CKE})
+        $fatal(1, "[pad8d] flat != chain @%0t: cmd %b%b A %04x/%04x BA %b/%b OE %b/%b",
+               $time, sh_cmd, {o_S_nRAS, o_S_nCAS, o_S_nWE},
+               sh_a, o_S_A, sh_ba, o_S_BA, sh_oe, o_S_DQ_OE);
+    if (sh_oe && (sh_dqo != o_S_DQ_O))
+        $fatal(1, "[pad8d] flat != chain DQ_O @%0t: %04x/%04x", $time, sh_dqo, o_S_DQ_O);
+end
+// synthesis translate_on
+
+//------------------------------------------------------------------
 // optional debug (+pumpdbg): init completion + NOR engine trace
 //------------------------------------------------------------------
 `ifndef SYNTHESIS
@@ -772,8 +1427,8 @@ always @(posedge i_CLK) if (pdbg != 0) begin
         pdbg_n = pdbg_n + 1;
     end
     if ((|rdg_sh) && (pdbg_n < 200)) begin
-        $display("[pump] t=%0t GRD rdg=%06b dq=%04x hi=%04x w=%08x oe=%b",
-                 $time, rdg_sh, i_S_DQ_I, rd_hi, rd_word, o_G_RDATA_OE);
+        $display("[pump] t=%0t GRD rdg=%06b cap=%03b dq=%04x hi=%04x lo=%04x w=%08x oe=%b",
+                 $time, rdg_sh, cap_sh, i_S_DQ_I, rd_hi_e, rd_lo, rd_word, o_G_RDATA_OE);
         pdbg_n = pdbg_n + 1;
     end
     if ((nst != NS_IDLE) || (nor_read_req && !nor_rdy)) begin

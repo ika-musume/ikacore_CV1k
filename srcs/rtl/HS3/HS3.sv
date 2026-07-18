@@ -79,13 +79,22 @@ module HS3 #(
     output  wire            o_D_PU,         //PULD: D31-D0 pull-up state (figs 10.42-43)
     output  wire            o_IRQOUT_n,     //bus retrieval request (p.321)
 
+    /* TRANSACTION MONITOR - (early-transaction snoop): one registered
+       pulse per committed external transaction unit at its internal accept
+       edge - advisory only, nothing returned. Leave unconnected when unused. */
+    output  wire            o_MON_REQ,
+    output  wire            o_MON_WR,
+    output  wire            o_MON_BURST,
+    output  wire    [1:0]   o_MON_SIZE,
+    output  wire    [28:0]  o_MON_ADDR,
+
     /* GENERIC MEMORY PORT - mirrors EVERY external access. Generic-class
        accesses may be completed early by i_MEM_RSP_VALID (ORed with the
        i_WAIT_n-timed physical bus cycle); BSC-owned accesses (SDRAM 2/3,
        areas 1/7) are one-cycle accept strobes - observation only, never
        answered. i_MEM_READY is reserved (ignored). */
     output  wire            o_MEM_REQ,
-    output  wire            o_MEM_WRITE,
+    output  wire            o_MEM_WR,
     output  wire            o_MEM_BURST,
     output  wire    [1:0]   o_MEM_SIZE,
     output  wire    [28:0]  o_MEM_ADDR,
@@ -178,18 +187,18 @@ wire            cen = DISABLE_CEN ? 1'b1 : i_CEN;
 //////  Bus Fabric
 ////
 
-IBus_1          CORE_I_BUS();       //I bus 1: cache master -> arbiter
-IBus_1          DMA_I_BUS();        //I bus 1: DMAC master -> arbiter (tied off until the engine lands)
-IBus_1          ARB_I_BUS();        //arbiter -> splitter (the single downstream master)
-IBus_1          BRG_I_BUS();        //splitter -> bridge (register windows)
-IBus_1          BSC_I_BUS();        //splitter -> BSC (memory + BSC registers)
-IBus_2          REG_CPG();          //bridge -> cpg_wdt   (0xFFFFFF80-8F)
-IBus_2          REG_INTC_HI();      //bridge -> intc      (0xFFFFFEE0-EF)
-IBus_2          REG_INTC_LO();      //bridge -> intc      (0xA4000000-1F)
-IBus_2          PBUS_TMU();         //P bus: BSC -> tmu    (0xFFFFFE90-B8)
-IBus_2          PBUS_RTC();         //P bus: BSC -> rtc    (0xFFFFFEC0-DE)
-IBus_2          PBUS_PORT();        //P bus: BSC -> ioport (0x04000100-137)
-IBus_2          PBUS_DMAC();        //P bus: BSC -> dmac   (0x04000020-77)
+IBus_1          IBUS1_CORE();       //I bus 1: cache master -> arbiter (Fig 1.1, hw manual p.6)
+IBus_1          IBUS1_DMA();        //I bus 1: DMAC master -> arbiter (tied off until the engine lands)
+IBus_1          IBUS1_ARB();        //I bus 1: arbiter -> splitter (the single downstream master)
+IBus_1          IBUS1_BRG();        //I bus 1: splitter -> bridge (register windows)
+IBus_1          IBUS1_BSC();        //I bus 1: splitter -> BSC (memory + BSC registers)
+IBus_2          IBUS2_CPG();        //I bus 2: bridge -> cpg_wdt        (0xFFFFFF80-8F)
+IBus_2          IBUS2_INTC_HI();    //I bus 2: bridge -> intc           (0xFFFFFEE0-EF)
+IBus_2          IBUS2_INTC_LO();    //I bus 2: bridge -> intc           (0xA4000000-1F)
+IBus_2          PBUS1_TMU();        //Peripheral bus 1: BSC -> tmu      (0xFFFFFE90-B8)
+IBus_2          PBUS1_RTC();        //Peripheral bus 1: BSC -> rtc      (0xFFFFFEC0-DE)
+IBus_2          PBUS2_PORT();       //Peripheral bus 2: BSC -> ioport   (0x04000100-137)
+IBus_2          PBUS2_DMAC();       //Peripheral bus 2: BSC -> dmac     (0x04000020-77)
 
 wire            dmac_hold;          //DMAC transfer-unit / burst bus hold
 
@@ -198,9 +207,9 @@ ibus_arb u_arb (
     .i_CLK                  (i_CLK                                  ),
     .i_CEN                  (cen                                    ),
 
-    .CPU_BUS                (CORE_I_BUS                             ),
-    .DMA_BUS                (DMA_I_BUS                              ),
-    .CORE_BUS               (ARB_I_BUS                              ),
+    .CPU_BUS                (IBUS1_CORE                             ),
+    .DMA_BUS                (IBUS1_DMA                              ),
+    .CORE_BUS               (IBUS1_ARB                              ),
 
     .i_DMA_HOLD             (dmac_hold                              )
 );
@@ -210,9 +219,9 @@ ibus_splitter u_split (
     .i_CLK                  (i_CLK                                  ),
     .i_CEN                  (cen                                    ),
 
-    .CORE_BUS               (ARB_I_BUS                              ),
-    .BRG_BUS                (BRG_I_BUS                              ),
-    .EXT_BUS                (BSC_I_BUS                              )
+    .CORE_BUS               (IBUS1_ARB                              ),
+    .BRG_BUS                (IBUS1_BRG                              ),
+    .EXT_BUS                (IBUS1_BSC                              )
 );
 
 ibus_bridge u_bridge (
@@ -220,10 +229,10 @@ ibus_bridge u_bridge (
     .i_CLK                  (i_CLK                                  ),
     .i_CEN                  (cen                                    ),
 
-    .I_BUS                  (BRG_I_BUS                              ),
-    .REG_CPG                (REG_CPG                                ),
-    .REG_INTC_HI            (REG_INTC_HI                            ),
-    .REG_INTC_LO            (REG_INTC_LO                            )
+    .I_BUS                  (IBUS1_BRG                              ),
+    .REG_CPG                (IBUS2_CPG                                ),
+    .REG_INTC_HI            (IBUS2_INTC_HI                            ),
+    .REG_INTC_LO            (IBUS2_INTC_LO                            )
 );
 
 
@@ -248,14 +257,14 @@ bsc #(
     .i_CEN                  (cen                                    ),
     .i_BCEN                 (bcen                                   ),
 
-    .I_BUS                  (BSC_I_BUS                              ),
-    .REG_TMU                (PBUS_TMU                               ),
-    .REG_RTC                (PBUS_RTC                               ),
-    .REG_PORT               (PBUS_PORT                              ),
-    .REG_DMAC               (PBUS_DMAC                              ),
+    .I_BUS                  (IBUS1_BSC                              ),
+    .REG_TMU                (PBUS1_TMU                               ),
+    .REG_RTC                (PBUS1_RTC                               ),
+    .REG_PORT               (PBUS2_PORT                              ),
+    .REG_DMAC               (PBUS2_DMAC                              ),
 
     .o_MEM_REQ              (o_MEM_REQ                              ),
-    .o_MEM_WRITE            (o_MEM_WRITE                            ),
+    .o_MEM_WR            (o_MEM_WR                            ),
     .o_MEM_BURST            (o_MEM_BURST                            ),
     .o_MEM_SIZE             (o_MEM_SIZE                             ),
     .o_MEM_ADDR             (o_MEM_ADDR                             ),
@@ -265,6 +274,12 @@ bsc #(
     .i_MEM_RSP_VALID        (i_MEM_RSP_VALID                        ),
     .i_MEM_FAULT            (i_MEM_FAULT                            ),
     .o_MEM_RSP_READY        (o_MEM_RSP_READY                        ),
+
+    .o_MON_REQ               (o_MON_REQ                               ),
+    .o_MON_WR                (o_MON_WR                                ),
+    .o_MON_ADDR              (o_MON_ADDR                              ),
+    .o_MON_SIZE              (o_MON_SIZE                              ),
+    .o_MON_BURST             (o_MON_BURST                             ),
 
     .o_A                    (o_A                                    ),
     .o_D_O                  (o_D_O                                  ),
@@ -336,7 +351,7 @@ cpu_core #(
     .i_CLK                  (i_CLK                                  ),
     .i_CEN                  (cen                                    ),
 
-    .I_BUS                  (CORE_I_BUS                             ),
+    .I_BUS                  (IBUS1_CORE                             ),
 
     .i_NMI_VALID            (nmi_valid                              ),
     .i_NMI_BLMSK            (nmi_blmsk                              ),
@@ -373,7 +388,7 @@ cpg_wdt u_cpg_wdt (
     .i_CLK                  (i_CLK                                  ),
     .i_CEN                  (cen                                    ),
 
-    .REG_BUS                (REG_CPG                                ),
+    .REG_BUS                (IBUS2_CPG                                ),
 
     .o_PCEN                 (pcen                                   ),
     .o_BCEN                 (bcen                                   ),
@@ -402,7 +417,7 @@ tmu u_tmu (
     .i_CEN                  (cen                                    ),
     .i_PCEN                 (pcen                                   ),
 
-    .REG_BUS                (PBUS_TMU                               ),
+    .REG_BUS                (PBUS1_TMU                               ),
 
     .i_TCLK                 (i_PTH_I[7]                             ),  //TCLK pad = PTH7 (table 18.1)
     .o_TCLK_O               (tclk_o                                 ),
@@ -427,7 +442,7 @@ rtc u_rtc (
     .i_CLK                  (i_CLK                                  ),
     .i_CEN                  (cen                                    ),
 
-    .REG_BUS                (PBUS_RTC                               ),
+    .REG_BUS                (PBUS1_RTC                               ),
 
     .i_EXTAL2               (i_EXTAL2                               ),  //32.768 kHz crystal domain
     .o_RTCCLK               (rtcclk                                 ),
@@ -453,8 +468,8 @@ dmac u_dmac (
     .i_PCEN                 (pcen                                   ),
     .i_CKIO_NCEN            (o_CKIO_NCEN                            ),  //DREQ sample = CKIO falling edge (p.363)
 
-    .REG_BUS                (PBUS_DMAC                              ),
-    .I_BUS                  (DMA_I_BUS                              ),
+    .REG_BUS                (PBUS2_DMAC                              ),
+    .I_BUS                  (IBUS1_DMA                              ),
 
     .o_BUS_HOLD             (dmac_hold                              ),
 
@@ -510,7 +525,7 @@ ioport u_ioport (
     .i_CLK                  (i_CLK                                  ),
     .i_CEN                  (cen                                    ),
 
-    .REG_BUS                (PBUS_PORT                              ),
+    .REG_BUS                (PBUS2_PORT                              ),
 
     .i_PTA_I                (i_PTA_I                                ),
     .o_PTA_O                (o_PTA_O                                ),
@@ -571,8 +586,8 @@ intc u_intc (
     .i_CEN                  (cen                                    ),
     .i_PCEN                 (pcen                                   ),
 
-    .REG_HI                 (REG_INTC_HI                            ),
-    .REG_LO                 (REG_INTC_LO                            ),
+    .REG_HI                 (IBUS2_INTC_HI                            ),
+    .REG_LO                 (IBUS2_INTC_LO                            ),
 
     //interrupt pins ride the port pads (table 18.1): IRQ5 = SCPT7,
     //IRQ4-0 (= IRL3-0) = PTH4-0, IRLS3-0 = PTF3-0, PINT15-0 = PTF/PTC

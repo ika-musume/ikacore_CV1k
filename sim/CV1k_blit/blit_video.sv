@@ -309,7 +309,16 @@ module blit_video #(
     end
     else begin : g_fetch_train
 
-        reg  [15:0] line_buf [0:1023];         // {half, px}: fill vs display
+        // H7b.8e: the double-buffered line store is a 256 x 64 simple-dual-
+        // port RAM (was a 1024 x 16 register file -- the 64-bit train data
+        // fanning to a thousand scattered registers was a c153 wall).  The
+        // train beat is one aligned 64-bit word ({half, beat}), captured in
+        // a face register stage first so the RAM datain comes off local
+        // registers; the display side reads the full word with a one-cycle-
+        // ahead registered address (all index sources advance
+        // deterministically), then lane-muxes behind the RAM output -- o_px
+        // instants are IDENTICAL to the old register-file form.
+        reg  [63:0] line_mem [0:255];          // {half, word}: fill vs display
         reg         sel;                       // display half
         reg  [6:0]  fill_w;                    // fill word 0..96
         reg  [12:0] lat_sx_d;                  // display copy of the latched
@@ -324,13 +333,24 @@ module blit_video #(
         // is high - both were latched at the line_start edge one cycle
         // earlier, so they are stable and belong to this line's fetch.
 
+        // fill face capture (write lands one cycle later, in the half it
+        // was captured for -- safe against a swap in the gap, and the
+        // train has a full hline of slack)
+        reg         lfq_v;
+        reg  [63:0] lfq_d;
+        reg  [7:0]  lfq_a;                     // {half, word}
+
         always_ff @(posedge i_CLK or negedge i_RST_n) begin
             if (!i_RST_n) begin
                 sel      <= 1'b0;
                 fill_w   <= 7'(FETCH_BEATS);
                 lat_sx_d <= 13'd0;
+                lfq_v    <= 1'b0;
+                lfq_d    <= 64'd0;
+                lfq_a    <= 8'd0;
             end
             else begin
+                lfq_v <= 1'b0;
                 if (o_hline) begin
                     sel      <= ~sel;          // filled half becomes display
                     lat_sx_d <= lat_sx;        // its scroll_x rides along
@@ -342,14 +362,42 @@ module blit_video #(
 `endif
                 end
                 else if (i_lf_dvld && fill_w != 7'(FETCH_BEATS)) begin
-                    line_buf[{~sel, fill_w, 2'd0} + 10'd0] <= i_lf_data[15:0];
-                    line_buf[{~sel, fill_w, 2'd0} + 10'd1] <= i_lf_data[31:16];
-                    line_buf[{~sel, fill_w, 2'd0} + 10'd2] <= i_lf_data[47:32];
-                    line_buf[{~sel, fill_w, 2'd0} + 10'd3] <= i_lf_data[63:48];
+                    lfq_v  <= 1'b1;
+                    lfq_d  <= i_lf_data;
+                    lfq_a  <= {~sel, fill_w};
                     fill_w <= fill_w + 7'd1;
                 end
             end
         end
+
+        always_ff @(posedge i_CLK) begin
+            if (lfq_v)
+                line_mem[lfq_a] <= lfq_d;
+        end
+
+        // display read: register the NEXT window's pixel index into the RAM
+        // address port every cycle (hcnt/sel/lat_sx_d next-values replicate
+        // their own update rules exactly), so the word arrives in the same
+        // window the old async read was evaluated in
+        wire [8:0] hcnt_nx  = dot_ce ? (line_last ? 9'd0 : hcnt + 9'd1)
+                                     : hcnt;
+        wire       sel_nx   = o_hline ? ~sel : sel;
+        wire [4:0] sx5_nx   = o_hline ? lat_sx[4:0] : lat_sx_d[4:0];
+        wire [9:0] rd_px_nx = {sel_nx, 4'd0, sx5_nx}
+                            + {1'b0, hcnt_nx - 9'(HACT_START)};
+
+        reg  [63:0] rd_word;
+        reg  [1:0]  rd_lane;
+
+        always_ff @(posedge i_CLK) begin
+            rd_word <= line_mem[rd_px_nx[9:2]];
+            rd_lane <= rd_px_nx[1:0];
+        end
+
+        wire [15:0] rd_px16 = (rd_lane == 2'd0) ? rd_word[15:0]
+                            : (rd_lane == 2'd1) ? rd_word[31:16]
+                            : (rd_lane == 2'd2) ? rd_word[47:32]
+                                                : rd_word[63:48];
 
         always_ff @(posedge i_CLK or negedge i_RST_n) begin
             if (!i_RST_n) begin
@@ -359,7 +407,7 @@ module blit_video #(
             else begin
                 o_px_de <= dot_ce && visible;
                 if (dot_ce && visible)
-                    o_px <= line_buf[{sel, 4'd0, lat_sx_d[4:0]} + act_x];
+                    o_px <= rd_px16;
             end
         end
 

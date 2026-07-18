@@ -28,14 +28,22 @@ set_global_assignment -name TIMEQUEST_MULTICORNER_ANALYSIS OFF
 set_global_assignment -name OPTIMIZE_POWER_DURING_FITTING OFF
 set_global_assignment -name FINAL_PLACEMENT_OPTIMIZATION ALWAYS
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
-set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name OPTIMIZATION_MODE "AGGRESSIVE PERFORMANCE"
 set_global_assignment -name ALLOW_POWER_UP_DONT_CARE ON
+# fit #9 A/B (SPARSE AUTO + LOW packing, seed 1): c102 -6.02 (-0.09), c153
+# -7.22 TNS -74k (was -55k) - packing pair neutral for c102, negative for
+# c153 on this design; baseline NORMAL/MEDIUM restored.
 set_global_assignment -name QII_AUTO_PACKED_REGISTERS NORMAL
 set_global_assignment -name ROUTER_LCELL_INSERTION_AND_LOGIC_DUPLICATION ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON
 set_global_assignment -name OPTIMIZATION_TECHNIQUE SPEED
+# Explicit ON overrides the Aggressive Performance mode default (Off) — the
+# mode's ONLY delta vs our pinned settings (Quartus Info 16304). A/B fit #7
+# (Off): blit_draw blender c153 −6.83→−8.89 and +2,772 ALM for c102 −5.93→−5.82;
+# ON is the better trade. With ON, Aggressive == High Performance Effort here
+# (fit #6 bit-identical to fit #5).
 set_global_assignment -name MUX_RESTRUCTURE ON
 set_global_assignment -name REMOVE_REDUNDANT_LOGIC_CELLS ON
 set_global_assignment -name AUTO_DELAY_CHAINS_FOR_HIGH_FANOUT_INPUT_PINS ON
@@ -48,7 +56,7 @@ set_global_assignment -name ECO_OPTIMIZE_TIMING ON
 set_global_assignment -name PERIPHERY_TO_CORE_PLACEMENT_AND_ROUTING_OPTIMIZATION ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_ASYNCHRONOUS_SIGNAL_PIPELINING ON
 set_global_assignment -name ALM_REGISTER_PACKING_EFFORT MEDIUM
-set_global_assignment -name SEED 1
+set_global_assignment -name SEED 2
 
 # ikacore_CV1k core build configuration (H7b.8): the portable top selects
 # the target arms with these - CV1k_sdram_control (double-pump SDRAM +
@@ -369,3 +377,13 @@ set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_CKE
 set_instance_assignment -name MAX_FANOUT 1 -to "*|CV1k_sdram_control:u_pump|o_S_DQ_OE"
 set_instance_assignment -name MAX_FANOUT 1 -to "*|CV1k_sdram_control:u_pump|o_S_A[11]"
 set_instance_assignment -name MAX_FANOUT 1 -to "*|CV1k_sdram_control:u_pump|o_S_A[12]"
+
+# H7b.8b pad register bank: fit #4 still left o_S_A[8]/[9]/[11]/[12] (+ the
+# DQM SynDups) and all 16 o_S_DQ_OE SynDups OUT of the IOEs - fitter warning
+# 176279 "cannot simultaneously use clear and load signals".  The sys
+# template's ALLOW_SYNCH_CTRL_USAGE OFF targets *|SDRAM_* (pin names) and
+# never matched the pump's registers.  Forbid sync-control secondaries on
+# the pad register bank itself so the sync reset/NOP-default logic folds
+# into the D LUT and every pad register (and its duplicates) is packable.
+set_instance_assignment -name ALLOW_SYNCH_CTRL_USAGE OFF -to "*|CV1k_sdram_control:u_pump|o_S_*"
+set_global_assignment -name PLACEMENT_EFFORT_MULTIPLIER 4.0

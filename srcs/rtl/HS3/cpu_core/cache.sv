@@ -267,8 +267,12 @@ logic   [1:0]   grant_word;
 wire            grant_d     = !PIPE_L_BUS.req_fetch;                          //data cycle (shallow)
 wire            d_req_valid = PIPE_L_BUS.req_valid && !PIPE_L_BUS.req_fetch;
 wire            i_req_valid = PIPE_L_BUS.req_valid &&  PIPE_L_BUS.req_fetch;
-assign  grant_idx  = PIPE_L_BUS.req_addr[11:4];
-assign  grant_word = PIPE_L_BUS.req_addr[3:2];
+//RAM read index rides the pipe's 12-bit index-slice TWIN (== req_addr[11:2] every
+//cycle, sim-asserted in int_pipe): its whole mux+adder cone is private to this
+//consumer, so the fitter can place it AT the RAM block. All other req_addr
+//consumers (compare/decode/captures) keep the shared AGU output.
+assign  grant_idx  = PIPE_L_BUS.req_addr_idx[11:4];
+assign  grant_word = PIPE_L_BUS.req_addr_idx[3:2];
 
 //Simple-dual-port (1R1W): read port presents the live-grant lookup, the miss-FSM
 //victim/array read, or the mm-dispatch redirect; write port carries the commits.

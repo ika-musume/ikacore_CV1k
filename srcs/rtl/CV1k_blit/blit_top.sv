@@ -66,6 +66,8 @@ module blit_top #(
     input  wire [31:0] i_D_BUS,        // resolved shared bus (fetch read data)
     output wire        o_REF_WIN,      // fetch guarantees >= 5 CKIO w/o PALL/ACT
                                        // (CV1k_sdram_control refresh scheduler)
+    output wire [7:0]  o_SB_COL,       // early-gear announce: train start col
+    output wire [4:0]  o_SB_LEN,       //   + CAS beats, valid under the ACTV
 
     //------------------------------------------------------------------
     // interrupts (falling-edge sources, INTC-visible shapes)
@@ -233,7 +235,9 @@ blit_fetch u_blit_fetch (
     .o_snoop_word (blit_snoop_word),
     .o_busy       (blit_busy),
     .o_done       (blit_done),
-    .o_REF_WIN    (o_REF_WIN)
+    .o_REF_WIN    (o_REF_WIN),
+    .o_SB_COL     (o_SB_COL),
+    .o_SB_LEN     (o_SB_LEN)
 );
 
 //==================================================================

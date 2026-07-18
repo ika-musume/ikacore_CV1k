@@ -129,7 +129,7 @@ logic   [31:0]  tea;
 logic           pipe_d_pref;        //PREF sideband: pipeline -> cache data port
 logic           pipe_i_squash;      //wrong-path fetch sideband: pipeline -> cache (abort fill)
 
-LBus            PIPE_L_BUS();       //unified IF+MA L bus: int_pipe (master) <-> u_cache (slave), direct
+LBus            LBUS_PIPE();       //unified IF+MA L bus: int_pipe (master) <-> u_cache (slave), direct
 
 assign  core_rst_n = i_RST_n & i_POR_n;
 
@@ -180,7 +180,7 @@ assign  dbg_o_RTE_VALID         = pipe_rte_valid;
 
     L-bus MMIO registers live INSIDE their owning module (Appendix B, pp.739-744):
     the cache owns CCR/CCR2 and the mm tag/data windows; exc_handler owns
-    TRA/EXPEVT/INTEVT/TEA plus their decode (it snoops PIPE_L_BUS directly). The
+    TRA/EXPEVT/INTEVT/TEA plus their decode (it snoops LBUS_PIPE directly). The
     wires below carry the exc-group hit/read line into the cache's do_d
     output-flop mux and the fire-and-forget write pulse back.
 */
@@ -213,7 +213,7 @@ int_pipe #(
     .i_SPC                  (ctrl_spc                               ),
     .i_VBR                  (ctrl_vbr                               ),
 
-    .L_BUS                  (PIPE_L_BUS                             ),
+    .L_BUS                  (LBUS_PIPE                             ),
     .o_D_PREF               (pipe_d_pref                            ),
     .o_I_SQUASH             (pipe_i_squash                          ),
 
@@ -270,7 +270,7 @@ cache #(
     .i_CLK                  (i_CLK                                  ),
     .i_CEN                  (i_CEN                                  ),
 
-    .PIPE_L_BUS             (PIPE_L_BUS                             ),
+    .PIPE_L_BUS             (LBUS_PIPE                             ),
     .i_I_SQUASH             (pipe_i_squash                          ),
     .i_PIPE_D_PREF          (pipe_d_pref                            ),
 
@@ -367,7 +367,7 @@ exc_handler #(
     .o_INT_ACK              (o_INT_ACK                              ),
     .o_NMI_ACK              (o_NMI_ACK                              ),
 
-    .L_BUS                  (PIPE_L_BUS                             ),
+    .L_BUS                  (LBUS_PIPE                             ),
     .i_LMMIO_WE             (lmmio_exc_we                           ),
     .o_LMMIO_HIT_LIVE       (lmmio_exc_hit_live                     ),
     .o_LMMIO_HIT            (lmmio_exc_hit                          ),

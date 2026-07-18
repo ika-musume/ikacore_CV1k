@@ -179,21 +179,39 @@ module blit_draw (
     reg signed [17:0] pv_xlo, pv_xhi, pv_ylo, pv_yhi;
     reg               pv_valid;
 
-    // pixel pipe (B1 issue -> B2 data-on-bus -> B3 raw regs/ALU1 -> B4 ALU2/write)
-    // H7b.8 Fmax retime: ALU1 (tint) evaluates on the live read-return
-    // during B2 and registers into B3; ALU2 (blend) evaluates from the B3
-    // registers and lands in the B4 data register that drives the write
-    // port directly.  Same values at the same edges as the original
-    // ALU1@B3/ALU2@B4 comb placement (read data is held stable by the
-    // i_rd_vld protocol, and mode banks cannot change under in-flight
-    // beats per the s3_bank_clear gate), so H0-H6 behavior is
-    // bit-identical - but no stage carries more than one ALU, and the
-    // draw->batch wfifo hop is register->RAM routing only.
-    reg         b1_v, b2_v, b3_v, b4_v;
-    reg         b1_bk, b2_bk, b3_bk, b4_bk;
-    reg         b1_px1, b2_px1;                // 1-pixel beat (strict smear mode)
-    reg  [24:0] b1_sa_, b1_wa, b2_wa, b3_wa, b4_wa;
-    reg  [3:0]  b1_en, b2_en, b3_mask, b4_mask;
+    // pixel pipe (B1 issue -> B2 data-on-bus -> B2r raw capture -> B3
+    // ALU1 regs -> B4 ALU2/write).  H7b.8c latency step (+1 stage, user
+    // latitude 2026-07-17 -- datapath speed unthrottled, write lands one
+    // fast cycle later): the read returns are captured RAW into the B2r
+    // registers at the same adv edge that used to consume them comb, and
+    // ALU1 (tint) now evaluates register->register from B2r into B3 --
+    // the staging-RAM Tco + route no longer feeds the tint multiplier
+    // cone (fit #8 c153 worst, -6.8).  ALU2 (blend) is unchanged from
+    // the B3 registers into the B4 data register that drives the write
+    // port directly.  Per-pixel values are identical (same read data,
+    // same mode banks -- s3_bank_clear covers the extra stage), only the
+    // write instant shifts +1 fast cycle; the batch train protocol is
+    // descriptor-counted and order-preserving, so DES behavior is
+    // unchanged (proven by datum + matrix).
+    reg         b1_v, b2_v, b2r_v, b3_v, b4_v;
+    reg         b1_bk, b2_bk, b2r_bk, b3_bk, b4_bk;
+    reg         b1_px1, b2_px1, b2r_px1;       // 1-pixel beat (strict smear mode)
+    reg  [24:0] b1_sa_, b1_wa, b2_wa, b2r_wa, b3_wa, b4_wa;
+    reg  [3:0]  b1_en, b2_en, b2r_en, b3_mask, b4_mask;
+    reg  [63:0] b2r_s, b2r_d;                  // captured src / dst read beats
+    // H7b.8e: B3i is a plain 1:1 delay stage between ALU1 and ALU2 (values
+    // identical, one cycle later) -- the two serial 5x6 / x2115 multiplies
+    // of the blend algebra span more than one period, and this register
+    // gives the synthesis retimer a boundary to spread them across.  Pipe
+    // depth 5 -> 6: hazard windows below carry the extra stage.
+    reg         b3i_v;
+    reg         b3i_bk;
+    reg  [24:0] b3i_wa;
+    reg  [3:0]  b3i_mask;
+    reg  [63:0] b3i_raw;
+    reg  [3:0][4:0] b3i_sr, b3i_sg, b3i_sb;
+    reg  [3:0][4:0] b3i_dr, b3i_dg, b3i_db;
+    reg  [3:0]      b3i_a;
     reg  [63:0] b3_raw;                        // post-flip raw src px (copy path)
     reg  [3:0][4:0] b3_sr, b3_sg, b3_sb;       // tinted src channels
     reg  [3:0][4:0] b3_dr, b3_dg, b3_db;       // dst channels
@@ -206,7 +224,7 @@ module blit_draw (
     reg  [1:0][4:0] bk_sa, bk_da;
     reg  [1:0][5:0] bk_tr, bk_tg, bk_tb;
 
-    wire pipe_empty = !b1_v && !b2_v && !b3_v && !b4_v;
+    wire pipe_empty = !b1_v && !b2_v && !b2r_v && !b3i_v && !b3_v && !b4_v;
 
     // pipe advance: stall sources are a write beat not accepted and, behind
     // a variable-latency backend (H7), a read not yet served (i_rd_vld=0)
@@ -504,10 +522,12 @@ module blit_draw (
     wire        emit_fire = (bst == B_BEAT) && adv && can_emit_gate;
     wire [2:0]  step      = q_px1 ? 3'd1 : 3'd4;
     wire        last_of_row = (px_left <= 16'($signed({13'b0, step})));
-    wire        bank_clear = !((b1_v && (b1_bk == bk_sel)) ||
-                               (b2_v && (b2_bk == bk_sel)) ||
-                               (b3_v && (b3_bk == bk_sel)) ||
-                               (b4_v && (b4_bk == bk_sel)));
+    wire        bank_clear = !((b1_v  && (b1_bk  == bk_sel)) ||
+                               (b2_v  && (b2_bk  == bk_sel)) ||
+                               (b2r_v && (b2r_bk == bk_sel)) ||
+                               (b3i_v && (b3i_bk == bk_sel)) ||
+                               (b3_v  && (b3_bk  == bk_sel)) ||
+                               (b4_v  && (b4_bk  == bk_sel)));
     // S3 writes the mode bank the op is ABOUT to take (~bk_sel): it must
     // not fire while any pipe beat still carries that bank.  Latent since
     // H3 (two fast ops can decode through S3 while an older op's tail
@@ -516,10 +536,12 @@ module blit_draw (
     // the programming itself is the clobber.  With an unstalled pipe the
     // target bank drains before any S3 can reach it, so H0-H6 behavior is
     // bit-identical (re-proven by the H6/FASTBOOT reruns).
-    wire        s3_bank_clear = !((b1_v && (b1_bk == ~bk_sel)) ||
-                                  (b2_v && (b2_bk == ~bk_sel)) ||
-                                  (b3_v && (b3_bk == ~bk_sel)) ||
-                                  (b4_v && (b4_bk == ~bk_sel)));
+    wire        s3_bank_clear = !((b1_v  && (b1_bk  == ~bk_sel)) ||
+                                  (b2_v  && (b2_bk  == ~bk_sel)) ||
+                                  (b2r_v && (b2r_bk == ~bk_sel)) ||
+                                  (b3i_v && (b3i_bk == ~bk_sel)) ||
+                                  (b3_v  && (b3_bk  == ~bk_sel)) ||
+                                  (b4_v  && (b4_bk  == ~bk_sel)));
     wire [2:0]  lane_cnt  = q_px1 ? 3'd1 :
                             (px_left >= 16'sd4) ? 3'd4 : px_left[2:0];
 
@@ -769,8 +791,9 @@ module blit_draw (
     // ---------------------------------------------------------------------
     // pixel pipe B1..B4
     // ---------------------------------------------------------------------
-    // ALU1 (comb, from B2 + the live read return): lane un-flip, channel
-    // extract, tint multiply, trans/A masking.  Results register into B3.
+    // ALU1 (comb, from the B2r raw-capture registers): lane un-flip,
+    // channel extract, tint multiply, trans/A masking.  Results register
+    // into B3.  Register->register: no RAM Tco or routing in this cone.
     logic [3:0][15:0] a1_raw;
     logic [3:0][4:0]  a1_sr, a1_sg, a1_sb, a1_dr, a1_dg, a1_db;
     logic [3:0]       a1_a, a1_mask;
@@ -779,28 +802,32 @@ module blit_draw (
             automatic logic [15:0] rw;
             automatic logic [15:0] dw_;
             // src lane un-flip: 4-px beats read ascending, output descending
-            rw  = b2_px1 ? i_srd_data[15:0]
-                : (bk_flip[b2_bk] ? i_srd_data[(3-l)*16 +: 16] : i_srd_data[l*16 +: 16]);
-            dw_ = i_drd_data[l*16 +: 16];
+            rw  = b2r_px1 ? b2r_s[15:0]
+                : (bk_flip[b2r_bk] ? b2r_s[(3-l)*16 +: 16] : b2r_s[l*16 +: 16]);
+            dw_ = b2r_d[l*16 +: 16];
             a1_raw[l] = rw;
             a1_a[l]   = rw[15];
-            a1_sr[l]  = bk_tint[b2_bk] ? f_mulop(rw[14:10], bk_tr[b2_bk], 1'b0) : rw[14:10];
-            a1_sg[l]  = bk_tint[b2_bk] ? f_mulop(rw[9:5],   bk_tg[b2_bk], 1'b0) : rw[9:5];
-            a1_sb[l]  = bk_tint[b2_bk] ? f_mulop(rw[4:0],   bk_tb[b2_bk], 1'b0) : rw[4:0];
+            a1_sr[l]  = bk_tint[b2r_bk] ? f_mulop(rw[14:10], bk_tr[b2r_bk], 1'b0) : rw[14:10];
+            a1_sg[l]  = bk_tint[b2r_bk] ? f_mulop(rw[9:5],   bk_tg[b2r_bk], 1'b0) : rw[9:5];
+            a1_sb[l]  = bk_tint[b2r_bk] ? f_mulop(rw[4:0],   bk_tb[b2r_bk], 1'b0) : rw[4:0];
             a1_dr[l]  = dw_[14:10];
             a1_dg[l]  = dw_[9:5];
             a1_db[l]  = dw_[4:0];
-            a1_mask[l]= b2_en[l] && (!bk_trans[b2_bk] || rw[15]);
+            a1_mask[l]= b2r_en[l] && (!bk_trans[b2r_bk] || rw[15]);
         end
     end
 
     always_ff @(posedge i_CLK or negedge i_RST_n) begin
         if (!i_RST_n) begin
-            b1_v <= 1'b0; b2_v <= 1'b0; b3_v <= 1'b0; b4_v <= 1'b0;
-            b1_bk <= 1'b0; b2_bk <= 1'b0; b3_bk <= 1'b0; b4_bk <= 1'b0;
-            b1_px1 <= 1'b0; b2_px1 <= 1'b0;
-            b1_sa_ <= '0; b1_wa <= '0; b2_wa <= '0; b3_wa <= '0; b4_wa <= '0;
-            b1_en <= '0; b2_en <= '0; b3_mask <= '0; b4_mask <= '0;
+            b1_v <= 1'b0; b2_v <= 1'b0; b2r_v <= 1'b0; b3_v <= 1'b0; b4_v <= 1'b0;
+            b1_bk <= 1'b0; b2_bk <= 1'b0; b2r_bk <= 1'b0; b3_bk <= 1'b0; b4_bk <= 1'b0;
+            b1_px1 <= 1'b0; b2_px1 <= 1'b0; b2r_px1 <= 1'b0;
+            b1_sa_ <= '0; b1_wa <= '0; b2_wa <= '0; b2r_wa <= '0; b3_wa <= '0; b4_wa <= '0;
+            b1_en <= '0; b2_en <= '0; b2r_en <= '0; b3_mask <= '0; b4_mask <= '0;
+            b2r_s <= '0; b2r_d <= '0;
+            b3i_v <= 1'b0; b3i_bk <= 1'b0; b3i_wa <= '0; b3i_mask <= '0;
+            b3i_raw <= '0; b3i_sr <= '0; b3i_sg <= '0; b3i_sb <= '0;
+            b3i_dr <= '0; b3i_dg <= '0; b3i_db <= '0; b3i_a <= '0;
             b3_raw <= '0; b4_data <= '0;
             b3_sr <= '0; b3_sg <= '0; b3_sb <= '0;
             b3_dr <= '0; b3_dg <= '0; b3_db <= '0; b3_a <= '0;
@@ -812,13 +839,26 @@ module blit_draw (
             b4_wa   <= b3_wa;
             b4_mask <= b3_v ? b3_mask : 4'b0;
             b4_data <= {a2_out[3], a2_out[2], a2_out[1], a2_out[0]};
-            // B2 -> B3 (read data lands here, through ALU1)
-            b3_v   <= b2_v;   b3_bk <= b2_bk;
-            b3_wa  <= b2_wa;  b3_mask <= a1_mask;
-            for (int l = 0; l < 4; l++) b3_raw[l*16 +: 16] <= a1_raw[l];
-            b3_sr <= a1_sr;  b3_sg <= a1_sg;  b3_sb <= a1_sb;
-            b3_dr <= a1_dr;  b3_dg <= a1_dg;  b3_db <= a1_db;
-            b3_a  <= a1_a;
+            // B3i -> B3 (plain delay; H7b.8e)
+            b3_v   <= b3i_v;  b3_bk <= b3i_bk;
+            b3_wa  <= b3i_wa; b3_mask <= b3i_mask;
+            b3_raw <= b3i_raw;
+            b3_sr <= b3i_sr;  b3_sg <= b3i_sg;  b3_sb <= b3i_sb;
+            b3_dr <= b3i_dr;  b3_dg <= b3i_dg;  b3_db <= b3i_db;
+            b3_a  <= b3i_a;
+            // B2r -> B3i (ALU1 from the captured read beats)
+            b3i_v   <= b2r_v;  b3i_bk <= b2r_bk;
+            b3i_wa  <= b2r_wa; b3i_mask <= a1_mask;
+            for (int l = 0; l < 4; l++) b3i_raw[l*16 +: 16] <= a1_raw[l];
+            b3i_sr <= a1_sr;  b3i_sg <= a1_sg;  b3i_sb <= a1_sb;
+            b3i_dr <= a1_dr;  b3i_dg <= a1_dg;  b3i_db <= a1_db;
+            b3i_a  <= a1_a;
+            // B2 -> B2r (read beats captured RAW at the edge that used to
+            // consume them comb -- same adv gate, same i_rd_vld handshake)
+            b2r_v   <= b2_v;   b2r_bk <= b2_bk;  b2r_px1 <= b2_px1;
+            b2r_wa  <= b2_wa;  b2r_en <= b2_en;
+            b2r_s   <= i_srd_data;
+            b2r_d   <= i_drd_data;
             // B1 -> B2
             b2_v  <= b1_v;   b2_bk <= b1_bk;  b2_px1 <= b1_px1;
             b2_wa <= b1_wa;  b2_en <= b1_en;
