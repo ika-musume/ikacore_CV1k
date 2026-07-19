@@ -1,0 +1,913 @@
+Info: *******************************************************************
+Info: Running Quartus Prime TimeQuest Timing Analyzer
+    Info: Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+    Info: Copyright (C) 2017  Intel Corporation. All rights reserved.
+    Info: Your use of Intel Corporation's design tools, logic functions 
+    Info: and other software and tools, and its AMPP partner logic 
+    Info: functions, and any output files from any of the foregoing 
+    Info: (including device programming or simulation files), and any 
+    Info: associated documentation or information are expressly subject 
+    Info: to the terms and conditions of the Intel Program License 
+    Info: Subscription Agreement, the Intel Quartus Prime License Agreement,
+    Info: the Intel MegaCore Function License Agreement, or other 
+    Info: applicable license agreement, including, without limitation, 
+    Info: that your use is for the sole purpose of programming logic 
+    Info: devices manufactured by Intel and sold by Intel or its 
+    Info: authorized distributors.  Please refer to the applicable 
+    Info: agreement for further details.
+    Info: Processing started: Sat Jul 18 15:30:59 2026
+Info: Command: quartus_sta -t sta_r4probe.tcl
+Info (20030): Parallel compilation is enabled and will use 16 of the 48 processors detected
+Info (21077): Core supply voltage is 1.1V
+Info (332164): Evaluating HDL-embedded SDC commands
+    Info (332165): Entity altera_std_synchronizer
+        Info (332166): set_false_path -to [get_keepers {*altera_std_synchronizer:*|din_s1}]
+Info (332104): Reading SDC File: 'sys/sys_top.sdc'
+Info (332110): Deriving PLL clocks
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]} -divide_by 8 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin} -divide_by 512 -multiply_by 12595 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|vco0ph[0]} -divide_by 12 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|vco0ph[0]} -divide_by 12 -phase 56.26 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|divclk}
+    Info (332110): create_generated_clock -source {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]} -divide_by 3 -duty_cycle 50.00 -name {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk} {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}
+    Info (332110): create_generated_clock -source {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin} -divide_by 512 -multiply_by 4563 -duty_cycle 50.00 -name {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]} {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]}
+    Info (332110): create_generated_clock -source {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|refclkin} -divide_by 512 -multiply_by 4279 -duty_cycle 50.00 -name {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|vcoph[0]} {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|vcoph[0]}
+    Info (332110): create_generated_clock -source {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|vco0ph[0]} -divide_by 17 -duty_cycle 50.00 -name {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk} {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk}
+Info (332151): Clock uncertainty is not calculated until you update the timing netlist.
+Warning (332174): Ignored filter at sys_top.sdc(60): arc* could not be matched with a clock or keeper File: /host/sys/sys_top.sdc Line: 60
+Warning (332174): Ignored filter at sys_top.sdc(61): arx* could not be matched with a clock or keeper or register or port or pin or cell or partition File: /host/sys/sys_top.sdc Line: 61
+Warning (332174): Ignored filter at sys_top.sdc(61): ary* could not be matched with a clock or keeper or register or port or pin or cell or partition File: /host/sys/sys_top.sdc Line: 61
+Warning (332049): Ignored set_false_path at sys_top.sdc(61): Argument <from> is not an object ID File: /host/sys/sys_top.sdc Line: 61
+    Info (332050): set_false_path -from {arx* ary*} File: /host/sys/sys_top.sdc Line: 61
+Info (332104): Reading SDC File: 'ikacore_CV1k.sdc'
+Info (332151): Clock uncertainty is not calculated until you update the timing netlist.
+Warning (332174): Ignored filter at ikacore_CV1k.sdc(55): *u_gpr_bram*DATA_IN* could not be matched with a register File: /host/ikacore_CV1k.sdc Line: 55
+Info (332097): The following timing edges are non-unate.  TimeQuest will assume pos-unate behavior for these edges in the clock network.
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll  from: refclkin  to: fbclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL  from: refclkin  to: fbclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll  from: refclkin  to: fbclk
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_762
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_827
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_920
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_7
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_6
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_5
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_3  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_4
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_3
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_2
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_1
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_3  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_0
+Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
+########## R4-A draw dimx_e -> blend mult (full) ##########
+Info (332115): Report Timing: Found 2 setup paths (2 violated).  Worst case slack is -3.919
+    Info (332115): -from [get_registers {emu|core|u_blit|u_blit_draw|dimx_e[*]}]
+    Info (332115): -setup
+    Info (332115): -npaths 2
+    Info (332115): -detail full_path
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -3.919 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115): To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult52_rtl_22|mult_8i01:auto_generated|Add3~13_OTERM5458
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):      4.347      1.738 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):      5.383      1.036 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):      5.693      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):      8.025      2.332 RR    IC  emu|core|u_blit|u_blit_draw|dimx_e[8]|clk
+    Info (332115):      8.573      0.548 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):      8.573      0.000     uTco  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):      8.573      0.000 FF  CELL  emu|core|u_blit|u_blit_draw|dimx_e[8]|q
+    Info (332115):      9.451      0.878 FF    IC  emu|core|u_blit|u_blit_draw|LessThan14~13|datab
+    Info (332115):     10.003      0.552 FR  CELL  emu|core|u_blit|u_blit_draw|LessThan14~13|combout
+    Info (332115):     10.223      0.220 RR    IC  emu|core|u_blit|u_blit_draw|LessThan14~14|dataa
+    Info (332115):     10.819      0.596 RF  CELL  emu|core|u_blit|u_blit_draw|LessThan14~14|combout
+    Info (332115):     11.040      0.221 FF    IC  emu|core|u_blit|u_blit_draw|always3~11|datac
+    Info (332115):     11.470      0.430 FR  CELL  emu|core|u_blit|u_blit_draw|always3~11|combout
+    Info (332115):     12.494      1.024 RR    IC  emu|core|u_blit|u_blit_draw|bk_trans[0]~1|datae
+    Info (332115):     12.801      0.307 RF  CELL  emu|core|u_blit|u_blit_draw|bk_trans[0]~1|combout
+    Info (332115):     13.919      1.118 FF    IC  emu|core|u_blit|u_blit_draw|bk_smode[0][0]_NEW2301|dataf
+    Info (332115):     13.999      0.080 FF  CELL  emu|core|u_blit|u_blit_draw|bk_smode[0][0]_NEW2301|combout
+    Info (332115):     14.212      0.213 FF    IC  emu|core|u_blit|u_blit_draw|sm[0]~0|datac
+    Info (332115):     14.698      0.486 FF  CELL  emu|core|u_blit|u_blit_draw|sm[0]~0|combout
+    Info (332115):     15.664      0.966 FF    IC  emu|core|u_blit|u_blit_draw|xe~67|dataa
+    Info (332115):     16.235      0.571 FF  CELL  emu|core|u_blit|u_blit_draw|xe~67|combout
+    Info (332115):     17.122      0.887 FF    IC  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~5|datac
+    Info (332115):     17.967      0.845 FF  CELL  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~5|cout
+    Info (332115):     17.967      0.000 FF    IC  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~9|cin
+    Info (332115):     17.967      0.000 FF  CELL  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~9|cout
+    Info (332115):     17.967      0.000 FF    IC  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~13|cin
+    Info (332115):     18.340      0.373 FR  CELL  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~13|sumout
+    Info (332115):     18.340      0.000 RR    IC  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~13_NEW_REG5457|d
+    Info (332115):     18.602      0.262 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult52_rtl_22|mult_8i01:auto_generated|Add3~13_OTERM5458
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      6.504      6.504           latch edge time
+    Info (332115):      6.504      0.000           source latency
+    Info (332115):      6.504      0.000           FPGA_CLK2_50
+    Info (332115):      6.504      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      7.270      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      8.443      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      8.753      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      8.753      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      8.604     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      8.604      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):     10.074      1.470 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):     10.984      0.910 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):     11.270      0.286 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):     13.235      1.965 RR    IC  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~13_NEW_REG5457|clk
+    Info (332115):     13.726      0.491 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult52_rtl_22|mult_8i01:auto_generated|Add3~13_OTERM5458
+    Info (332115):     15.013      1.287           clock pessimism removed
+    Info (332115):     14.683     -0.330           clock uncertainty
+    Info (332115):     14.683      0.000     uTsu  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult52_rtl_22|mult_8i01:auto_generated|Add3~13_OTERM5458
+    Info (332115): Data Arrival Time  :    18.602
+    Info (332115): Data Required Time :    14.683
+    Info (332115): Slack              :    -3.919 (VIOLATED)
+    Info (332115): ===================================================================
+Info (332115): Path #2: Setup slack is -3.882 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115): To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add3~13_OTERM7168
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):      4.347      1.738 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):      5.383      1.036 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):      5.693      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):      8.025      2.332 RR    IC  emu|core|u_blit|u_blit_draw|dimx_e[8]|clk
+    Info (332115):      8.573      0.548 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):      8.573      0.000     uTco  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):      8.573      0.000 FF  CELL  emu|core|u_blit|u_blit_draw|dimx_e[8]|q
+    Info (332115):      9.451      0.878 FF    IC  emu|core|u_blit|u_blit_draw|LessThan14~13|datab
+    Info (332115):     10.003      0.552 FR  CELL  emu|core|u_blit|u_blit_draw|LessThan14~13|combout
+    Info (332115):     10.223      0.220 RR    IC  emu|core|u_blit|u_blit_draw|LessThan14~14|dataa
+    Info (332115):     10.819      0.596 RF  CELL  emu|core|u_blit|u_blit_draw|LessThan14~14|combout
+    Info (332115):     11.040      0.221 FF    IC  emu|core|u_blit|u_blit_draw|always3~11|datac
+    Info (332115):     11.470      0.430 FR  CELL  emu|core|u_blit|u_blit_draw|always3~11|combout
+    Info (332115):     12.494      1.024 RR    IC  emu|core|u_blit|u_blit_draw|bk_trans[0]~1|datae
+    Info (332115):     12.801      0.307 RF  CELL  emu|core|u_blit|u_blit_draw|bk_trans[0]~1|combout
+    Info (332115):     13.919      1.118 FF    IC  emu|core|u_blit|u_blit_draw|bk_smode[0][0]_NEW2301|dataf
+    Info (332115):     13.999      0.080 FF  CELL  emu|core|u_blit|u_blit_draw|bk_smode[0][0]_NEW2301|combout
+    Info (332115):     14.212      0.213 FF    IC  emu|core|u_blit|u_blit_draw|sm[0]~0|datac
+    Info (332115):     14.698      0.486 FF  CELL  emu|core|u_blit|u_blit_draw|sm[0]~0|combout
+    Info (332115):     15.959      1.261 FF    IC  emu|core|u_blit|u_blit_draw|xe~15|datad
+    Info (332115):     16.479      0.520 FF  CELL  emu|core|u_blit|u_blit_draw|xe~15|combout
+    Info (332115):     17.044      0.565 FF    IC  emu|core|u_blit|u_blit_draw|Mult50_rtl_18|auto_generated|Add3~13|datab
+    Info (332115):     18.251      1.207 FR  CELL  emu|core|u_blit|u_blit_draw|Mult50_rtl_18|auto_generated|Add3~13|sumout
+    Info (332115):     18.251      0.000 RR    IC  emu|core|u_blit|u_blit_draw|Mult50_rtl_18|auto_generated|Add3~13_NEW_REG7167|d
+    Info (332115):     18.513      0.262 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add3~13_OTERM7168
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      6.504      6.504           latch edge time
+    Info (332115):      6.504      0.000           source latency
+    Info (332115):      6.504      0.000           FPGA_CLK2_50
+    Info (332115):      6.504      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      7.270      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      8.443      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      8.753      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      8.753      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      8.604     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      8.604      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):     10.074      1.470 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):     10.984      0.910 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):     11.270      0.286 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):     13.183      1.913 RR    IC  emu|core|u_blit|u_blit_draw|Mult50_rtl_18|auto_generated|Add3~13_NEW_REG7167|clk
+    Info (332115):     13.674      0.491 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add3~13_OTERM7168
+    Info (332115):     14.961      1.287           clock pessimism removed
+    Info (332115):     14.631     -0.330           clock uncertainty
+    Info (332115):     14.631      0.000     uTsu  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add3~13_OTERM7168
+    Info (332115): Data Arrival Time  :    18.513
+    Info (332115): Data Required Time :    14.631
+    Info (332115): Slack              :    -3.882 (VIOLATED)
+    Info (332115): ===================================================================
+########## R4-A2 draw worst overall (full) ##########
+Info (332115): Report Timing: Found 2 setup paths (2 violated).  Worst case slack is -3.919
+    Info (332115): -to [get_registers {emu|core|u_blit|u_blit_draw|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 2
+    Info (332115): -detail full_path
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -3.919 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115): To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult52_rtl_22|mult_8i01:auto_generated|Add3~13_OTERM5458
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):      4.347      1.738 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):      5.383      1.036 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):      5.693      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):      8.025      2.332 RR    IC  emu|core|u_blit|u_blit_draw|dimx_e[8]|clk
+    Info (332115):      8.573      0.548 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):      8.573      0.000     uTco  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):      8.573      0.000 FF  CELL  emu|core|u_blit|u_blit_draw|dimx_e[8]|q
+    Info (332115):      9.451      0.878 FF    IC  emu|core|u_blit|u_blit_draw|LessThan14~13|datab
+    Info (332115):     10.003      0.552 FR  CELL  emu|core|u_blit|u_blit_draw|LessThan14~13|combout
+    Info (332115):     10.223      0.220 RR    IC  emu|core|u_blit|u_blit_draw|LessThan14~14|dataa
+    Info (332115):     10.819      0.596 RF  CELL  emu|core|u_blit|u_blit_draw|LessThan14~14|combout
+    Info (332115):     11.040      0.221 FF    IC  emu|core|u_blit|u_blit_draw|always3~11|datac
+    Info (332115):     11.470      0.430 FR  CELL  emu|core|u_blit|u_blit_draw|always3~11|combout
+    Info (332115):     12.494      1.024 RR    IC  emu|core|u_blit|u_blit_draw|bk_trans[0]~1|datae
+    Info (332115):     12.801      0.307 RF  CELL  emu|core|u_blit|u_blit_draw|bk_trans[0]~1|combout
+    Info (332115):     13.919      1.118 FF    IC  emu|core|u_blit|u_blit_draw|bk_smode[0][0]_NEW2301|dataf
+    Info (332115):     13.999      0.080 FF  CELL  emu|core|u_blit|u_blit_draw|bk_smode[0][0]_NEW2301|combout
+    Info (332115):     14.212      0.213 FF    IC  emu|core|u_blit|u_blit_draw|sm[0]~0|datac
+    Info (332115):     14.698      0.486 FF  CELL  emu|core|u_blit|u_blit_draw|sm[0]~0|combout
+    Info (332115):     15.664      0.966 FF    IC  emu|core|u_blit|u_blit_draw|xe~67|dataa
+    Info (332115):     16.235      0.571 FF  CELL  emu|core|u_blit|u_blit_draw|xe~67|combout
+    Info (332115):     17.122      0.887 FF    IC  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~5|datac
+    Info (332115):     17.967      0.845 FF  CELL  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~5|cout
+    Info (332115):     17.967      0.000 FF    IC  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~9|cin
+    Info (332115):     17.967      0.000 FF  CELL  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~9|cout
+    Info (332115):     17.967      0.000 FF    IC  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~13|cin
+    Info (332115):     18.340      0.373 FR  CELL  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~13|sumout
+    Info (332115):     18.340      0.000 RR    IC  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~13_NEW_REG5457|d
+    Info (332115):     18.602      0.262 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult52_rtl_22|mult_8i01:auto_generated|Add3~13_OTERM5458
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      6.504      6.504           latch edge time
+    Info (332115):      6.504      0.000           source latency
+    Info (332115):      6.504      0.000           FPGA_CLK2_50
+    Info (332115):      6.504      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      7.270      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      8.443      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      8.753      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      8.753      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      8.604     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      8.604      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):     10.074      1.470 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):     10.984      0.910 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):     11.270      0.286 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):     13.235      1.965 RR    IC  emu|core|u_blit|u_blit_draw|Mult52_rtl_22|auto_generated|Add3~13_NEW_REG5457|clk
+    Info (332115):     13.726      0.491 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult52_rtl_22|mult_8i01:auto_generated|Add3~13_OTERM5458
+    Info (332115):     15.013      1.287           clock pessimism removed
+    Info (332115):     14.683     -0.330           clock uncertainty
+    Info (332115):     14.683      0.000     uTsu  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult52_rtl_22|mult_8i01:auto_generated|Add3~13_OTERM5458
+    Info (332115): Data Arrival Time  :    18.602
+    Info (332115): Data Required Time :    14.683
+    Info (332115): Slack              :    -3.919 (VIOLATED)
+    Info (332115): ===================================================================
+Info (332115): Path #2: Setup slack is -3.882 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115): To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add3~13_OTERM7168
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):      4.347      1.738 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):      5.383      1.036 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):      5.693      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):      8.025      2.332 RR    IC  emu|core|u_blit|u_blit_draw|dimx_e[8]|clk
+    Info (332115):      8.573      0.548 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):      8.573      0.000     uTco  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):      8.573      0.000 FF  CELL  emu|core|u_blit|u_blit_draw|dimx_e[8]|q
+    Info (332115):      9.451      0.878 FF    IC  emu|core|u_blit|u_blit_draw|LessThan14~13|datab
+    Info (332115):     10.003      0.552 FR  CELL  emu|core|u_blit|u_blit_draw|LessThan14~13|combout
+    Info (332115):     10.223      0.220 RR    IC  emu|core|u_blit|u_blit_draw|LessThan14~14|dataa
+    Info (332115):     10.819      0.596 RF  CELL  emu|core|u_blit|u_blit_draw|LessThan14~14|combout
+    Info (332115):     11.040      0.221 FF    IC  emu|core|u_blit|u_blit_draw|always3~11|datac
+    Info (332115):     11.470      0.430 FR  CELL  emu|core|u_blit|u_blit_draw|always3~11|combout
+    Info (332115):     12.494      1.024 RR    IC  emu|core|u_blit|u_blit_draw|bk_trans[0]~1|datae
+    Info (332115):     12.801      0.307 RF  CELL  emu|core|u_blit|u_blit_draw|bk_trans[0]~1|combout
+    Info (332115):     13.919      1.118 FF    IC  emu|core|u_blit|u_blit_draw|bk_smode[0][0]_NEW2301|dataf
+    Info (332115):     13.999      0.080 FF  CELL  emu|core|u_blit|u_blit_draw|bk_smode[0][0]_NEW2301|combout
+    Info (332115):     14.212      0.213 FF    IC  emu|core|u_blit|u_blit_draw|sm[0]~0|datac
+    Info (332115):     14.698      0.486 FF  CELL  emu|core|u_blit|u_blit_draw|sm[0]~0|combout
+    Info (332115):     15.959      1.261 FF    IC  emu|core|u_blit|u_blit_draw|xe~15|datad
+    Info (332115):     16.479      0.520 FF  CELL  emu|core|u_blit|u_blit_draw|xe~15|combout
+    Info (332115):     17.044      0.565 FF    IC  emu|core|u_blit|u_blit_draw|Mult50_rtl_18|auto_generated|Add3~13|datab
+    Info (332115):     18.251      1.207 FR  CELL  emu|core|u_blit|u_blit_draw|Mult50_rtl_18|auto_generated|Add3~13|sumout
+    Info (332115):     18.251      0.000 RR    IC  emu|core|u_blit|u_blit_draw|Mult50_rtl_18|auto_generated|Add3~13_NEW_REG7167|d
+    Info (332115):     18.513      0.262 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add3~13_OTERM7168
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      6.504      6.504           latch edge time
+    Info (332115):      6.504      0.000           source latency
+    Info (332115):      6.504      0.000           FPGA_CLK2_50
+    Info (332115):      6.504      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      7.270      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      8.443      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      8.753      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      8.753      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      8.604     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      8.604      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):     10.074      1.470 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):     10.984      0.910 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):     11.270      0.286 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):     13.183      1.913 RR    IC  emu|core|u_blit|u_blit_draw|Mult50_rtl_18|auto_generated|Add3~13_NEW_REG7167|clk
+    Info (332115):     13.674      0.491 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add3~13_OTERM7168
+    Info (332115):     14.961      1.287           clock pessimism removed
+    Info (332115):     14.631     -0.330           clock uncertainty
+    Info (332115):     14.631      0.000     uTsu  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add3~13_OTERM7168
+    Info (332115): Data Arrival Time  :    18.513
+    Info (332115): Data Required Time :    14.631
+    Info (332115): Slack              :    -3.882 (VIOLATED)
+    Info (332115): ===================================================================
+########## R4-B fetch skid_half -> w_need (full) ##########
+Info (332115): Report Timing: Found 2 setup paths (2 violated).  Worst case slack is -3.695
+    Info (332115): -from [get_registers {emu|core|u_blit|u_blit_fetch|skid_half*}]
+    Info (332115): -setup
+    Info (332115): -npaths 2
+    Info (332115): -detail full_path
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -3.695 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115): To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[2]_OTERM555
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):      4.347      1.738 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):      5.383      1.036 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):      5.693      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):      7.959      2.266 RR    IC  emu|core|u_blit|u_blit_fetch|skid_half|clk
+    Info (332115):      8.529      0.570 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):      8.529      0.000     uTco  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):      8.529      0.000 FF  CELL  emu|core|u_blit|u_blit_fetch|skid_half|q
+    Info (332115):     10.009      1.480 FF    IC  emu|core|u_blit|u_blit_fetch|o_snoop_word[5]~5|dataf
+    Info (332115):     10.088      0.079 FF  CELL  emu|core|u_blit|u_blit_fetch|o_snoop_word[5]~5|combout
+    Info (332115):     12.116      2.028 FF    IC  emu|core|u_blit|u_blit_fetch|Mult0~mac|ay[5]
+    Info (332115):     16.106      3.990 FF  CELL  emu|core|u_blit|u_blit_fetch|Mult0~mac|resulta[2]
+    Info (332115):     17.367      1.261 FF    IC  emu|core|u_blit|u_blit_fetch|w_need[2]_NEW_REG554|asdata
+    Info (332115):     17.986      0.619 FF  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[2]_OTERM555
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      6.504      6.504           latch edge time
+    Info (332115):      6.504      0.000           source latency
+    Info (332115):      6.504      0.000           FPGA_CLK2_50
+    Info (332115):      6.504      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      7.270      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      8.443      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      8.753      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      8.753      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      8.604     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      8.604      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):     10.074      1.470 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):     10.984      0.910 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):     11.270      0.286 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):     13.198      1.928 RR    IC  emu|core|u_blit|u_blit_fetch|w_need[2]_NEW_REG554|clk
+    Info (332115):     13.694      0.496 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[2]_OTERM555
+    Info (332115):     14.621      0.927           clock pessimism removed
+    Info (332115):     14.291     -0.330           clock uncertainty
+    Info (332115):     14.291      0.000     uTsu  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[2]_OTERM555
+    Info (332115): Data Arrival Time  :    17.986
+    Info (332115): Data Required Time :    14.291
+    Info (332115): Slack              :    -3.695 (VIOLATED)
+    Info (332115): ===================================================================
+Info (332115): Path #2: Setup slack is -3.655 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115): To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[7]_OTERM461
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):      4.347      1.738 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):      5.383      1.036 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):      5.693      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):      7.959      2.266 RR    IC  emu|core|u_blit|u_blit_fetch|skid_half|clk
+    Info (332115):      8.529      0.570 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):      8.529      0.000     uTco  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):      8.529      0.000 FF  CELL  emu|core|u_blit|u_blit_fetch|skid_half|q
+    Info (332115):     10.009      1.480 FF    IC  emu|core|u_blit|u_blit_fetch|o_snoop_word[5]~5|dataf
+    Info (332115):     10.088      0.079 FF  CELL  emu|core|u_blit|u_blit_fetch|o_snoop_word[5]~5|combout
+    Info (332115):     12.116      2.028 FF    IC  emu|core|u_blit|u_blit_fetch|Mult0~mac|ay[5]
+    Info (332115):     16.106      3.990 FF  CELL  emu|core|u_blit|u_blit_fetch|Mult0~mac|resulta[7]
+    Info (332115):     17.336      1.230 FF    IC  emu|core|u_blit|u_blit_fetch|w_need[7]_NEW_REG460|asdata
+    Info (332115):     17.932      0.596 FF  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[7]_OTERM461
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      6.504      6.504           latch edge time
+    Info (332115):      6.504      0.000           source latency
+    Info (332115):      6.504      0.000           FPGA_CLK2_50
+    Info (332115):      6.504      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      7.270      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      8.443      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      8.753      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      8.753      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      8.604     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      8.604      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):     10.074      1.470 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):     10.984      0.910 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):     11.270      0.286 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):     13.195      1.925 RR    IC  emu|core|u_blit|u_blit_fetch|w_need[7]_NEW_REG460|clk
+    Info (332115):     13.680      0.485 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[7]_OTERM461
+    Info (332115):     14.607      0.927           clock pessimism removed
+    Info (332115):     14.277     -0.330           clock uncertainty
+    Info (332115):     14.277      0.000     uTsu  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[7]_OTERM461
+    Info (332115): Data Arrival Time  :    17.932
+    Info (332115): Data Required Time :    14.277
+    Info (332115): Slack              :    -3.655 (VIOLATED)
+    Info (332115): ===================================================================
+########## R4-C gov last_mark -> win_f (full) ##########
+Info (332115): Report Timing: Found 2 setup paths (2 violated).  Worst case slack is -3.333
+    Info (332115): -from [get_registers {emu|core|u_blit|u_blit_gov|last_mark*}]
+    Info (332115): -setup
+    Info (332115): -npaths 2
+    Info (332115): -detail full_path
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -3.333 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|last_mark[18]
+    Info (332115): To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|win_f[20]
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):      4.347      1.738 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):      5.383      1.036 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):      5.693      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):      7.977      2.284 RR    IC  emu|core|u_blit|u_blit_gov|last_mark[18]|clk
+    Info (332115):      8.538      0.561 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|last_mark[18]
+    Info (332115):      8.538      0.000     uTco  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|last_mark[18]
+    Info (332115):      8.538      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|last_mark[18]|q
+    Info (332115):      9.369      0.831 FF    IC  emu|core|u_blit|u_blit_gov|LessThan2~16|datad
+    Info (332115):      9.804      0.435 FR  CELL  emu|core|u_blit|u_blit_gov|LessThan2~16|combout
+    Info (332115):     10.048      0.244 RR    IC  emu|core|u_blit|u_blit_gov|LessThan2~21|datad
+    Info (332115):     10.546      0.498 RF  CELL  emu|core|u_blit|u_blit_gov|LessThan2~21|combout
+    Info (332115):     11.314      0.768 FF    IC  emu|core|u_blit|u_blit_gov|LessThan2~22|datac
+    Info (332115):     11.744      0.430 FR  CELL  emu|core|u_blit|u_blit_gov|LessThan2~22|combout
+    Info (332115):     12.110      0.366 RR    IC  emu|core|u_blit|u_blit_gov|LessThan3~14|datab
+    Info (332115):     12.679      0.569 RR  CELL  emu|core|u_blit|u_blit_gov|LessThan3~14|combout
+    Info (332115):     12.966      0.287 RR    IC  emu|core|u_blit|u_blit_gov|LessThan3~15|datac
+    Info (332115):     13.374      0.408 RR  CELL  emu|core|u_blit|u_blit_gov|LessThan3~15|combout
+    Info (332115):     13.756      0.382 RR    IC  emu|core|u_blit|u_blit_gov|LessThan3~18|datac
+    Info (332115):     14.256      0.500 RF  CELL  emu|core|u_blit|u_blit_gov|LessThan3~18|combout
+    Info (332115):     14.933      0.677 FF    IC  emu|core|u_blit|u_blit_gov|LessThan3~27|dataa
+    Info (332115):     15.481      0.548 FR  CELL  emu|core|u_blit|u_blit_gov|LessThan3~27|combout
+    Info (332115):     15.739      0.258 RR    IC  emu|core|u_blit|u_blit_gov|Add50~81|datab
+    Info (332115):     16.737      0.998 RF  CELL  emu|core|u_blit|u_blit_gov|Add50~81|cout
+    Info (332115):     16.737      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~77|cin
+    Info (332115):     16.737      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~77|cout
+    Info (332115):     16.737      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~73|cin
+    Info (332115):     16.783      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~73|cout
+    Info (332115):     16.783      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~69|cin
+    Info (332115):     16.783      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~69|cout
+    Info (332115):     16.783      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~65|cin
+    Info (332115):     16.829      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~65|cout
+    Info (332115):     16.829      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~61|cin
+    Info (332115):     16.829      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~61|cout
+    Info (332115):     16.829      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~57|cin
+    Info (332115):     16.875      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~57|cout
+    Info (332115):     16.875      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~53|cin
+    Info (332115):     16.875      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~53|cout
+    Info (332115):     16.875      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~49|cin
+    Info (332115):     16.918      0.043 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~49|cout
+    Info (332115):     16.918      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~33|cin
+    Info (332115):     16.918      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~33|cout
+    Info (332115):     16.918      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~13|cin
+    Info (332115):     17.044      0.126 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~13|cout
+    Info (332115):     17.044      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~17|cin
+    Info (332115):     17.044      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~17|cout
+    Info (332115):     17.044      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~21|cin
+    Info (332115):     17.090      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~21|cout
+    Info (332115):     17.090      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~25|cin
+    Info (332115):     17.090      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~25|cout
+    Info (332115):     17.090      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~37|cin
+    Info (332115):     17.136      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~37|cout
+    Info (332115):     17.136      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~41|cin
+    Info (332115):     17.136      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~41|cout
+    Info (332115):     17.136      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~45|cin
+    Info (332115):     17.182      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~45|cout
+    Info (332115):     17.182      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~5|cin
+    Info (332115):     17.182      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~5|cout
+    Info (332115):     17.182      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~9|cin
+    Info (332115):     17.240      0.058 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~9|cout
+    Info (332115):     17.240      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~29|cin
+    Info (332115):     17.240      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~29|cout
+    Info (332115):     17.240      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~1|cin
+    Info (332115):     17.655      0.415 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~1|sumout
+    Info (332115):     17.655      0.000 FF    IC  emu|core|u_blit|u_blit_gov|win_f[20]|d
+    Info (332115):     17.916      0.261 FF  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|win_f[20]
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      6.504      6.504           latch edge time
+    Info (332115):      6.504      0.000           source latency
+    Info (332115):      6.504      0.000           FPGA_CLK2_50
+    Info (332115):      6.504      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      7.270      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      8.443      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      8.753      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      8.753      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      8.604     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      8.604      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):     10.074      1.470 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):     10.984      0.910 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):     11.270      0.286 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):     13.141      1.871 RR    IC  emu|core|u_blit|u_blit_gov|win_f[20]|clk
+    Info (332115):     13.623      0.482 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|win_f[20]
+    Info (332115):     14.913      1.290           clock pessimism removed
+    Info (332115):     14.583     -0.330           clock uncertainty
+    Info (332115):     14.583      0.000     uTsu  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|win_f[20]
+    Info (332115): Data Arrival Time  :    17.916
+    Info (332115): Data Required Time :    14.583
+    Info (332115): Slack              :    -3.333 (VIOLATED)
+    Info (332115): ===================================================================
+Info (332115): Path #2: Setup slack is -3.333 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|last_mark[18]
+    Info (332115): To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|win_f[20]
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):      4.347      1.738 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):      5.383      1.036 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):      5.693      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):      7.977      2.284 RR    IC  emu|core|u_blit|u_blit_gov|last_mark[18]|clk
+    Info (332115):      8.538      0.561 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|last_mark[18]
+    Info (332115):      8.538      0.000     uTco  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|last_mark[18]
+    Info (332115):      8.538      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|last_mark[18]|q
+    Info (332115):      9.369      0.831 FF    IC  emu|core|u_blit|u_blit_gov|LessThan2~16|datad
+    Info (332115):      9.804      0.435 FR  CELL  emu|core|u_blit|u_blit_gov|LessThan2~16|combout
+    Info (332115):     10.048      0.244 RR    IC  emu|core|u_blit|u_blit_gov|LessThan2~21|datad
+    Info (332115):     10.546      0.498 RF  CELL  emu|core|u_blit|u_blit_gov|LessThan2~21|combout
+    Info (332115):     11.314      0.768 FF    IC  emu|core|u_blit|u_blit_gov|LessThan2~22|datac
+    Info (332115):     11.744      0.430 FR  CELL  emu|core|u_blit|u_blit_gov|LessThan2~22|combout
+    Info (332115):     12.110      0.366 RR    IC  emu|core|u_blit|u_blit_gov|LessThan3~14|datab
+    Info (332115):     12.679      0.569 RR  CELL  emu|core|u_blit|u_blit_gov|LessThan3~14|combout
+    Info (332115):     12.966      0.287 RR    IC  emu|core|u_blit|u_blit_gov|LessThan3~15|datac
+    Info (332115):     13.374      0.408 RR  CELL  emu|core|u_blit|u_blit_gov|LessThan3~15|combout
+    Info (332115):     13.756      0.382 RR    IC  emu|core|u_blit|u_blit_gov|LessThan3~18|datac
+    Info (332115):     14.256      0.500 RF  CELL  emu|core|u_blit|u_blit_gov|LessThan3~18|combout
+    Info (332115):     14.933      0.677 FF    IC  emu|core|u_blit|u_blit_gov|LessThan3~27|dataa
+    Info (332115):     15.481      0.548 FR  CELL  emu|core|u_blit|u_blit_gov|LessThan3~27|combout
+    Info (332115):     15.739      0.258 RR    IC  emu|core|u_blit|u_blit_gov|Add50~77|datab
+    Info (332115):     16.737      0.998 RF  CELL  emu|core|u_blit|u_blit_gov|Add50~77|cout
+    Info (332115):     16.737      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~73|cin
+    Info (332115):     16.783      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~73|cout
+    Info (332115):     16.783      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~69|cin
+    Info (332115):     16.783      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~69|cout
+    Info (332115):     16.783      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~65|cin
+    Info (332115):     16.829      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~65|cout
+    Info (332115):     16.829      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~61|cin
+    Info (332115):     16.829      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~61|cout
+    Info (332115):     16.829      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~57|cin
+    Info (332115):     16.875      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~57|cout
+    Info (332115):     16.875      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~53|cin
+    Info (332115):     16.875      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~53|cout
+    Info (332115):     16.875      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~49|cin
+    Info (332115):     16.918      0.043 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~49|cout
+    Info (332115):     16.918      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~33|cin
+    Info (332115):     16.918      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~33|cout
+    Info (332115):     16.918      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~13|cin
+    Info (332115):     17.044      0.126 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~13|cout
+    Info (332115):     17.044      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~17|cin
+    Info (332115):     17.044      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~17|cout
+    Info (332115):     17.044      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~21|cin
+    Info (332115):     17.090      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~21|cout
+    Info (332115):     17.090      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~25|cin
+    Info (332115):     17.090      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~25|cout
+    Info (332115):     17.090      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~37|cin
+    Info (332115):     17.136      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~37|cout
+    Info (332115):     17.136      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~41|cin
+    Info (332115):     17.136      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~41|cout
+    Info (332115):     17.136      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~45|cin
+    Info (332115):     17.182      0.046 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~45|cout
+    Info (332115):     17.182      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~5|cin
+    Info (332115):     17.182      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~5|cout
+    Info (332115):     17.182      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~9|cin
+    Info (332115):     17.240      0.058 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~9|cout
+    Info (332115):     17.240      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~29|cin
+    Info (332115):     17.240      0.000 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~29|cout
+    Info (332115):     17.240      0.000 FF    IC  emu|core|u_blit|u_blit_gov|Add50~1|cin
+    Info (332115):     17.655      0.415 FF  CELL  emu|core|u_blit|u_blit_gov|Add50~1|sumout
+    Info (332115):     17.655      0.000 FF    IC  emu|core|u_blit|u_blit_gov|win_f[20]|d
+    Info (332115):     17.916      0.261 FF  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|win_f[20]
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      6.504      6.504           latch edge time
+    Info (332115):      6.504      0.000           source latency
+    Info (332115):      6.504      0.000           FPGA_CLK2_50
+    Info (332115):      6.504      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      7.270      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      8.443      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      8.753      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      8.753      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      8.604     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      8.604      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):     10.074      1.470 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):     10.984      0.910 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):     11.270      0.286 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):     13.141      1.871 RR    IC  emu|core|u_blit|u_blit_gov|win_f[20]|clk
+    Info (332115):     13.623      0.482 RR  CELL  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|win_f[20]
+    Info (332115):     14.913      1.290           clock pessimism removed
+    Info (332115):     14.583     -0.330           clock uncertainty
+    Info (332115):     14.583      0.000     uTsu  emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|win_f[20]
+    Info (332115): Data Arrival Time  :    17.916
+    Info (332115): Data Required Time :    14.583
+    Info (332115): Slack              :    -3.333 (VIOLATED)
+    Info (332115): ===================================================================
+########## R4-D wfifo o_af fan (full) ##########
+Warning (332174): Ignored filter at sta_r4probe.tcl(19): emu|core|u_blit|u_bb_wfifo|* could not be matched with a register File: /host/sta_r4probe.tcl Line: 19
+Warning (332055): Command report_timing failed
+    Warning (332019): Argument <from> is an empty collection
+########## R4-E draw top-10 endpoints summary ##########
+Info (332115): Report Timing: Found 10 setup paths (10 violated).  Worst case slack is -3.919
+    Info (332115): -to [get_registers {emu|core|u_blit|u_blit_draw|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 10
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -3.919 (VIOLATED)
+    Info (332115):    Slack        : -3.919 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult52_rtl_22|mult_8i01:auto_generated|Add3~13_OTERM5458
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.064
+    Info (332115):    Data Delay   : 10.029
+Info (332115): Path #2: Setup slack is -3.882 (VIOLATED)
+    Info (332115):    Slack        : -3.882 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add3~13_OTERM7168
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.116
+    Info (332115):    Data Delay   : 9.940
+Info (332115): Path #3: Setup slack is -3.880 (VIOLATED)
+    Info (332115):    Slack        : -3.880 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add3~13_OTERM7168
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.116
+    Info (332115):    Data Delay   : 9.938
+Info (332115): Path #4: Setup slack is -3.863 (VIOLATED)
+    Info (332115):    Slack        : -3.863 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult52_rtl_22|mult_8i01:auto_generated|Add2~1_OTERM7300
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.061
+    Info (332115):    Data Delay   : 9.976
+Info (332115): Path #5: Setup slack is -3.856 (VIOLATED)
+    Info (332115):    Slack        : -3.856 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add2~1_OTERM7336
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.112
+    Info (332115):    Data Delay   : 9.918
+Info (332115): Path #6: Setup slack is -3.847 (VIOLATED)
+    Info (332115):    Slack        : -3.847 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add2~1_OTERM7336
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.112
+    Info (332115):    Data Delay   : 9.909
+Info (332115): Path #7: Setup slack is -3.830 (VIOLATED)
+    Info (332115):    Slack        : -3.830 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult48_rtl_14|mult_8i01:auto_generated|Add3~13_OTERM5186
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.065
+    Info (332115):    Data Delay   : 9.939
+Info (332115): Path #8: Setup slack is -3.829 (VIOLATED)
+    Info (332115):    Slack        : -3.829 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult48_rtl_14|mult_8i01:auto_generated|Add2~1_OTERM7264
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.069
+    Info (332115):    Data Delay   : 9.934
+Info (332115): Path #9: Setup slack is -3.811 (VIOLATED)
+    Info (332115):    Slack        : -3.811 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|dimx_e[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult50_rtl_18|mult_8i01:auto_generated|Add3~1_OTERM7174
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.111
+    Info (332115):    Data Delay   : 9.874
+Info (332115): Path #10: Setup slack is -3.808 (VIOLATED)
+    Info (332115):    Slack        : -3.808 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|startx[12]~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|lpm_mult:Mult52_rtl_22|mult_8i01:auto_generated|Add3~13_OTERM5458
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.064
+    Info (332115):    Data Delay   : 9.918
+########## R4-F fetch top-10 endpoints summary ##########
+Info (332115): Report Timing: Found 10 setup paths (10 violated).  Worst case slack is -3.695
+    Info (332115): -to [get_registers {emu|core|u_blit|u_blit_fetch|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 10
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -3.695 (VIOLATED)
+    Info (332115):    Slack        : -3.695 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[2]_OTERM555
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.412
+    Info (332115):    Data Delay   : 9.457
+Info (332115): Path #2: Setup slack is -3.655 (VIOLATED)
+    Info (332115):    Slack        : -3.655 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[7]_OTERM461
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.426
+    Info (332115):    Data Delay   : 9.403
+Info (332115): Path #3: Setup slack is -3.539 (VIOLATED)
+    Info (332115):    Slack        : -3.539 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[10]_OTERM349
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.410
+    Info (332115):    Data Delay   : 9.303
+Info (332115): Path #4: Setup slack is -3.500 (VIOLATED)
+    Info (332115):    Slack        : -3.500 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[14]_OTERM313
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.410
+    Info (332115):    Data Delay   : 9.264
+Info (332115): Path #5: Setup slack is -3.487 (VIOLATED)
+    Info (332115):    Slack        : -3.487 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[4]_OTERM285
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.426
+    Info (332115):    Data Delay   : 9.235
+Info (332115): Path #6: Setup slack is -3.482 (VIOLATED)
+    Info (332115):    Slack        : -3.482 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[1]_OTERM357
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.419
+    Info (332115):    Data Delay   : 9.237
+Info (332115): Path #7: Setup slack is -3.479 (VIOLATED)
+    Info (332115):    Slack        : -3.479 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[3]_OTERM439
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.423
+    Info (332115):    Data Delay   : 9.230
+Info (332115): Path #8: Setup slack is -3.375 (VIOLATED)
+    Info (332115):    Slack        : -3.375 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[16]_OTERM293
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.416
+    Info (332115):    Data Delay   : 9.133
+Info (332115): Path #9: Setup slack is -3.372 (VIOLATED)
+    Info (332115):    Slack        : -3.372 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_hq[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[2]_OTERM555
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.392
+    Info (332115):    Data Delay   : 9.154
+Info (332115): Path #10: Setup slack is -3.371 (VIOLATED)
+    Info (332115):    Slack        : -3.371 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|skid_half
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[6]_OTERM449
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.426
+    Info (332115):    Data Delay   : 9.119
+Info (23030): Evaluation of Tcl script sta_r4probe.tcl was successful
+Info: Quartus Prime TimeQuest Timing Analyzer was successful. 0 errors, 8 warnings
+    Info: Peak virtual memory: 1826 megabytes
+    Info: Processing ended: Sat Jul 18 15:31:04 2026
+    Info: Elapsed time: 00:00:05
+    Info: Total CPU time (on all processors): 00:00:05

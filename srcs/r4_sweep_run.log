@@ -1,0 +1,5 @@
+== seed 1 done: Info (332146): Worst-case setup slack is -4.270
+== seed 3 done: Info (332146): Worst-case setup slack is -3.961
+== seed 7 done: Info (332146): Worst-case setup slack is -4.033
+== seed 10 done: Info (332146): Worst-case setup slack is -4.084
+== sweep complete (qsf restored to SEED 2) ==

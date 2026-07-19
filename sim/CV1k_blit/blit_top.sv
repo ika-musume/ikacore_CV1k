@@ -108,6 +108,9 @@ module blit_top #(
     input  wire        i_lf_dvld,
     input  wire [63:0] i_lf_data,
     output wire        o_steal,        // scanout-owns-memory window (debug/arb tap)
+    output wire        o_rq_v,         // r4: raw request legs (blit_draw taps;
+    output wire        o_rq_wr,        //  backend-side request rebuild --
+    output wire        o_rq_blend,     //  leave open on fixed-latency backends)
 
     //------------------------------------------------------------------
     // descriptor sideband (H7): blit_draw's output-only geometry taps,
@@ -292,6 +295,9 @@ blit_draw u_blit_draw (
     .o_wr_mask    (o_wr_mask),
     .i_wr_rdy     (i_wr_rdy && !blit_steal),   // H5: scanout owns VRAM
     .i_rd_vld     (i_rd_vld),                  // H7: tie 1 on fixed-latency backends
+    .o_rq_v       (o_rq_v),                    // r4 raw request legs
+    .o_rq_wr      (o_rq_wr),
+    .o_rq_blend   (o_rq_blend),
     .o_dsc_vld    (o_dsc_vld),                 // H7 descriptor sideband
     .o_dsc_sx_lo  (o_dsc_sx_lo),
     .o_dsc_sx_hi  (o_dsc_sx_hi),

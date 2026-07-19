@@ -260,6 +260,14 @@ module blit_gov (
     // registers -- see the cost pipeline below.
     reg  [15:0] gd_sx, gd_sy, gd_dx, gd_dy;
     reg  [13:0] gu_dimx1;                // UPLOAD (w6 & 0x1fff) + 1
+    reg  [12:0] gu_dimy1;                // r4 iter3: (w7 & 0xfff) + 1
+    reg         gu_dx1_is1, gu_dy1_is1;  // 1-word-payload end detect
+    reg         gu_dx1_is2, gu_dy1_is2;  // px==2 detect for gp_is1
+    reg         gu_pend;                 // deferred product pending
+    reg         gp_is1;                  // r4 iter4: registered (gp_need == 1)
+                                         // -- the emit-decision compare off a
+                                         // flag instead of the 26-bit counter
+                                         // (mirrors blit_fetch w_is1)
 
     // clip window state (u16 wrap semantics, workload.h window_clip)
     reg  [15:0] gc_minx, gc_maxx, gc_miny, gc_maxy;
@@ -364,11 +372,30 @@ module blit_gov (
     // (src_px mod 4)*C_SRC4 <= src_px*C_SRC4 = m_psrc).
     wire [35:0] c_tsrc  = {1'b0, m_psrc} - {26'd0, m_rcs};
 
-    // chunk-slot marking for the governed window (surviving draws only)
-    wire [20:0] op_c1   = gp_wcnt[25:5];                 // last-word chunk
-    wire [20:0] mark_lo = (gp_c0 > last_mark) ? gp_c0 : last_mark;
-    wire [1:0]  nslot_w = (op_c1 >= mark_lo) ? 2'(op_c1 - mark_lo + 21'd1)
-                                             : 2'd0;    // draw spans <= 2 chunks
+    // chunk-slot marking for the governed window (surviving draws only).
+    // H7b.8e r4: the old comb form -- mark_lo = max(gp_c0, last_mark),
+    // nslot = (op_c1 >= mark_lo) ? op_c1-mark_lo+1 : 0 -- chained two
+    // 21-bit compares and the win_f carry chain into the emit edge.  A
+    // draw is 10 words, so between its HDR word (gp_c0 loads) and its
+    // emit word both gp_c0 and last_mark are STABLE for >= 8 pushes, and
+    // the "spans <= 2 chunks" invariant means op_c1 is either gp_c0 or
+    // gp_c0+1.  Enumerating both candidates one cycle behind their inputs
+    // (free-running regs, settled long before any emit) leaves only a
+    // 2:1 select by the registered crossing flag at the emit edge:
+    //   op_c1 == gp_c0   : nslot = (lm <= c0) ? 1 : 0
+    //   op_c1 == gp_c0+1 : nslot = (lm <= c0) ? 2 : (lm == c0+1) ? 1 : 0
+    // The sim-only oracle below re-proves select == old formula at every
+    // surviving-draw emit.
+    reg  [1:0]  ns_same_q, ns_cross_q;   // nslot candidates
+    reg  [20:0] lm_same_q, lm_cross_q;   // last_mark update candidates
+    reg         gp_crossed;              // this op's words crossed a chunk edge
+    always_ff @(posedge i_CLK) begin
+        ns_same_q  <= (last_mark <= gp_c0) ? 2'd1 : 2'd0;
+        ns_cross_q <= (last_mark <= gp_c0) ? 2'd2
+                    : (last_mark == gp_c0 + 21'd1) ? 2'd1 : 2'd0;
+        lm_same_q  <= gp_c0 + 21'd1;
+        lm_cross_q <= gp_c0 + 21'd2;
+    end
 
     // cost-queue push interface (driven by the parser below).  q_push marks
     // the EMIT edge; the entry then takes the P/F register stages and lands
@@ -445,13 +472,20 @@ module blit_gov (
     wire [4:0]  xc_cx0lo = (gd_dx > gc_minx) ? gd_dx[4:0] : gc_minx[4:0];
     wire [12:0] xc8_tssx = f_tspan_p(xs_nz, xs_thr, {2'd0, x_cw});
     wire [12:0] xc8_tsdx = f_tspan_p(xd_nz, xd_thr, {2'd0, x_cw});
-    wire [12:0] yc_tssy  = f_tspan_p(ys_nz, ys_thr, yc_chh);
-    wire [12:0] yc_tsdy  = f_tspan_p(yd_nz, yd_thr, yc_chh);
+    // r4 iter2: the y tile spans move to the w9 arm, computed off the
+    // REGISTERED y_chh (w8) -- their only consumers are the P1-stage
+    // products one cycle after the w9 emit edge, so capturing them at w9
+    // is value- and instant-identical, and the w8 window no longer chains
+    // subtract -> mux -> tspan off the live y_dye clamp.
+    wire [12:0] yc9_tssy = f_tspan_p(ys_nz, ys_thr, {3'd0, y_chh});
+    wire [12:0] yc9_tsdy = f_tspan_p(yd_nz, yd_thr, {3'd0, y_chh});
     wire [3:0]  mc_r4    = x_cw[1:0] * y_chh[1:0];   // src_px mod 4 in [1:0]
 
     // UPLOAD sizing product (w7 live word; see the parser below)
-    wire [12:0] up_h1    = {1'b0, i_word[11:0]} + 13'd1;
-    wire [26:0] up_px    = gu_dimx1 * up_h1;         // 14x13, <= 2^25
+    // r4 iter3: register x register (the live-word form up_h1/up_px is
+    // retired; the product lands one push later under gu_pend)
+    wire [26:0] up_pxm  = gu_dimx1 * gu_dimy1;       // 14x13, <= 2^25
+    wire [26:0] up_pxm1 = up_pxm - 27'd1;
 
     always_ff @(posedge i_CLK or negedge i_RST_n) begin
         if (!i_RST_n) begin
@@ -498,8 +532,6 @@ module blit_gov (
                                              // x_cw -- no clamp in series)
                     y_rej   <= x_rej || (gd_dy > gc_maxy) || (y_dye < gc_miny);
                     y_chh   <= yc_chh[12:0];
-                    y_ts_sy <= yc_tssy[9:0];
-                    y_ts_dy <= yc_tsdy[9:0];
                     y_cwc   <= x_cw    * t_c_src4;
                     y_dpwc  <= x_dpw4  * t_c_dst4;
                     x_ts_sx <= xc8_tssx[9:0];
@@ -507,9 +539,14 @@ module blit_gov (
                 end
                 4'd9: begin                  // M stage (emit edge; the span
                                              // DSPs moved here -- their
-                                             // products land in P1)
+                                             // products land in P1.  r4
+                                             // iter2: y tile spans off the
+                                             // registered y_chh, consumed
+                                             // at P1 -- instant-identical)
                     m_psrc  <= y_cwc   * y_chh;
                     m_pdst  <= y_dpwc  * y_chh;
+                    y_ts_sy <= yc9_tssy[9:0];
+                    y_ts_dy <= yc9_tsdy[9:0];
                     y_tsxc  <= x_ts_sx * t_p_src;
                     y_tsdc  <= x_ts_dx * t_rwwr;
                     m_rcs   <= mc_r4[1:0] * t_c_src4;
@@ -527,9 +564,17 @@ module blit_gov (
             gp_need   <= 26'd0;
             gp_wcnt   <= 26'd0;
             gp_c0     <= 21'd0;
+            gp_crossed<= 1'b0;
             gd_sx     <= 16'd0;  gd_sy <= 16'd0;
             gd_dx     <= 16'd0;  gd_dy <= 16'd0;
             gu_dimx1  <= 14'd0;
+            gu_dimy1  <= 13'd0;
+            gu_dx1_is1<= 1'b0;
+            gu_dy1_is1<= 1'b0;
+            gu_dx1_is2<= 1'b0;
+            gu_dy1_is2<= 1'b0;
+            gu_pend   <= 1'b0;
+            gp_is1    <= 1'b0;
             gc_minx   <= 16'd0;  gc_maxx <= 16'd0;
             gc_miny   <= 16'd0;  gc_maxy <= 16'd0;
             gl_clip_x <= 16'd0;  gl_clip_y <= 16'd0;
@@ -562,6 +607,10 @@ module blit_gov (
                     GP_HDR: begin
                         gp_idx <= 4'd1;
                         gp_c0  <= gp_wcnt[25:5];
+                        // r4: crossed iff a later word of THIS op sits in
+                        // the next chunk -- seeded by the HDR word itself
+                        // being the last word of its chunk
+                        gp_crossed <= (gp_wcnt[4:0] == 5'd31);
                         case (i_word[15:12])
                             4'h0, 4'hF: begin        // END
                                 q_push  <= 1'b1;
@@ -569,9 +618,9 @@ module blit_gov (
                                 q_pnslot<= 2'd0;
                                 gp      <= GP_HALT;
                             end
-                            4'hC: begin gp_kind <= 2'd0; gp_need <= 26'd1; gp <= GP_BODY; end
-                            4'h1: begin gp_kind <= 2'd1; gp_need <= 26'd9; gp <= GP_BODY; end
-                            4'h2: begin gp_kind <= 2'd2; gp_need <= 26'd7; gp <= GP_BODY; end
+                            4'hC: begin gp_kind <= 2'd0; gp_need <= 26'd1; gp_is1 <= 1'b1; gp <= GP_BODY; end
+                            4'h1: begin gp_kind <= 2'd1; gp_need <= 26'd9; gp_is1 <= 1'b0; gp <= GP_BODY; end
+                            4'h2: begin gp_kind <= 2'd2; gp_need <= 26'd7; gp_is1 <= 1'b0; gp <= GP_BODY; end
                             default: begin           // fault: retire like END
                                 q_push  <= 1'b1;
                                 q_pkind <= 2'd2;
@@ -587,6 +636,9 @@ module blit_gov (
                     GP_BODY: begin
                         gp_idx  <= (gp_idx == 4'hF) ? 4'hF : gp_idx + 4'd1;
                         gp_need <= gp_need - 26'd1;
+                        gp_is1  <= (gp_need == 26'd2);   // exact next-value
+                        if (gp_wcnt[4:0] == 5'd31)   // r4: next word crosses
+                            gp_crossed <= 1'b1;
 
                         // DRAW field capture (DrawView slices; the w6/w7
                         // dimension words are captured as end-coordinate
@@ -602,15 +654,38 @@ module blit_gov (
                         end
 
                         // UPLOAD payload sizing (same law as the fetch
-                        // walker).  dimx+1 is pre-registered so the sizing
-                        // product is a single narrow multiply (14x13; the
-                        // payload bound 8192*4096 = 2^25 fits gp_need) --
-                        // the next push can land on the very next cycle.
-                        if (gp_kind == 2'd2 && gp_idx == 4'd6)
-                            gu_dimx1 <= {1'b0, i_word[12:0]} + 14'd1;
-                        if (gp_kind == 2'd2 && gp_idx == 4'd7)
-                            gp_need <= up_px[25:0];
-                        else if (gp_need == 26'd1) begin
+                        // walker).  r4 iter3: the dimy side gets the fetch
+                        // walker's r4 recipe -- dimy+1 registered at word
+                        // 7 and the product DEFERRED one push (register x
+                        // register into the DSP), so the live snoop-word
+                        // mux leaves the gp_need cone.  The 1-word payload
+                        // (dimx=dimy=0: the deferral word is also the last)
+                        // emits via the pre-registered is1 flags -- same
+                        // word, same entry, same instants.
+                        if (gp_kind == 2'd2 && gp_idx == 4'd6) begin
+                            gu_dimx1  <= {1'b0, i_word[12:0]} + 14'd1;
+                            gu_dx1_is1<= (i_word[12:0] == 13'd0);
+                            gu_dx1_is2<= (i_word[12:0] == 13'd1);
+                        end
+                        if (gu_pend) begin
+                            gu_pend <= 1'b0;
+                            gp_need <= up_pxm1[25:0];
+                            gp_is1  <= (gu_dx1_is2 && gu_dy1_is1)   // px == 2
+                                    || (gu_dx1_is1 && gu_dy1_is2);
+                            if (gu_dx1_is1 && gu_dy1_is1) begin
+                                gp      <= GP_HDR;
+                                q_push  <= 1'b1;
+                                q_pkind <= 2'd0;     // UPLOAD: zero cost
+                                q_pnslot<= 2'd0;
+                            end
+                        end
+                        else if (gp_kind == 2'd2 && gp_idx == 4'd7) begin
+                            gu_dimy1  <= {1'b0, i_word[11:0]} + 13'd1;
+                            gu_dy1_is1<= (i_word[11:0] == 12'd0);
+                            gu_dy1_is2<= (i_word[11:0] == 12'd1);
+                            gu_pend   <= 1'b1;
+                        end
+                        else if (gp_is1) begin           // == (gp_need == 1)
                             // op complete on THIS word: emit its entry
                             gp <= GP_HDR;
                             case (gp_kind)
@@ -637,12 +712,17 @@ module blit_gov (
                                         q_pkind <= 2'd0;
                                         q_pnslot<= 2'd0;
                                     end
-                                    else begin
+                                    else begin       // r4: staged candidates,
+                                                     // 2:1 select at the edge
+                                        automatic logic [1:0] ns_w;
+                                        ns_w = gp_crossed ? ns_cross_q
+                                                          : ns_same_q;
                                         q_pkind <= 2'd1;
-                                        q_pnslot<= nslot_w;
-                                        win_f   <= win_f + {19'd0, nslot_w};
-                                        if (nslot_w != 2'd0)
-                                            last_mark <= op_c1 + 21'd1;
+                                        q_pnslot<= ns_w;
+                                        win_f   <= win_f + {19'd0, ns_w};
+                                        if (ns_w != 2'd0)
+                                            last_mark <= gp_crossed ? lm_cross_q
+                                                                    : lm_same_q;
                                     end
                                 end
                                 default: begin       // UPLOAD: fetch-bound, zero cost
@@ -659,6 +739,38 @@ module blit_gov (
             end
         end
     end
+
+`ifndef SYNTHESIS
+    // r4 iter4 oracle: gp_is1 must track (gp_need == 1) in GP_BODY
+    always @(posedge i_CLK)
+        if (i_RST_n && gp == GP_BODY && gp_is1 != (gp_need == 26'd1))
+            $fatal(2, "[blit_gov] r4 gp_is1 diverged (is1=%b need=%0d) t=%0t",
+                   gp_is1, gp_need, $time);
+`endif
+
+`ifndef SYNTHESIS
+    // r4 shadow oracle: the staged nslot/last_mark candidates must equal
+    // the retired comb formula at every surviving-draw emit instant.
+    always @(posedge i_CLK) begin
+        if (i_RST_n && i_push && gp == GP_BODY && gp_kind == 2'd1 &&
+            gp_need == 26'd1 && !y_rej) begin
+            automatic logic [20:0] chk_c1  = gp_wcnt[25:5];
+            automatic logic [20:0] chk_mlo = (gp_c0 > last_mark) ? gp_c0
+                                                                 : last_mark;
+            automatic logic [1:0]  chk_ns  = (chk_c1 >= chk_mlo)
+                                   ? 2'(chk_c1 - chk_mlo + 21'd1) : 2'd0;
+            automatic logic [1:0]  got_ns  = gp_crossed ? ns_cross_q
+                                                        : ns_same_q;
+            if (got_ns != chk_ns)
+                $fatal(2, "[blit_gov] r4 nslot stage diverged: got %0d want %0d (c0=%0d c1=%0d lm=%0d crossed=%0d) t=%0t",
+                       got_ns, chk_ns, gp_c0, chk_c1, last_mark, gp_crossed, $time);
+            if (chk_ns != 2'd0 &&
+                (gp_crossed ? lm_cross_q : lm_same_q) != chk_c1 + 21'd1)
+                $fatal(2, "[blit_gov] r4 last_mark stage diverged: got %0d want %0d t=%0t",
+                       gp_crossed ? lm_cross_q : lm_same_q, chk_c1 + 21'd1, $time);
+        end
+    end
+`endif
 
     //------------------------------------------------------------------
     // cost queue (arrival -> timeline).  4096 entries never binds on the

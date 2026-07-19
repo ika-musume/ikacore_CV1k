@@ -121,7 +121,16 @@ module blit_draw (
     output wire [12:0] o_dsc_upl_dimy,   // rows
 
     output wire        o_busy,           // EXEC accepted .. END retired
-    output reg         o_done            // 1-cycle pulse at END retire
+    output reg         o_done,           // 1-cycle pulse at END retire
+
+    // r4: raw request legs -- the registered components of o_srd_req /
+    // o_drd_req, exported so a backend that owns the other AND legs
+    // (wr-fifo almost-full, rd_vld, scanout steal) can rebuild the
+    // requests locally instead of timing the two-crossing detour through
+    // this module's adv LUT.  o_srd_req == o_rq_v && adv by definition.
+    output wire        o_rq_v,           // = b1_v
+    output wire        o_rq_wr,          // = draw_wr (b4 write beat pending)
+    output wire        o_rq_blend        // = b1_blend (dst read leg)
 );
 
     // ---------------------------------------------------------------------
@@ -141,6 +150,48 @@ module blit_draw (
         q  = p * 12'd2115;                 // exact floor(p/31) in q[22:16]
         f_mulop = (|q[22:21]) ? 5'd31 : q[20:16];   // min(q>>16, 31)
     endfunction
+
+    // r4: f_mulop split at the first-product boundary for the ALU2 pipe
+    // cut -- f_mulop(x,y,rev) == f_mulop_b(f_mulop_a(x,y,rev)) by
+    // construction (same expressions, no truncation between the halves)
+    function automatic logic [10:0] f_mulop_a(input logic [4:0] x,
+                                              input logic [5:0] y,
+                                              input logic       rev);
+        logic [4:0] xe;
+        xe = rev ? ~x : x;
+        f_mulop_a = xe * y;
+    endfunction
+
+    function automatic logic [4:0] f_mulop_b(input logic [10:0] p);
+        logic [22:0] q;
+        q = p * 12'd2115;
+        f_mulop_b = (|q[22:21]) ? 5'd31 : q[20:16];
+    endfunction
+
+    // r4 iter 2: constant-folded tint form for ALU1 -- the per-op tint y is
+    // a bank constant, so y*2115 is precomputed at bank-program time (18b:
+    // 63*2115 = 133,245) and the live path is ONE 5x18 multiply + clamp
+    // instead of the two serial multiplies of f_mulop.  Exact by integer
+    // associativity: (x*y)*2115 == x*(y*2115), both <= 31*133,245 =
+    // 4,130,595 < 2^23 -- the elaboration self-check below proves it
+    // exhaustively over the full 32x64 domain every sim build.
+    function automatic logic [4:0] f_mulop_k(input logic [4:0]  x,
+                                             input logic [17:0] k);
+        logic [22:0] q;
+        q = x * k;
+        f_mulop_k = (|q[22:21]) ? 5'd31 : q[20:16];
+    endfunction
+
+`ifndef SYNTHESIS
+    initial begin
+        for (int xi = 0; xi < 32; xi++)
+            for (int yi = 0; yi < 64; yi++)
+                if (f_mulop(5'(xi), 6'(yi), 1'b0)
+                    != f_mulop_k(5'(xi), 18'(yi * 2115)))
+                    $fatal(2, "[blit_draw] f_mulop_k mismatch x=%0d y=%0d",
+                           xi, yi);
+    end
+`endif
 
     function automatic logic [4:0] f_satadd(input logic [4:0] a,
                                             input logic [4:0] b);
@@ -222,7 +273,39 @@ module blit_draw (
     reg  [1:0]      bk_simple, bk_blend, bk_tint, bk_trans, bk_flip;
     reg  [1:0][2:0] bk_smode, bk_dmode;
     reg  [1:0][4:0] bk_sa, bk_da;
-    reg  [1:0][5:0] bk_tr, bk_tg, bk_tb;
+    reg  [1:0][17:0] bk_ktr, bk_ktg, bk_ktb;  // r4 iter2: tint*2115 (K-form)
+
+    // H7b.8e r4: stage-local copies of the mode-bank fields, fetched at the
+    // same adv edge that advances the op into the consuming stage (index =
+    // the PREVIOUS stage's bank).  s3_bank_clear forbids reprogramming a
+    // bank while any pipe stage still references it, so these copies are
+    // value-identical to the direct bk_*[stage_bk] reads they replace; the
+    // ALU cones become pure register->register and the synthesis retimer
+    // can no longer drag the B_S3 bank-write/enable cone (dimx_e/dimy_e
+    // compares) into the blend multiplier when it splits ALU2 across B3.
+    reg             b1_blend;                   // o_drd_req leg
+    reg             b2r_flip, b2r_tint, b2r_trans;
+    reg  [17:0]     b2r_ktr, b2r_ktg, b2r_ktb; // K-form tint constants
+    reg  [2:0]      b3i_sm, b3i_dm;             // ALU2a selects (B3i stage)
+    reg  [4:0]      b3i_sac, b3i_dac;           // alpha constants (B3i stage)
+    reg  [2:0]      b3_sm, b3_dm;               // carried for ALU2b
+    reg             b3_simple, b3_blendf;
+
+    // H7b.8e r4: ALU2 is hand-split across the existing B3i->B3 boundary
+    // instead of leaving the whole blend cone to the synthesis retimer.
+    // The retimer's automatic split (fit evidence: Add3~13_NEW_REG inside
+    // the soft multiplier) must RECONSTRUCT every moved register's next
+    // value -- adv ? D : Q -- which put the adv stall net (o_af arrival
+    // from u_batch) and the mode-bank select into the multiplier D-cones
+    // as DATA.  With the first multiply registered explicitly (ALU2a:
+    // operand select + rev-invert + xe*y products; ALU2b: x2115 const
+    // multiply + clamp + saturating add + output select), every B3-stage
+    // register is an ordinary enabled register: adv is a clock enable
+    // again and no reconstruction LUTs exist.  b4_data values and instants
+    // are IDENTICAL (same expressions, cut at a register boundary that
+    // was already a pipeline stage).
+    reg  [3:0][10:0] b3_ps_r, b3_ps_g, b3_ps_b; // src-leg first products
+    reg  [3:0][10:0] b3_pd_r, b3_pd_g, b3_pd_b; // dst-leg first products
 
     wire pipe_empty = !b1_v && !b2_v && !b2r_v && !b3i_v && !b3_v && !b4_v;
 
@@ -477,7 +560,26 @@ module blit_draw (
     // BACK: per-draw setup + row/beat generator
     // ---------------------------------------------------------------------
     localparam [2:0] B_IDLE = 3'd0, B_S1 = 3'd1, B_S2 = 3'd2, B_S3 = 3'd3,
-                     B_ROW  = 3'd4, B_BEAT = 3'd5;
+                     B_ROW  = 3'd4, B_BEAT = 3'd5, B_S3P = 3'd6;
+    // r4 iter3: B_S3P precompute registers -- the S3 extent/base/rect
+    // automatics land here one cycle ahead (inputs are all S1/S2-or-older
+    // registers, stable until the next op), so the S3 commit cycle keeps
+    // only the f_ovl compares, the pv_* hazard legs (still read LIVE at
+    // the commit edge -- retire updates between S3P and S3 are honored
+    // exactly as before), and the bank program.  Engine-side +1 cycle per
+    // draw setup (user latitude; datum/anchors/matrix adjudicate).
+    reg signed [17:0] p3_npx;
+    reg        [12:0] p3_sxb;
+    reg        [11:0] p3_ysr;
+    reg signed [31:0] p3_drow;
+    reg signed [17:0] p3_rows;
+    reg signed [17:0] p3_sxlo, p3_sxhi;
+    reg signed [17:0] p3_sylo, p3_syhi;
+    reg               p3_syfull;
+    reg signed [17:0] p3_fxlo, p3_fxhi;
+    reg signed [17:0] p3_dylo, p3_dyhi;
+    reg               p3_xs_sm;
+    reg               p3_rej;   // (starty >= dimy_e) || (startx >= dimx_e)
     reg [2:0] bst;
     assign back_idle = (bst == B_IDLE);
     wire back_ob_take = back_idle && ob_v;
@@ -583,6 +685,11 @@ module blit_draw (
             sx0 <= '0; sy0 <= '0; g_a <= '0; g_b <= '0;
             starty_r <= '0; startx_r <= '0; dimy_e <= '0; dimx_e <= '0;
             starty <= '0; startx <= '0; n_px_s <= '0;
+            p3_npx <= '0; p3_sxb <= '0; p3_ysr <= '0; p3_drow <= '0;
+            p3_rows <= '0; p3_sxlo <= '0; p3_sxhi <= '0;
+            p3_sylo <= '0; p3_syhi <= '0; p3_syfull <= 1'b0;
+            p3_fxlo <= '0; p3_fxhi <= '0; p3_dylo <= '0; p3_dyhi <= '0;
+            p3_xs_sm <= 1'b0; p3_rej <= 1'b0;
             sx_base <= '0; ysrc0 <= '0; didx_row0 <= '0; rows <= '0;
             src_cur <= '0; didx_beat <= '0; px_left <= '0;
             srow_sh <= '0; didx_row_sh <= '0; y_left <= '0;
@@ -590,7 +697,7 @@ module blit_draw (
             d_xlo <= '0; d_xhi <= '0; d_ylo <= '0; d_yhi <= '0;
             bk_simple <= '0; bk_blend <= '0; bk_tint <= '0; bk_trans <= '0;
             bk_flip <= '0; bk_smode <= '0; bk_dmode <= '0;
-            bk_sa <= '0; bk_da <= '0; bk_tr <= '0; bk_tg <= '0; bk_tb <= '0;
+            bk_sa <= '0; bk_da <= '0; bk_ktr <= '0; bk_ktg <= '0; bk_ktb <= '0;
         end
         else begin
             o_dsc_vld <= 1'b0;
@@ -643,76 +750,92 @@ module blit_draw (
                 if (q_flipx ? (g_a < g_b) : (g_a > g_b))
                     bst <= B_IDLE;             // src 0x2000-edge wrap: skip draw
                 else
-                    bst <= B_S3;
+                    bst <= B_S3P;
+            end
+
+            // S3P (r4 iter3): register the S3 automatics one cycle ahead
+            B_S3P: begin
+                automatic logic signed [17:0] npx    = dimx_e - startx;
+                automatic logic        [12:0] sxb    =
+                    q_flipx ? 13'(sx0 - 15'(startx)) : 13'(sx0 + 15'(startx));
+                automatic logic signed [17:0] sxlo_c =
+                    q_flipx ? (18'($signed({5'b0, sxb})) - npx + 18'sd1)
+                            : 18'($signed({5'b0, sxb}));
+                automatic logic signed [17:0] sxhi_c =
+                    q_flipx ? 18'($signed({5'b0, sxb}))
+                            : (18'($signed({5'b0, sxb})) + npx - 18'sd1);
+                automatic logic signed [17:0] sylo_u =
+                    q_flipy ? (18'($signed({3'b0, sy0})) - (dimy_e - 18'sd1))
+                            : (18'($signed({3'b0, sy0})) + starty);
+                automatic logic signed [17:0] syhi_u =
+                    q_flipy ? (18'($signed({3'b0, sy0})) - starty)
+                            : (18'($signed({3'b0, sy0})) + dimy_e - 18'sd1);
+                automatic logic               syfull =
+                    (sylo_u < 18'sd0) || (sylo_u[17:12] != syhi_u[17:12]);
+                automatic logic signed [17:0] dxlo_c = q_dst_x + startx;
+                automatic logic signed [17:0] dxhi_c = q_dst_x + dimx_e - 18'sd1;
+                automatic logic               dspill =
+                    (dxlo_c < 18'sd0) || (dxhi_c > 18'sd8191);
+                automatic logic signed [17:0] xshift = dxlo_c - 18'($signed({5'b0, sxb}));
+                p3_npx   <= npx;
+                p3_sxb   <= sxb;
+                p3_ysr   <= q_flipy ? 12'(sy0 - 15'(starty)) : 12'(sy0 + 15'(starty));
+                p3_drow  <= ((32'($signed(q_dst_y)) + 32'($signed(starty))) <<< 13)
+                            + 32'($signed(q_dst_x)) + 32'($signed(startx));
+                p3_rows  <= dimy_e - starty;
+                p3_sxlo  <= sxlo_c;
+                p3_sxhi  <= sxhi_c;
+                p3_sylo  <= {6'b0, sylo_u[11:0]};   // RAW; the syfull mask
+                p3_syhi  <= {6'b0, syhi_u[11:0]};   // applies at B_S3 (r4
+                p3_syfull<= syfull;                 // iter4: 2 levels off S3P)
+                p3_fxlo  <= dspill ? 18'sd0    : dxlo_c;
+                p3_fxhi  <= dspill ? 18'sd8191 : dxhi_c;
+                p3_dylo  <= (q_dst_y + starty) - (dspill ? 18'sd1 : 18'sd0);
+                p3_dyhi  <= (q_dst_y + dimy_e - 18'sd1) + (dspill ? 18'sd1 : 18'sd0);
+                p3_xs_sm <= (xshift > -18'sd4) && (xshift < 18'sd4);
+                p3_rej   <= (starty >= dimy_e) || (startx >= dimx_e);
+                bst      <= B_S3;
             end
 
             // S3: extents, bases, hazard rects; program the mode bank
             // (held until the target bank's pipe beats have drained)
             B_S3: begin
-                if ((starty >= dimy_e) || (startx >= dimx_e)) bst <= B_IDLE;
+                if (p3_rej) bst <= B_IDLE;   // registered at S3P (r4 iter4)
                 else if (s3_bank_clear) begin
-                    automatic logic signed [17:0] npx    = dimx_e - startx;
-                    automatic logic        [12:0] sxb    =
-                        q_flipx ? 13'(sx0 - 15'(startx)) : 13'(sx0 + 15'(startx));
-                    automatic logic        [11:0] ysr    =
-                        q_flipy ? 12'(sy0 - 15'(starty)) : 12'(sy0 + 15'(starty));
-                    automatic logic signed [31:0] drow   =
-                        ((32'($signed(q_dst_y)) + 32'($signed(starty))) <<< 13)
-                        + 32'($signed(q_dst_x)) + 32'($signed(startx));
-                    automatic logic signed [17:0] sxlo_c =
-                        q_flipx ? (18'($signed({5'b0, sxb})) - npx + 18'sd1)
-                                : 18'($signed({5'b0, sxb}));
-                    automatic logic signed [17:0] sxhi_c =
-                        q_flipx ? 18'($signed({5'b0, sxb}))
-                                : (18'($signed({5'b0, sxb})) + npx - 18'sd1);
-                    automatic logic signed [17:0] sylo_u =
-                        q_flipy ? (18'($signed({3'b0, sy0})) - (dimy_e - 18'sd1))
-                                : (18'($signed({3'b0, sy0})) + starty);
-                    automatic logic signed [17:0] syhi_u =
-                        q_flipy ? (18'($signed({3'b0, sy0})) - starty)
-                                : (18'($signed({3'b0, sy0})) + dimy_e - 18'sd1);
-                    automatic logic               syfull =
-                        (sylo_u < 18'sd0) || (sylo_u[17:12] != syhi_u[17:12]);
-                    automatic logic signed [17:0] dxlo_c = q_dst_x + startx;
-                    automatic logic signed [17:0] dxhi_c = q_dst_x + dimx_e - 18'sd1;
-                    automatic logic               dspill =
-                        (dxlo_c < 18'sd0) || (dxhi_c > 18'sd8191);
-                    automatic logic signed [17:0] dylo_c =
-                        (q_dst_y + starty) - (dspill ? 18'sd1 : 18'sd0);
-                    automatic logic signed [17:0] dyhi_c =
-                        (q_dst_y + dimy_e - 18'sd1) + (dspill ? 18'sd1 : 18'sd0);
-                    automatic logic signed [17:0] fxlo   = dspill ? 18'sd0    : dxlo_c;
-                    automatic logic signed [17:0] fxhi   = dspill ? 18'sd8191 : dxhi_c;
-                    automatic logic signed [17:0] sylo_m = syfull ? 18'sd0    : {6'b0, sylo_u[11:0]};
-                    automatic logic signed [17:0] syhi_m = syfull ? 18'sd4095 : {6'b0, syhi_u[11:0]};
-                    automatic logic               ovl_self =
-                        f_ovl(sxlo_c, sxhi_c, fxlo, fxhi) &&
-                        f_ovl(sylo_m, syhi_m, dylo_c, dyhi_c);
-                    automatic logic signed [17:0] xshift = dxlo_c - 18'($signed({5'b0, sxb}));
+                    // r4 iter3: rects/bases come from the B_S3P registers;
+                    // this cycle keeps the f_ovl compares (2 levels off
+                    // regs), the LIVE pv_* hazard legs, and the bank
+                    // program.  Values identical to the one-cycle form.
+                    automatic logic signed [17:0] sylo_m =
+                        p3_syfull ? 18'sd0    : p3_sylo;
+                    automatic logic signed [17:0] syhi_m =
+                        p3_syfull ? 18'sd4095 : p3_syhi;
+                    automatic logic ovl_self =
+                        f_ovl(p3_sxlo, p3_sxhi, p3_fxlo, p3_fxhi) &&
+                        f_ovl(sylo_m, syhi_m, p3_dylo, p3_dyhi);
 
-                    n_px_s   <= npx;
-                    sx_base  <= sxb;
-                    ysrc0    <= ysr;
-                    didx_row0<= drow;
-                    rows     <= dimy_e - starty;
-                    s_xlo <= sxlo_c;  s_xhi <= sxhi_c;
-                    s_ylo <= sylo_m;  s_yhi <= syhi_m;  s_yfull <= syfull;
-                    d_xlo <= fxlo;    d_xhi <= fxhi;
-                    d_ylo <= dylo_c;  d_yhi <= dyhi_c;
+                    n_px_s   <= p3_npx;
+                    sx_base  <= p3_sxb;
+                    ysrc0    <= p3_ysr;
+                    didx_row0<= p3_drow;
+                    rows     <= p3_rows;
+                    s_xlo <= p3_sxlo;  s_xhi <= p3_sxhi;
+                    s_ylo <= sylo_m;   s_yhi <= syhi_m;   s_yfull <= p3_syfull;
+                    d_xlo <= p3_fxlo;  d_xhi <= p3_fxhi;
+                    d_ylo <= p3_dylo;  d_yhi <= p3_dyhi;
 
                     q_strict <= ovl_self;
                     // 1-px beats when the golden sequential smear is visible
                     // inside a 4-px beat: flipped src, or |x shift| < 4
-                    q_px1    <= ovl_self && (q_flipx || q_flipy ||
-                                 ((xshift > -18'sd4) && (xshift < 18'sd4)));
+                    q_px1    <= ovl_self && (q_flipx || q_flipy || p3_xs_sm);
                     // cross-op hazard: our src (or, when blending, our dst)
                     // touches the previous op's dst -> drain once at start
                     q_waitpipe <= ovl_self ||
-                        (pv_valid && f_ovl(sxlo_c, sxhi_c, pv_xlo, pv_xhi)
+                        (pv_valid && f_ovl(p3_sxlo, p3_sxhi, pv_xlo, pv_xhi)
                                   && f_ovl(sylo_m, syhi_m, pv_ylo, pv_yhi)) ||
                         (pv_valid && q_blend_eff &&
-                                     f_ovl(fxlo, fxhi, pv_xlo, pv_xhi) &&
-                                     f_ovl(dylo_c, dyhi_c, pv_ylo, pv_yhi));
+                                     f_ovl(p3_fxlo, p3_fxhi, pv_xlo, pv_xhi) &&
+                                     f_ovl(p3_dylo, p3_dyhi, pv_ylo, pv_yhi));
 
                     q_simple <= !q_blend_eff && !q_tint_eff;
                     // program the (currently unused) mode bank
@@ -726,9 +849,9 @@ module blit_draw (
                     bk_dmode [~bk_sel]   <= q_dmode;
                     bk_sa    [~bk_sel]   <= q_sa;
                     bk_da    [~bk_sel]   <= q_da;
-                    bk_tr    [~bk_sel]   <= q_tr;
-                    bk_tg    [~bk_sel]   <= q_tg;
-                    bk_tb    [~bk_sel]   <= q_tb;
+                    bk_ktr   [~bk_sel]   <= 18'(q_tr * 12'd2115);
+                    bk_ktg   [~bk_sel]   <= 18'(q_tg * 12'd2115);
+                    bk_ktb   [~bk_sel]   <= 18'(q_tb * 12'd2115);
                     o_dsc_vld <= 1'b1;         // H7 sideband: surviving DRAW
                     bst      <= B_ROW;
                 end
@@ -803,17 +926,17 @@ module blit_draw (
             automatic logic [15:0] dw_;
             // src lane un-flip: 4-px beats read ascending, output descending
             rw  = b2r_px1 ? b2r_s[15:0]
-                : (bk_flip[b2r_bk] ? b2r_s[(3-l)*16 +: 16] : b2r_s[l*16 +: 16]);
+                : (b2r_flip ? b2r_s[(3-l)*16 +: 16] : b2r_s[l*16 +: 16]);
             dw_ = b2r_d[l*16 +: 16];
             a1_raw[l] = rw;
             a1_a[l]   = rw[15];
-            a1_sr[l]  = bk_tint[b2r_bk] ? f_mulop(rw[14:10], bk_tr[b2r_bk], 1'b0) : rw[14:10];
-            a1_sg[l]  = bk_tint[b2r_bk] ? f_mulop(rw[9:5],   bk_tg[b2r_bk], 1'b0) : rw[9:5];
-            a1_sb[l]  = bk_tint[b2r_bk] ? f_mulop(rw[4:0],   bk_tb[b2r_bk], 1'b0) : rw[4:0];
+            a1_sr[l]  = b2r_tint ? f_mulop_k(rw[14:10], b2r_ktr) : rw[14:10];
+            a1_sg[l]  = b2r_tint ? f_mulop_k(rw[9:5],   b2r_ktg) : rw[9:5];
+            a1_sb[l]  = b2r_tint ? f_mulop_k(rw[4:0],   b2r_ktb) : rw[4:0];
             a1_dr[l]  = dw_[14:10];
             a1_dg[l]  = dw_[9:5];
             a1_db[l]  = dw_[4:0];
-            a1_mask[l]= b2r_en[l] && (!bk_trans[b2r_bk] || rw[15]);
+            a1_mask[l]= b2r_en[l] && (!b2r_trans || rw[15]);
         end
     end
 
@@ -831,6 +954,14 @@ module blit_draw (
             b3_raw <= '0; b4_data <= '0;
             b3_sr <= '0; b3_sg <= '0; b3_sb <= '0;
             b3_dr <= '0; b3_dg <= '0; b3_db <= '0; b3_a <= '0;
+            b1_blend <= 1'b0;
+            b2r_flip <= 1'b0; b2r_tint <= 1'b0; b2r_trans <= 1'b0;
+            b2r_ktr <= '0; b2r_ktg <= '0; b2r_ktb <= '0;
+            b3i_sm <= '0; b3i_dm <= '0; b3i_sac <= '0; b3i_dac <= '0;
+            b3_sm <= '0; b3_dm <= '0;
+            b3_simple <= 1'b0; b3_blendf <= 1'b0;
+            b3_ps_r <= '0; b3_ps_g <= '0; b3_ps_b <= '0;
+            b3_pd_r <= '0; b3_pd_g <= '0; b3_pd_b <= '0;
         end
         else if (adv) begin
             // B3 -> B4 (ALU2 result lands in the write-data register)
@@ -839,32 +970,56 @@ module blit_draw (
             b4_wa   <= b3_wa;
             b4_mask <= b3_v ? b3_mask : 4'b0;
             b4_data <= {a2_out[3], a2_out[2], a2_out[1], a2_out[0]};
-            // B3i -> B3 (plain delay; H7b.8e)
+            // B3i -> B3 (H7b.8e; r4: no longer a plain delay -- the edge
+            // captures the ALU2a first products, cutting the blend cone at
+            // this boundary by hand.  Values/instants identical: b4_data
+            // is the same function of the B3i inputs, split where the
+            // retimer used to split it with reconstruction LUTs)
             b3_v   <= b3i_v;  b3_bk <= b3i_bk;
             b3_wa  <= b3i_wa; b3_mask <= b3i_mask;
             b3_raw <= b3i_raw;
             b3_sr <= b3i_sr;  b3_sg <= b3i_sg;  b3_sb <= b3i_sb;
             b3_dr <= b3i_dr;  b3_dg <= b3i_dg;  b3_db <= b3i_db;
             b3_a  <= b3i_a;
-            // B2r -> B3i (ALU1 from the captured read beats)
+            b3_sm     <= b3i_sm;
+            b3_dm     <= b3i_dm;
+            b3_simple <= bk_simple[b3i_bk];
+            b3_blendf <= bk_blend[b3i_bk];
+            b3_ps_r <= a2a_ps_r;  b3_ps_g <= a2a_ps_g;  b3_ps_b <= a2a_ps_b;
+            b3_pd_r <= a2a_pd_r;  b3_pd_g <= a2a_pd_g;  b3_pd_b <= a2a_pd_b;
+            // B2r -> B3i (ALU1 from the captured read beats.  r4: the
+            // ALU2a selects/constants ride this edge from the mode bank --
+            // bank stable while the op occupies b2r, per s3_bank_clear)
             b3i_v   <= b2r_v;  b3i_bk <= b2r_bk;
             b3i_wa  <= b2r_wa; b3i_mask <= a1_mask;
             for (int l = 0; l < 4; l++) b3i_raw[l*16 +: 16] <= a1_raw[l];
             b3i_sr <= a1_sr;  b3i_sg <= a1_sg;  b3i_sb <= a1_sb;
             b3i_dr <= a1_dr;  b3i_dg <= a1_dg;  b3i_db <= a1_db;
             b3i_a  <= a1_a;
+            b3i_sm  <= bk_smode[b2r_bk];
+            b3i_dm  <= bk_dmode[b2r_bk];
+            b3i_sac <= bk_sa[b2r_bk];
+            b3i_dac <= bk_da[b2r_bk];
             // B2 -> B2r (read beats captured RAW at the edge that used to
-            // consume them comb -- same adv gate, same i_rd_vld handshake)
+            // consume them comb -- same adv gate, same i_rd_vld handshake.
+            // r4: ALU1's mode-bank fields ride the same edge)
             b2r_v   <= b2_v;   b2r_bk <= b2_bk;  b2r_px1 <= b2_px1;
             b2r_wa  <= b2_wa;  b2r_en <= b2_en;
             b2r_s   <= i_srd_data;
             b2r_d   <= i_drd_data;
+            b2r_flip  <= bk_flip[b2_bk];
+            b2r_tint  <= bk_tint[b2_bk];
+            b2r_trans <= bk_trans[b2_bk];
+            b2r_ktr   <= bk_ktr[b2_bk];
+            b2r_ktg   <= bk_ktg[b2_bk];
+            b2r_ktb   <= bk_ktb[b2_bk];
             // B1 -> B2
             b2_v  <= b1_v;   b2_bk <= b1_bk;  b2_px1 <= b1_px1;
             b2_wa <= b1_wa;  b2_en <= b1_en;
-            // emit -> B1
+            // emit -> B1 (r4: blend flag rides along for o_drd_req)
             b1_v   <= emit_fire;
             b1_bk  <= bk_sel;
+            b1_blend <= bk_blend[bk_sel];
             b1_px1 <= q_px1;
             b1_sa_ <= src_cur;
             b1_wa  <= didx_beat[24:0];
@@ -874,8 +1029,13 @@ module blit_draw (
 
     assign o_srd_req  = b1_v && adv;
     assign o_srd_addr = b1_sa_;
-    assign o_drd_req  = b1_v && adv && bk_blend[b1_bk];
+    assign o_drd_req  = b1_v && adv && b1_blend;
     assign o_drd_addr = b1_wa;
+
+    // r4 raw request legs (see the port note)
+    assign o_rq_v     = b1_v;
+    assign o_rq_wr    = draw_wr;
+    assign o_rq_blend = b1_blend;
 
     // ---------------------------------------------------------------------
     // H7 descriptor sideband fields: pure taps of the S1-S3 setup registers
@@ -898,52 +1058,66 @@ module blit_draw (
     assign o_dsc_upl_dimx = up_dimx;
     assign o_dsc_upl_dimy = up_dimy;
 
-    // ALU2 (comb, from B3): the unified blend form; copy path passes raw.
-    // Registers into b4_data at the B3->B4 edge.
+    // ALU2a (comb, from B3i): operand select + rev-invert + the xe*y first
+    // products.  Registers into b3_ps_*/b3_pd_* at the B3i->B3 edge.
+    logic [3:0][10:0] a2a_ps_r, a2a_ps_g, a2a_ps_b;
+    logic [3:0][10:0] a2a_pd_r, a2a_pd_g, a2a_pd_b;
+    always_comb begin
+        for (int l = 0; l < 4; l++) begin
+            automatic logic [4:0] xr, xg, xb, yr, yg, yb;
+            // clr0 = f(smode): operand select {alpha, s, d}, rev = sm[2]
+            case (b3i_sm[1:0])
+                2'd0: begin xr = b3i_sac;      xg = b3i_sac;      xb = b3i_sac;      end
+                2'd1: begin xr = b3i_sr[l];    xg = b3i_sg[l];    xb = b3i_sb[l];    end
+                default: begin xr = b3i_dr[l]; xg = b3i_dg[l];    xb = b3i_db[l];    end
+            endcase
+            a2a_ps_r[l] = f_mulop_a(xr, {1'b0, b3i_sr[l]}, b3i_sm[2]);
+            a2a_ps_g[l] = f_mulop_a(xg, {1'b0, b3i_sg[l]}, b3i_sm[2]);
+            a2a_ps_b[l] = f_mulop_a(xb, {1'b0, b3i_sb[l]}, b3i_sm[2]);
+            // dterm = f(dmode)
+            case (b3i_dm[1:0])
+                2'd0: begin yr = b3i_dac;      yg = b3i_dac;      yb = b3i_dac;      end
+                2'd1: begin yr = b3i_sr[l];    yg = b3i_sg[l];    yb = b3i_sb[l];    end
+                default: begin yr = b3i_dr[l]; yg = b3i_dg[l];    yb = b3i_db[l];    end
+            endcase
+            a2a_pd_r[l] = f_mulop_a(yr, {1'b0, b3i_dr[l]}, b3i_dm[2]);
+            a2a_pd_g[l] = f_mulop_a(yg, {1'b0, b3i_dg[l]}, b3i_dm[2]);
+            a2a_pd_b[l] = f_mulop_a(yb, {1'b0, b3i_db[l]}, b3i_dm[2]);
+        end
+    end
+
+    // ALU2b (comb, from B3): x2115 const multiply + clamp + saturating add
+    // + output select; copy path passes raw.  Registers into b4_data at
+    // the B3->B4 edge.  clr0/dterm bypasses (mode[1:0] == 3) read the
+    // carried channel registers, exactly as the unsplit form did.
     logic [3:0][15:0] a2_out;
     always_comb begin
         for (int l = 0; l < 4; l++) begin
             automatic logic [4:0] c0r, c0g, c0b, dtr, dtg, dtb, orr, org_, orb;
-            automatic logic [4:0] xr, xg, xb, yr, yg, yb;
-            automatic logic [2:0] sm, dm;
-            sm = bk_smode[b3_bk];
-            dm = bk_dmode[b3_bk];
-            // clr0 = f(smode): operand select {alpha, s, d}, rev = sm[2]
-            case (sm[1:0])
-                2'd0: begin xr = bk_sa[b3_bk]; xg = bk_sa[b3_bk]; xb = bk_sa[b3_bk]; end
-                2'd1: begin xr = b3_sr[l];     xg = b3_sg[l];     xb = b3_sb[l];     end
-                default: begin xr = b3_dr[l];  xg = b3_dg[l];     xb = b3_db[l];     end
-            endcase
-            if (sm[1:0] == 2'd3) begin
+            if (b3_sm[1:0] == 2'd3) begin
                 c0r = b3_sr[l];  c0g = b3_sg[l];  c0b = b3_sb[l];
             end
             else begin
-                c0r = f_mulop(xr, {1'b0, b3_sr[l]}, sm[2]);
-                c0g = f_mulop(xg, {1'b0, b3_sg[l]}, sm[2]);
-                c0b = f_mulop(xb, {1'b0, b3_sb[l]}, sm[2]);
+                c0r = f_mulop_b(b3_ps_r[l]);
+                c0g = f_mulop_b(b3_ps_g[l]);
+                c0b = f_mulop_b(b3_ps_b[l]);
             end
-            // dterm = f(dmode)
-            case (dm[1:0])
-                2'd0: begin yr = bk_da[b3_bk]; yg = bk_da[b3_bk]; yb = bk_da[b3_bk]; end
-                2'd1: begin yr = b3_sr[l];     yg = b3_sg[l];     yb = b3_sb[l];     end
-                default: begin yr = b3_dr[l];  yg = b3_dg[l];     yb = b3_db[l];     end
-            endcase
-            if (dm[1:0] == 2'd3) begin
+            if (b3_dm[1:0] == 2'd3) begin
                 dtr = b3_dr[l];  dtg = b3_dg[l];  dtb = b3_db[l];
             end
             else begin
-                dtr = f_mulop(yr, {1'b0, b3_dr[l]}, dm[2]);
-                dtg = f_mulop(yg, {1'b0, b3_dg[l]}, dm[2]);
-                dtb = f_mulop(yb, {1'b0, b3_db[l]}, dm[2]);
+                dtr = f_mulop_b(b3_pd_r[l]);
+                dtg = f_mulop_b(b3_pd_g[l]);
+                dtb = f_mulop_b(b3_pd_b[l]);
             end
             // the dmode2 MAME quirk: G/B adds take clr0.R as first index
             orr = f_satadd(c0r, dtr);
-            org_= f_satadd((dm == 3'd2) ? c0r : c0g, dtg);
-            orb = f_satadd((dm == 3'd2) ? c0r : c0b, dtb);
+            org_= f_satadd((b3_dm == 3'd2) ? c0r : c0g, dtg);
+            orb = f_satadd((b3_dm == 3'd2) ? c0r : c0b, dtb);
 
-            if (bk_simple[b3_bk])
+            if (b3_simple)
                 a2_out[l] = b3_raw[l*16 +: 16];
-            else if (bk_blend[b3_bk])
+            else if (b3_blendf)
                 a2_out[l] = {b3_a[l], orr, org_, orb};
             else  // tint only
                 a2_out[l] = {b3_a[l], b3_sr[l], b3_sg[l], b3_sb[l]};

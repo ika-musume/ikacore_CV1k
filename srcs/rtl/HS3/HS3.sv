@@ -203,36 +203,36 @@ IBus_2          PBUS2_DMAC();       //Peripheral bus 2: BSC -> dmac     (0x04000
 wire            dmac_hold;          //DMAC transfer-unit / burst bus hold
 
 ibus_arb u_arb (
-    .i_RST_n                (rst_all_n                              ),
-    .i_CLK                  (i_CLK                                  ),
-    .i_CEN                  (cen                                    ),
+    .i_RST_n                (rst_all_n                  ),
+    .i_CLK                  (i_CLK                      ),
+    .i_CEN                  (cen                        ),
 
-    .CPU_BUS                (IBUS1_CORE                             ),
-    .DMA_BUS                (IBUS1_DMA                              ),
-    .CORE_BUS               (IBUS1_ARB                              ),
+    .CPU_BUS                (IBUS1_CORE                 ),
+    .DMA_BUS                (IBUS1_DMA                  ),
+    .CORE_BUS               (IBUS1_ARB                  ),
 
-    .i_DMA_HOLD             (dmac_hold                              )
+    .i_DMA_HOLD             (dmac_hold                  )
 );
 
 ibus_splitter u_split (
-    .i_RST_n                (rst_all_n                              ),
-    .i_CLK                  (i_CLK                                  ),
-    .i_CEN                  (cen                                    ),
+    .i_RST_n                (rst_all_n                  ),
+    .i_CLK                  (i_CLK                      ),
+    .i_CEN                  (cen                        ),
 
-    .CORE_BUS               (IBUS1_ARB                              ),
-    .BRG_BUS                (IBUS1_BRG                              ),
-    .EXT_BUS                (IBUS1_BSC                              )
+    .CORE_BUS               (IBUS1_ARB                  ),
+    .BRG_BUS                (IBUS1_BRG                  ),
+    .EXT_BUS                (IBUS1_BSC                  )
 );
 
 ibus_bridge u_bridge (
-    .i_RST_n                (rst_all_n                              ),
-    .i_CLK                  (i_CLK                                  ),
-    .i_CEN                  (cen                                    ),
+    .i_RST_n                (rst_all_n                  ),
+    .i_CLK                  (i_CLK                      ),
+    .i_CEN                  (cen                        ),
 
-    .I_BUS                  (IBUS1_BRG                              ),
-    .REG_CPG                (IBUS2_CPG                                ),
-    .REG_INTC_HI            (IBUS2_INTC_HI                            ),
-    .REG_INTC_LO            (IBUS2_INTC_LO                            )
+    .I_BUS                  (IBUS1_BRG                  ),
+    .REG_CPG                (IBUS2_CPG                  ),
+    .REG_INTC_HI            (IBUS2_INTC_HI              ),
+    .REG_INTC_LO            (IBUS2_INTC_LO              )
 );
 
 
@@ -249,74 +249,74 @@ wire            mcs0_cs0;           //MCSCR0 decodes area 0: CS0 pad may switch
 wire            cs0_bsc;            //BSC's own CS0 view (pre-MCS0 pad merge)
 
 bsc #(
-    .BIG_ENDIAN             (BIG_ENDIAN                             )
+    .BIG_ENDIAN             (BIG_ENDIAN                 )
 ) u_bsc (
-    .i_POR_n                (rst_por_n                              ),  //regs/engine/refresh survive manual reset (p.297)
-    .i_RST_n                (rst_all_n                              ),  //front-end handshake only
-    .i_CLK                  (i_CLK                                  ),
-    .i_CEN                  (cen                                    ),
-    .i_BCEN                 (bcen                                   ),
+    .i_POR_n                (rst_por_n                  ),  //regs/engine/refresh survive manual reset (p.297)
+    .i_RST_n                (rst_all_n                  ),  //front-end handshake only
+    .i_CLK                  (i_CLK                      ),
+    .i_CEN                  (cen                        ),
+    .i_BCEN                 (bcen                       ),
 
-    .I_BUS                  (IBUS1_BSC                              ),
-    .REG_TMU                (PBUS1_TMU                               ),
-    .REG_RTC                (PBUS1_RTC                               ),
-    .REG_PORT               (PBUS2_PORT                              ),
-    .REG_DMAC               (PBUS2_DMAC                              ),
+    .I_BUS                  (IBUS1_BSC                  ),
+    .REG_TMU                (PBUS1_TMU                  ),
+    .REG_RTC                (PBUS1_RTC                  ),
+    .REG_PORT               (PBUS2_PORT                 ),
+    .REG_DMAC               (PBUS2_DMAC                 ),
 
-    .o_MEM_REQ              (o_MEM_REQ                              ),
-    .o_MEM_WR            (o_MEM_WR                            ),
-    .o_MEM_BURST            (o_MEM_BURST                            ),
-    .o_MEM_SIZE             (o_MEM_SIZE                             ),
-    .o_MEM_ADDR             (o_MEM_ADDR                             ),
-    .o_MEM_CS_n             (o_MEM_CS_n                             ),
-    .o_MEM_WSTRB            (o_MEM_WSTRB                            ),
-    .i_MEM_READY            (i_MEM_READY                            ),
-    .i_MEM_RSP_VALID        (i_MEM_RSP_VALID                        ),
-    .i_MEM_FAULT            (i_MEM_FAULT                            ),
-    .o_MEM_RSP_READY        (o_MEM_RSP_READY                        ),
+    .o_MEM_REQ              (o_MEM_REQ                  ),
+    .o_MEM_WR               (o_MEM_WR                   ),
+    .o_MEM_BURST            (o_MEM_BURST                ),
+    .o_MEM_SIZE             (o_MEM_SIZE                 ),
+    .o_MEM_ADDR             (o_MEM_ADDR                 ),
+    .o_MEM_CS_n             (o_MEM_CS_n                 ),
+    .o_MEM_WSTRB            (o_MEM_WSTRB                ),
+    .i_MEM_READY            (i_MEM_READY                ),
+    .i_MEM_RSP_VALID        (i_MEM_RSP_VALID            ),
+    .i_MEM_FAULT            (i_MEM_FAULT                ),
+    .o_MEM_RSP_READY        (o_MEM_RSP_READY            ),
 
-    .o_MON_REQ               (o_MON_REQ                               ),
-    .o_MON_WR                (o_MON_WR                                ),
-    .o_MON_ADDR              (o_MON_ADDR                              ),
-    .o_MON_SIZE              (o_MON_SIZE                              ),
-    .o_MON_BURST             (o_MON_BURST                             ),
+    .o_MON_REQ              (o_MON_REQ                  ),
+    .o_MON_WR               (o_MON_WR                   ),
+    .o_MON_ADDR             (o_MON_ADDR                 ),
+    .o_MON_SIZE             (o_MON_SIZE                 ),
+    .o_MON_BURST            (o_MON_BURST                ),
 
-    .o_A                    (o_A                                    ),
-    .o_D_O                  (o_D_O                                  ),
-    .o_D_OE                 (o_D_OE                                 ),
-    .i_D_I                  (i_D_I                                  ),
-    .o_BS_n                 (o_BS_n                                 ),
-    .o_CS0_n                (cs0_bsc                                ),
-    .o_CS2_n                (o_CS2_n                                ),
-    .o_CS3_n                (o_CS3_n                                ),
-    .o_CS4_n                (o_CS4_n                                ),
-    .o_CS5_n                (o_CS5_n                                ),
-    .o_CS6_n                (o_CS6_n                                ),
-    .o_RD_WR                (o_RD_WR                                ),
-    .o_RAS3L_n              (o_RAS3L_n                              ),
-    .o_RAS3U_n              (o_RAS3U_n                              ),
-    .o_CASL_n               (o_CASL_n                               ),
-    .o_CASU_n               (o_CASU_n                               ),
-    .o_WE_n                 (o_WE_n                                 ),
-    .o_RD_n                 (o_RD_n                                 ),
-    .i_WAIT_n               (i_WAIT_n                               ),
-    .i_MD4                  (i_MD4                                  ),
-    .i_MD3                  (i_MD3                                  ),
-    .o_CKE                  (o_CKE                                  ),
-    .i_BREQ_n               (i_BREQ_n                               ),
-    .o_BACK_n               (o_BACK_n                               ),
-    .o_BUS_OE               (o_BUS_OE                               ),
-    .o_RASCAS_OE            (o_RASCAS_OE                            ),
-    .o_A_PU                 (o_A_PU                                 ),
-    .o_D_PU                 (o_D_PU                                 ),
+    .o_A                    (o_A                        ),
+    .o_D_O                  (o_D_O                      ),
+    .o_D_OE                 (o_D_OE                     ),
+    .i_D_I                  (i_D_I                      ),
+    .o_BS_n                 (o_BS_n                     ),
+    .o_CS0_n                (cs0_bsc                    ),
+    .o_CS2_n                (o_CS2_n                    ),
+    .o_CS3_n                (o_CS3_n                    ),
+    .o_CS4_n                (o_CS4_n                    ),
+    .o_CS5_n                (o_CS5_n                    ),
+    .o_CS6_n                (o_CS6_n                    ),
+    .o_RD_WR                (o_RD_WR                    ),
+    .o_RAS3L_n              (o_RAS3L_n                  ),
+    .o_RAS3U_n              (o_RAS3U_n                  ),
+    .o_CASL_n               (o_CASL_n                   ),
+    .o_CASU_n               (o_CASU_n                   ),
+    .o_WE_n                 (o_WE_n                     ),
+    .o_RD_n                 (o_RD_n                     ),
+    .i_WAIT_n               (i_WAIT_n                   ),
+    .i_MD4                  (i_MD4                      ),
+    .i_MD3                  (i_MD3                      ),
+    .o_CKE                  (o_CKE                      ),
+    .i_BREQ_n               (i_BREQ_n                   ),
+    .o_BACK_n               (o_BACK_n                   ),
+    .o_BUS_OE               (o_BUS_OE                   ),
+    .o_RASCAS_OE            (o_RASCAS_OE                ),
+    .o_A_PU                 (o_A_PU                     ),
+    .o_D_PU                 (o_D_PU                     ),
 
-    .o_MCS_n                (mcs_n                                  ),
-    .o_MCS0_CS0             (mcs0_cs0                               ),
-    .o_DACK_WIN             (dack_win                               ),
-    .o_REF_PEND             (ref_pend                               ),
+    .o_MCS_n                (mcs_n                      ),
+    .o_MCS0_CS0             (mcs0_cs0                   ),
+    .o_DACK_WIN             (dack_win                   ),
+    .o_REF_PEND             (ref_pend                   ),
 
-    .o_RCMI_REQ             (rcmi_req                               ),
-    .o_ROVI_REQ             (rovi_req                               )
+    .o_RCMI_REQ             (rcmi_req                   ),
+    .o_ROVI_REQ             (rovi_req                   )
 );
 
 //CS0 pad merge: with PTC0 granted to its function and MCSCR0 decoding
@@ -343,23 +343,23 @@ wire    [11:0]  int_code;
 wire            int_ack, nmi_ack;
 
 cpu_core #(
-    .RESET_PC               (RESET_PC                               ),
-    .BIG_ENDIAN             (BIG_ENDIAN                             )
+    .RESET_PC               (RESET_PC                   ),
+    .BIG_ENDIAN             (BIG_ENDIAN                 )
 ) u_cpu (
-    .i_POR_n                (rst_por_n                              ),
-    .i_RST_n                (rst_man_n                              ),
-    .i_CLK                  (i_CLK                                  ),
-    .i_CEN                  (cen                                    ),
+    .i_POR_n                (rst_por_n                  ),
+    .i_RST_n                (rst_man_n                  ),
+    .i_CLK                  (i_CLK                      ),
+    .i_CEN                  (cen                        ),
 
-    .I_BUS                  (IBUS1_CORE                             ),
+    .I_BUS                  (IBUS1_CORE                 ),
 
-    .i_NMI_VALID            (nmi_valid                              ),
-    .i_NMI_BLMSK            (nmi_blmsk                              ),
-    .i_INT_VALID            (int_valid                              ),
-    .i_INT_LEVEL            (int_level                              ),
-    .i_INT_CODE             (int_code                               ),
-    .o_INT_ACK              (int_ack                                ),
-    .o_NMI_ACK              (nmi_ack                                ),
+    .i_NMI_VALID            (nmi_valid                  ),
+    .i_NMI_BLMSK            (nmi_blmsk                  ),
+    .i_INT_VALID            (int_valid                  ),
+    .i_INT_LEVEL            (int_level                  ),
+    .i_INT_CODE             (int_code                   ),
+    .o_INT_ACK              (int_ack                    ),
+    .o_NMI_ACK              (nmi_ack                    ),
 
     .dbg_o_RETIRE_VALID     (), .dbg_o_RETIRE_PC        (), .dbg_o_RETIRE_INST  (),
     .dbg_o_RETIRE_GPR_WE    (), .dbg_o_RETIRE_GPR       (), .dbg_o_RETIRE_GPR_DATA(),
@@ -383,21 +383,21 @@ cpu_core #(
 ////
 
 cpg_wdt u_cpg_wdt (
-    .i_POR_n                (i_POR_n                                ),  //raw pins: p.215 retention
-    .i_RST_n                (i_RST_n                                ),
-    .i_CLK                  (i_CLK                                  ),
-    .i_CEN                  (cen                                    ),
+    .i_POR_n                (i_POR_n                    ),  //raw pins: p.215 retention
+    .i_RST_n                (i_RST_n                    ),
+    .i_CLK                  (i_CLK                      ),
+    .i_CEN                  (cen                        ),
 
-    .REG_BUS                (IBUS2_CPG                                ),
+    .REG_BUS                (IBUS2_CPG                  ),
 
-    .o_PCEN                 (pcen                                   ),
-    .o_BCEN                 (bcen                                   ),
-    .o_CKIO                 (o_CKIO                                 ),
-    .o_CKIO_PCEN            (o_CKIO_PCEN                            ),
-    .o_CKIO_NCEN            (o_CKIO_NCEN                            ),
-    .o_ITI_REQ              (iti_req                                ),
-    .o_WDT_RST_POR_n        (wdt_rst_por_n                          ),
-    .o_WDT_RST_MAN_n        (wdt_rst_man_n                          )
+    .o_PCEN                 (pcen                       ),
+    .o_BCEN                 (bcen                       ),
+    .o_CKIO                 (o_CKIO                     ),
+    .o_CKIO_PCEN            (o_CKIO_PCEN                ),
+    .o_CKIO_NCEN            (o_CKIO_NCEN                ),
+    .o_ITI_REQ              (iti_req                    ),
+    .o_WDT_RST_POR_n        (wdt_rst_por_n              ),
+    .o_WDT_RST_MAN_n        (wdt_rst_man_n              )
 );
 
 
@@ -412,20 +412,20 @@ wire            ph7_fn;
 wire            rtcclk, rtc_tick;   //RTC divider output: pad level + bus-domain tick
 
 tmu u_tmu (
-    .i_RST_n                (rst_all_n                              ),  //regs init on POR AND manual (p.391)
-    .i_CLK                  (i_CLK                                  ),
-    .i_CEN                  (cen                                    ),
-    .i_PCEN                 (pcen                                   ),
+    .i_RST_n                (rst_all_n                  ),  //regs init on POR AND manual (p.391)
+    .i_CLK                  (i_CLK                      ),
+    .i_CEN                  (cen                        ),
+    .i_PCEN                 (pcen                       ),
 
-    .REG_BUS                (PBUS1_TMU                               ),
+    .REG_BUS                (PBUS1_TMU                  ),
 
-    .i_TCLK                 (i_PTH_I[7]                             ),  //TCLK pad = PTH7 (table 18.1)
-    .o_TCLK_O               (tclk_o                                 ),
-    .o_TCLK_OE              (tclk_oe                                ),
-    .i_RTC_TICK             (rtc_tick                               ),  //16.384 kHz tick (TPSC=100)
-    .i_RTCCLK               (rtcclk                                 ),  //same, as the TCOE pad level
+    .i_TCLK                 (i_PTH_I[7]                 ),  //TCLK pad = PTH7 (table 18.1)
+    .o_TCLK_O               (tclk_o                     ),
+    .o_TCLK_OE              (tclk_oe                    ),
+    .i_RTC_TICK             (rtc_tick                   ),  //16.384 kHz tick (TPSC=100)
+    .i_RTCCLK               (rtcclk                     ),  //same, as the TCOE pad level
 
-    .o_TMU_REQ              (tmu_req                                )
+    .o_TMU_REQ              (tmu_req                    )
 );
 
 
@@ -437,18 +437,18 @@ tmu u_tmu (
 wire    [2:0]   rtc_req;
 
 rtc u_rtc (
-    .i_POR_n                (rst_por_n                              ),  //alarm ENB + RTCEN/START (p.410)
-    .i_RST_n                (rst_all_n                              ),  //RCR1 + PEF/PES clear on any reset
-    .i_CLK                  (i_CLK                                  ),
-    .i_CEN                  (cen                                    ),
+    .i_POR_n                (rst_por_n                  ),  //alarm ENB + RTCEN/START (p.410)
+    .i_RST_n                (rst_all_n                  ),  //RCR1 + PEF/PES clear on any reset
+    .i_CLK                  (i_CLK                      ),
+    .i_CEN                  (cen                        ),
 
-    .REG_BUS                (PBUS1_RTC                               ),
+    .REG_BUS                (PBUS1_RTC                  ),
 
-    .i_EXTAL2               (i_EXTAL2                               ),  //32.768 kHz crystal domain
-    .o_RTCCLK               (rtcclk                                 ),
-    .o_RTC_TICK             (rtc_tick                               ),
+    .i_EXTAL2               (i_EXTAL2                   ),  //32.768 kHz crystal domain
+    .o_RTCCLK               (rtcclk                     ),
+    .o_RTC_TICK             (rtc_tick                   ),
 
-    .o_RTC_REQ              (rtc_req                                )
+    .o_RTC_REQ              (rtc_req                    )
 );
 
 
@@ -462,26 +462,26 @@ wire    [1:0]   dack_pad, drak_pad; //DACK/DRAK pad levels, merged onto Port D b
 wire            dmac_nmi_set;       //INTC NMI edge -> DMAOR.NMIF (11.6 note 3)
 
 dmac u_dmac (
-    .i_RST_n                (rst_all_n                              ),  //CHCR/DMAOR/CMT clear on any reset (p.332)
-    .i_CLK                  (i_CLK                                  ),
-    .i_CEN                  (cen                                    ),
-    .i_PCEN                 (pcen                                   ),
-    .i_CKIO_NCEN            (o_CKIO_NCEN                            ),  //DREQ sample = CKIO falling edge (p.363)
+    .i_RST_n                (rst_all_n                  ),  //CHCR/DMAOR/CMT clear on any reset (p.332)
+    .i_CLK                  (i_CLK                      ),
+    .i_CEN                  (cen                        ),
+    .i_PCEN                 (pcen                       ),
+    .i_CKIO_NCEN            (o_CKIO_NCEN                ),  //DREQ sample = CKIO falling edge (p.363)
 
-    .REG_BUS                (PBUS2_DMAC                              ),
-    .I_BUS                  (IBUS1_DMA                              ),
+    .REG_BUS                (PBUS2_DMAC                 ),
+    .I_BUS                  (IBUS1_DMA                  ),
 
-    .o_BUS_HOLD             (dmac_hold                              ),
+    .o_BUS_HOLD             (dmac_hold                  ),
 
-    .i_NMI_SET              (dmac_nmi_set                           ),
+    .i_NMI_SET              (dmac_nmi_set               ),
 
     //DREQ pins ride the Port D pads as inputs (table 18.1; INTC tap idiom)
-    .i_DREQ_n               ({i_PTD_I[6], i_PTD_I[4]}               ),
-    .i_DACK_WIN             (dack_win                               ),
-    .o_DACK                 (dack_pad                               ),
-    .o_DRAK                 (drak_pad                               ),
+    .i_DREQ_n               ({i_PTD_I[6], i_PTD_I[4]}   ),
+    .i_DACK_WIN             (dack_win                   ),
+    .o_DACK                 (dack_pad                   ),
+    .o_DRAK                 (drak_pad                   ),
 
-    .o_DEI                  (dmac_dei                               )
+    .o_DEI                  (dmac_dei                   )
 );
 
 
@@ -521,57 +521,57 @@ assign  o_PTD_OE = {pd_fn[7] | ptd_oe_port[7],
                     pd_fn[0] | ptd_oe_port[0]};
 
 ioport u_ioport (
-    .i_POR_n                (rst_por_n                              ),  //regs hold through manual reset (p.570)
-    .i_CLK                  (i_CLK                                  ),
-    .i_CEN                  (cen                                    ),
+    .i_POR_n                (rst_por_n                  ),  //regs hold through manual reset (p.570)
+    .i_CLK                  (i_CLK                      ),
+    .i_CEN                  (cen                        ),
 
-    .REG_BUS                (PBUS2_PORT                              ),
+    .REG_BUS                (PBUS2_PORT                 ),
 
-    .i_PTA_I                (i_PTA_I                                ),
-    .o_PTA_O                (o_PTA_O                                ),
-    .o_PTA_OE               (o_PTA_OE                               ),
-    .o_PTA_PU               (o_PTA_PU                               ),
-    .i_PTB_I                (i_PTB_I                                ),
-    .o_PTB_O                (o_PTB_O                                ),
-    .o_PTB_OE               (o_PTB_OE                               ),
-    .o_PTB_PU               (o_PTB_PU                               ),
-    .i_PTC_I                (i_PTC_I                                ),
-    .o_PTC_O                (ptc_o_port                             ),
-    .o_PTC_OE               (ptc_oe_port                            ),
-    .o_PTC_PU               (o_PTC_PU                               ),
-    .i_PTD_I                (i_PTD_I                                ),
-    .o_PTD_O                (ptd_o_port                             ),
-    .o_PTD_OE               (ptd_oe_port                            ),
-    .o_PTD_PU               (o_PTD_PU                               ),
-    .i_PTE_I                (i_PTE_I                                ),
-    .o_PTE_O                (o_PTE_O                                ),
-    .o_PTE_OE               (o_PTE_OE                               ),
-    .o_PTE_PU               (o_PTE_PU                               ),
-    .i_PTF_I                (i_PTF_I                                ),
-    .o_PTF_PU               (o_PTF_PU                               ),
-    .i_PTG_I                (i_PTG_I                                ),
-    .o_PTG_PU               (o_PTG_PU                               ),
-    .i_PTH_I                (i_PTH_I                                ),
-    .o_PTH_O                (pth_o_port                             ),
-    .o_PTH_OE               (pth_oe_port                            ),
-    .o_PTH_PU               (o_PTH_PU                               ),
-    .i_PTJ_I                (i_PTJ_I                                ),
-    .o_PTJ_O                (o_PTJ_O                                ),
-    .o_PTJ_OE               (o_PTJ_OE                               ),
-    .o_PTJ_PU               (o_PTJ_PU                               ),
-    .i_PTK_I                (i_PTK_I                                ),
-    .o_PTK_O                (o_PTK_O                                ),
-    .o_PTK_OE               (o_PTK_OE                               ),
-    .o_PTK_PU               (o_PTK_PU                               ),
-    .i_PTL_I                (i_PTL_I                                ),
-    .i_SCPT_I               (i_SCPT_I                               ),
-    .o_SCPT_O               (o_SCPT_O                               ),
-    .o_SCPT_OE              (o_SCPT_OE                              ),
-    .o_SCPT_PU              (o_SCPT_PU                              ),
+    .i_PTA_I                (i_PTA_I                    ),
+    .o_PTA_O                (o_PTA_O                    ),
+    .o_PTA_OE               (o_PTA_OE                   ),
+    .o_PTA_PU               (o_PTA_PU                   ),
+    .i_PTB_I                (i_PTB_I                    ),
+    .o_PTB_O                (o_PTB_O                    ),
+    .o_PTB_OE               (o_PTB_OE                   ),
+    .o_PTB_PU               (o_PTB_PU                   ),
+    .i_PTC_I                (i_PTC_I                    ),
+    .o_PTC_O                (ptc_o_port                 ),
+    .o_PTC_OE               (ptc_oe_port                ),
+    .o_PTC_PU               (o_PTC_PU                   ),
+    .i_PTD_I                (i_PTD_I                    ),
+    .o_PTD_O                (ptd_o_port                 ),
+    .o_PTD_OE               (ptd_oe_port                ),
+    .o_PTD_PU               (o_PTD_PU                   ),
+    .i_PTE_I                (i_PTE_I                    ),
+    .o_PTE_O                (o_PTE_O                    ),
+    .o_PTE_OE               (o_PTE_OE                   ),
+    .o_PTE_PU               (o_PTE_PU                   ),
+    .i_PTF_I                (i_PTF_I                    ),
+    .o_PTF_PU               (o_PTF_PU                   ),
+    .i_PTG_I                (i_PTG_I                    ),
+    .o_PTG_PU               (o_PTG_PU                   ),
+    .i_PTH_I                (i_PTH_I                    ),
+    .o_PTH_O                (pth_o_port                 ),
+    .o_PTH_OE               (pth_oe_port                ),
+    .o_PTH_PU               (o_PTH_PU                   ),
+    .i_PTJ_I                (i_PTJ_I                    ),
+    .o_PTJ_O                (o_PTJ_O                    ),
+    .o_PTJ_OE               (o_PTJ_OE                   ),
+    .o_PTJ_PU               (o_PTJ_PU                   ),
+    .i_PTK_I                (i_PTK_I                    ),
+    .o_PTK_O                (o_PTK_O                    ),
+    .o_PTK_OE               (o_PTK_OE                   ),
+    .o_PTK_PU               (o_PTK_PU                   ),
+    .i_PTL_I                (i_PTL_I                    ),
+    .i_SCPT_I               (i_SCPT_I                   ),
+    .o_SCPT_O               (o_SCPT_O                   ),
+    .o_SCPT_OE              (o_SCPT_OE                  ),
+    .o_SCPT_PU              (o_SCPT_PU                  ),
 
-    .o_PH7_FN               (ph7_fn                                 ),
-    .o_PC_FN                (pc_fn                                  ),
-    .o_PD_FN                (pd_fn                                  )
+    .o_PH7_FN               (ph7_fn                     ),
+    .o_PC_FN                (pc_fn                      ),
+    .o_PD_FN                (pd_fn                      )
 );
 
 
@@ -581,42 +581,42 @@ ioport u_ioport (
 ////
 
 intc u_intc (
-    .i_RST_n                (rst_all_n                              ),
-    .i_CLK                  (i_CLK                                  ),
-    .i_CEN                  (cen                                    ),
-    .i_PCEN                 (pcen                                   ),
+    .i_RST_n                (rst_all_n                  ),
+    .i_CLK                  (i_CLK                      ),
+    .i_CEN                  (cen                        ),
+    .i_PCEN                 (pcen                       ),
 
-    .REG_HI                 (IBUS2_INTC_HI                            ),
-    .REG_LO                 (IBUS2_INTC_LO                            ),
+    .REG_HI                 (IBUS2_INTC_HI              ),
+    .REG_LO                 (IBUS2_INTC_LO              ),
 
     //interrupt pins ride the port pads (table 18.1): IRQ5 = SCPT7,
     //IRQ4-0 (= IRL3-0) = PTH4-0, IRLS3-0 = PTF3-0, PINT15-0 = PTF/PTC
-    .i_NMI                  (i_NMI                                  ),
-    .i_IRQ                  ({i_SCPT_I[7], i_PTH_I[4:0]}            ),
-    .i_IRLS                 (i_PTF_I[3:0]                           ),
-    .i_PINT                 ({i_PTF_I, i_PTC_I}                     ),
+    .i_NMI                  (i_NMI                      ),
+    .i_IRQ                  ({i_SCPT_I[7], i_PTH_I[4:0]}),
+    .i_IRLS                 (i_PTF_I[3:0]               ),
+    .i_PINT                 ({i_PTF_I, i_PTC_I}         ),
 
     //on-chip sources: WDT + BSC refresh + TMU + RTC + DMAC exist; the rest
     //arrive with their modules (SCI/SCIF/IrDA/ADC later)
-    .i_ITI_REQ              (iti_req                                ),
-    .i_TMU_REQ              (tmu_req                                ),
-    .i_RTC_REQ              (rtc_req                                ),
-    .i_SCI_REQ              (4'd0                                   ),
-    .i_SCIF_REQ             (4'd0                                   ),
-    .i_IRDA_REQ             (4'd0                                   ),
-    .i_DMAC_REQ             (dmac_dei                               ),
-    .i_REF_REQ              ({rovi_req, rcmi_req}                   ),
-    .i_ADC_REQ              (1'b0                                   ),
-    .i_UDI_REQ              (1'b0                                   ),
+    .i_ITI_REQ              (iti_req                    ),
+    .i_TMU_REQ              (tmu_req                    ),
+    .i_RTC_REQ              (rtc_req                    ),
+    .i_SCI_REQ              (4'd0                       ),
+    .i_SCIF_REQ             (4'd0                       ),
+    .i_IRDA_REQ             (4'd0                       ),
+    .i_DMAC_REQ             (dmac_dei                   ),
+    .i_REF_REQ              ({rovi_req, rcmi_req}       ),
+    .i_ADC_REQ              (1'b0                       ),
+    .i_UDI_REQ              (1'b0                       ),
 
-    .o_NMI_VALID            (nmi_valid                              ),
-    .o_NMI_BLMSK            (nmi_blmsk                              ),
-    .o_NMI_EDGE             (dmac_nmi_set                           ),
-    .o_INT_VALID            (int_valid                              ),
-    .o_INT_LEVEL            (int_level                              ),
-    .o_INT_CODE             (int_code                               ),
-    .i_INT_ACK              (int_ack                                ),
-    .i_NMI_ACK              (nmi_ack                                )
+    .o_NMI_VALID            (nmi_valid                  ),
+    .o_NMI_BLMSK            (nmi_blmsk                  ),
+    .o_NMI_EDGE             (dmac_nmi_set               ),
+    .o_INT_VALID            (int_valid                  ),
+    .o_INT_LEVEL            (int_level                  ),
+    .o_INT_CODE             (int_code                   ),
+    .i_INT_ACK              (int_ack                    ),
+    .i_NMI_ACK              (nmi_ack                    )
 );
 
 endmodule

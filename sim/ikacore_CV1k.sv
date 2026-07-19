@@ -335,6 +335,7 @@ wire [3:0]  bf_DQM;
 
 // blitter VRAM beat channels (blit_top <-> blit_batch, H7b.2)
 wire        bv_srd_req, bv_drd_req, bv_wr_req, bv_wr_rdy, bv_rd_vld;
+wire        bv_rq_v, bv_rq_wr, bv_rq_blend;   // r4 raw request legs
 wire [24:0] bv_srd_addr, bv_drd_addr, bv_wr_addr;
 wire [63:0] bv_srd_data, bv_drd_data, bv_wr_data;
 wire [3:0]  bv_wr_mask;
@@ -861,6 +862,9 @@ blit_top #(
     .i_lf_dvld   (lf_dvld),
     .i_lf_data   (lf_data),
     .o_steal     (blit_steal),
+    .o_rq_v      (bv_rq_v),            // r4 raw request legs -> u_batch
+    .o_rq_wr     (bv_rq_wr),
+    .o_rq_blend  (bv_rq_blend),
 
     // H7 descriptor sideband -> blit_batch train formation (the TB
     // footprint checker taps the full set hierarchically)
@@ -906,6 +910,10 @@ blit_batch u_batch (
     .i_wr_data    (bv_wr_data),
     .i_wr_mask    (bv_wr_mask),
     .o_wr_rdy     (bv_wr_rdy),
+    .i_rq_v       (bv_rq_v),           // r4 raw request legs
+    .i_rq_wr      (bv_rq_wr),
+    .i_rq_blend   (bv_rq_blend),
+    .i_steal      (blit_steal),
     .i_dsc_vld    (dsc_vld),
     .i_dsc_sx_lo  (dsc_sx_lo),
     .i_dsc_sy0    (dsc_sy0),

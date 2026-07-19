@@ -420,6 +420,28 @@ module blit_fetch #(
                                          // governor's gu_dimx1 -- keeps the
                                          // payload sizing a single narrow
                                          // 14x13 multiply off a register)
+    // H7b.8e r4: the dimy side gets the same recipe -- dimy+1 registered at
+    // word 7 and the payload product DEFERRED one pop (it lands in w_need
+    // at the first payload word, under w_pxpend).  Both multiplier operands
+    // are then registers with the mult as their only fanout, so the 14x13
+    // lands in a DSP with packed input registers and the live
+    // skid_half->skid_word mux leaves the w_need cone entirely.  The pop
+    // schedule, FIFO stream, and snoop stream are untouched; the only
+    // value that differs is w_need's transient during [word7, word8), which
+    // nothing outside the parser observes.  The one-word payload edge case
+    // (dimx=dimy=0: word 8 is also the last payload word) is end-detected
+    // by the pre-registered is1 flags, not the product.
+    reg  [12:0] w_dimy1;                 // dimy+1, registered at word 7
+    reg         w_dx1_is1, w_dy1_is1;    // (dim+1 == 1) flags for the 1-word
+                                         // payload end detect
+    reg         w_dx1_is2, w_dy1_is2;    // (dim+1 == 2) flags: px==2 detect
+                                         // for the deferred-load w_is1
+    reg         w_pxpend;                // deferred product pending
+    reg         w_is1;                   // r4 iter2: registered (w_need == 1)
+                                         // -- the 26-bit compare leaves the
+                                         // wst transition cone; maintained as
+                                         // an exact next-value at every
+                                         // w_need assignment (oracle below)
 
     assign end_seen   = (wst == W_END);
     assign walk_fault = (wst == W_FAULT);
@@ -436,9 +458,10 @@ module blit_fetch #(
     assign skid_pop_word = skid_avail && fifo_free && (wst != W_FAULT);
     wire fifo_push      = skid_pop_word && (wst != W_END);
 
-    // UPLOAD payload sizing off the live dimy word (14x13, <= 2^25)
-    wire [12:0] w_h1 = {1'b0, skid_word[11:0]} + 13'd1;
-    wire [26:0] w_px = w_dimx1 * w_h1;
+    // UPLOAD payload sizing, register x register (14x13, <= 2^25; r4: both
+    // operands pre-registered, product consumed one pop after dimy)
+    wire [26:0] w_pxm  = w_dimx1 * w_dimy1;
+    wire [26:0] w_pxm1 = w_pxm - 27'd1;
 
     // governor arrival snoop (includes the END word - pushed while wst is
     // still W_HDR - and upload payload; nothing after END/fault)
@@ -452,6 +475,13 @@ module blit_fetch #(
             w_idx     <= 4'd0;
             w_upl     <= 1'b0;
             w_dimx1   <= 14'd0;
+            w_dimy1   <= 13'd0;
+            w_dx1_is1 <= 1'b0;
+            w_dy1_is1 <= 1'b0;
+            w_dx1_is2 <= 1'b0;
+            w_dy1_is2 <= 1'b0;
+            w_pxpend  <= 1'b0;
+            w_is1     <= 1'b0;
             skid_half <= 1'b0;
             skid_rp   <= 3'd0;
             f_wp      <= 16'd0;
@@ -460,10 +490,12 @@ module blit_fetch #(
             fifo_room_q <= 1'b1;
         end
         else begin
-            // reset parser at fetch start (new list)
+            // reset parser at fetch start (new list; r4: a stale deferred
+            // product must not land in the new list's first body word)
             if (i_exec && !o_busy) begin
                 wst       <= W_HDR;
                 skid_half <= 1'b0;
+                w_pxpend  <= 1'b0;
             end
 
             if (skid_pop_word) begin
@@ -476,9 +508,9 @@ module blit_fetch #(
                         w_idx <= 4'd1;
                         case (skid_word[15:12])
                             4'h0, 4'hF: wst <= W_END;                 // END word
-                            4'hC: begin w_need <= 26'd1;  w_upl <= 1'b0; wst <= W_BODY; end
-                            4'h1: begin w_need <= 26'd9;  w_upl <= 1'b0; wst <= W_BODY; end
-                            4'h2: begin w_need <= 26'd7;  w_upl <= 1'b1; wst <= W_BODY; end
+                            4'hC: begin w_need <= 26'd1;  w_is1 <= 1'b1; w_upl <= 1'b0; wst <= W_BODY; end
+                            4'h1: begin w_need <= 26'd9;  w_is1 <= 1'b0; w_upl <= 1'b0; wst <= W_BODY; end
+                            4'h2: begin w_need <= 26'd7;  w_is1 <= 1'b0; w_upl <= 1'b1; wst <= W_BODY; end
                             default: begin
                                 wst <= W_FAULT;
 `ifndef SYNTHESIS
@@ -490,11 +522,29 @@ module blit_fetch #(
                     W_BODY: begin
                         w_idx  <= (w_idx == 4'hF) ? 4'hF : w_idx + 4'd1;
                         w_need <= w_need - 26'd1;
-                        if (w_upl && w_idx == 4'd6)       // header word 6: dimx
-                            w_dimx1 <= {1'b0, skid_word[12:0]} + 14'd1;
-                        if (w_upl && w_idx == 4'd7)       // word 7: dimy -> payload
-                            w_need <= w_px[25:0];         // (dimx+1)*(dimy+1)
-                        else if (w_need == 26'd1)
+                        w_is1  <= (w_need == 26'd2);      // r4 iter2: exact
+                                                          // next-value of
+                                                          // (w_need == 1)
+                        if (w_upl && w_idx == 4'd6) begin // header word 6: dimx
+                            w_dimx1   <= {1'b0, skid_word[12:0]} + 14'd1;
+                            w_dx1_is1 <= (skid_word[12:0] == 13'd0);
+                            w_dx1_is2 <= (skid_word[12:0] == 13'd1);
+                        end
+                        if (w_pxpend) begin               // first payload word:
+                            w_pxpend <= 1'b0;             // deferred product lands
+                            w_need   <= w_pxm1[25:0];     // (dimx+1)*(dimy+1)-1
+                            w_is1    <= (w_dx1_is2 && w_dy1_is1)   // px == 2
+                                     || (w_dx1_is1 && w_dy1_is2);
+                            if (w_dx1_is1 && w_dy1_is1)   // 1-word payload ends here
+                                wst <= W_HDR;
+                        end
+                        else if (w_upl && w_idx == 4'd7) begin // word 7: dimy
+                            w_dimy1   <= {1'b0, skid_word[11:0]} + 13'd1;
+                            w_dy1_is1 <= (skid_word[11:0] == 12'd0);
+                            w_dy1_is2 <= (skid_word[11:0] == 12'd1);
+                            w_pxpend  <= 1'b1;
+                        end
+                        else if (w_is1)                   // == (w_need == 1)
                             wst <= W_HDR;
                     end
                     W_END, W_FAULT: ;                     // hold (pops drain skid)
@@ -519,6 +569,14 @@ module blit_fetch #(
                            > 16'd40;
         end
     end
+
+`ifndef SYNTHESIS
+    // r4 iter2 oracle: w_is1 must track (w_need == 1) at every W_BODY cycle
+    always @(posedge i_CLK)
+        if (i_RST_n && wst == W_BODY && w_is1 != (w_need == 26'd1))
+            $fatal(2, "[blit_fetch] r4 w_is1 diverged (is1=%b need=%0d) t=%0t",
+                   w_is1, w_need, $time);
+`endif
 
 endmodule
 `default_nettype none

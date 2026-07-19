@@ -54,6 +54,18 @@ set c102 [get_clocks $pin_c102]
 # (the explicit write-through bypass registers supply it).
 set_false_path -from [get_registers {*|cache:u_cache|*WRITE_ENABLE* *|cache:u_cache|*we_reg* *|cache:u_cache|*DATA_IN* *|cache:u_cache|*datain_reg* *u_gpr_bram*WRITE_ENABLE* *u_gpr_bram*we_reg* *u_gpr_bram*DATA_IN* *u_gpr_bram*datain_reg*}]
 
+# r4: the same RDW modeling class on the two blitter FWFT FIFO M10Ks.
+# fmem (blit_fetch attribute FIFO): a pushed word cannot be consumed in
+# its write cycle -- o_fifo_valid = (f_lvl != 0) and f_lvl increments at
+# the push edge, so an empty-FIFO push is invisible until the next cycle,
+# and a non-empty FIFO has f_rp != f_wp (no address collision); the
+# synthesized fmem_rtl_0_bypass write-through covers the model arc.
+# bb_wfifo mem (blit_batch write-beat FIFO): head refill requires
+# cnt != 0 (a register), so a push-to-empty entry is never read the same
+# edge, and cnt != 0 implies rp != wp.  Both are the we/datain LAUNCH
+# registers only -- read-side timing is untouched.
+set_false_path -from [get_registers {*|blit_fetch:u_blit_fetch|*WRITE_ENABLE* *|blit_fetch:u_blit_fetch|*DATA_IN* *|bb_wfifo:u_wfifo|*WRITE_ENABLE* *|bb_wfifo:u_wfifo|*DATA_IN*}]
+
 # dq_n fan-out: no exception needed (kept as a design note).  Every grid
 # CAS is geared (sideband/announce predictors), so dq_n's complete fabric
 # fan-out is the three pump-local capture registers rd_hi_e/rd_lo/

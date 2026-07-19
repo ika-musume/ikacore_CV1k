@@ -72,6 +72,7 @@ module tb_h7 (
     // engine <-> batch beat channels (blit_top's steal gating replicated)
     // ------------------------------------------------------------------
     wire        srd_req, drd_req, rd_vld;
+    wire        rq_v, rq_wr, rq_blend;    // r4 raw request legs
     wire [24:0] srd_addr, drd_addr;
     wire [63:0] srd_data, drd_data;
     wire        eng_wr_req, bat_wr_rdy;
@@ -122,6 +123,9 @@ module tb_h7 (
         .o_wr_mask    (wr_mask),
         .i_wr_rdy     (eng_wr_rdy),
         .i_rd_vld     (rd_vld),
+        .o_rq_v       (rq_v),          // r4 raw request legs
+        .o_rq_wr      (rq_wr),
+        .o_rq_blend   (rq_blend),
         .o_dsc_vld    (dsc_vld),
         .o_dsc_sx_lo  (dsc_sx_lo),
         .o_dsc_sx_hi  (dsc_sx_hi),
@@ -193,6 +197,10 @@ module tb_h7 (
         .i_wr_data    (wr_data),
         .i_wr_mask    (wr_mask),
         .o_wr_rdy     (bat_wr_rdy),
+        .i_rq_v       (rq_v),          // r4 raw request legs
+        .i_rq_wr      (rq_wr),
+        .i_rq_blend   (rq_blend),
+        .i_steal      (steal),
         .i_dsc_vld    (dsc_vld),
         .i_dsc_sx_lo  (dsc_sx_lo),
         .i_dsc_sy0    (dsc_sy0),
