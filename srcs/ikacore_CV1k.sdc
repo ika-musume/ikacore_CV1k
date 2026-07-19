@@ -66,6 +66,19 @@ set_false_path -from [get_registers {*|cache:u_cache|*WRITE_ENABLE* *|cache:u_ca
 # registers only -- read-side timing is untouched.
 set_false_path -from [get_registers {*|blit_fetch:u_blit_fetch|*WRITE_ENABLE* *|blit_fetch:u_blit_fetch|*DATA_IN* *|bb_wfifo:u_wfifo|*WRITE_ENABLE* *|bb_wfifo:u_wfifo|*DATA_IN*}]
 
+# r5: the same RDW modeling class on the ascal downscale line buffer
+# (framework sys/ascal.vhd, ILBUF process: i_mem write under i_lwr,
+# registered read i_ldrm under i_pce -- Quartus absorbs i_ldrm as the
+# M10K registered-address read, dataout combinational into the bilinear
+# DSPs and captured at i_pix one cycle later).  The author's own
+# ramstyle "no_rw_check" attribute on i_mem declares write/read address
+# collisions DONT_CARE, so the WE/DATA_IN -> dataout write-through
+# modeling arc cannot carry a consumed value: a non-colliding read's
+# dataout is a pure function of the read-address register (that launch
+# stays fully timed), and a colliding read is contractually undefined
+# whether or not the arc makes timing.  we/datain LAUNCH registers only.
+set_false_path -from [get_registers {ascal:ascal|*i_mem*WRITE_ENABLE* ascal:ascal|*i_mem*DATA_IN*}]
+
 # dq_n fan-out: no exception needed (kept as a design note).  Every grid
 # CAS is geared (sideband/announce predictors), so dq_n's complete fabric
 # fan-out is the three pump-local capture registers rd_hi_e/rd_lo/
@@ -163,6 +176,37 @@ set bf_pump_from [get_registers {emu|core|u_blit|u_blit_fetch|o_bus_drive \
                                  emu|core|u_blit|u_blit_fetch|run_left[*]}]
 set_max_delay 9.76 -from $bf_pump_from -to [get_registers {emu|core|u_pump|*}]
 set_min_delay 0    -from $bf_pump_from -to [get_registers {emu|core|u_pump|*}]
+
+# r5: BSC <-> NAND grid-budget exceptions (the fit-#2 cross family).
+# Forward (nand -> HS3, -2.23 class): re_d/we_d register the RE#/WE# pin
+# state and cur_word_q loads on those grid strobes -- all three change
+# ONLY on the c153 edge after a CKIO edge (the documented mid-grid-mover
+# property; strobes are BSC pin outputs, PCEN-grid by the BSC one-
+# external-cycle invariant).  The consuming captures (dmac wdata_q,
+# cache di_q) load on BSC read-sample grid edges, one full CKIO later
+# => real budget >= 13.0 ns; 9.76 (one c102) is the conservative bound.
+# Reverse (bsc -> nand, -1.70 class): the ord_* transfer-shape fields
+# load once at request-accept and every NAND capture they reach is
+# enabled by a we_d/re_d-delayed strobe >= 1 external cycle after accept
+# (address/control setup precedes the first strobe by protocol), same
+# 9.76 bound.  Unobserved arcs stay under the 6.2 blanket.
+set_max_delay 9.76 -from [get_registers {emu|core|u_u2_nand|re_d emu|core|u_u2_nand|we_d emu|core|u_u2_nand|cur_word_q[*]}] -to [get_registers {emu|core|u_hs3|*}]
+set_min_delay 0    -from [get_registers {emu|core|u_u2_nand|re_d emu|core|u_u2_nand|we_d emu|core|u_u2_nand|cur_word_q[*]}] -to [get_registers {emu|core|u_hs3|*}]
+# r6: ord_wdata joins the reverse list -- it reloads ONLY at request-
+# accept (I_BUS.req_wdata) or at a burst beat boundary (obuf[ordp_cnt+1]
+# at the bs_n/t2 advance), both external-cycle-gridded events, and every
+# strobe-enabled NAND capture samples >= 1 external cycle later (the
+# per-beat form of the same setup-precedes-strobe protocol argument).
+set_max_delay 9.76 -from [get_registers {emu|core|u_hs3|u_bsc|ord_w8 emu|core|u_hs3|u_bsc|ord_w16 emu|core|u_hs3|u_bsc|ord_ba[*] emu|core|u_hs3|u_bsc|ord_subs[*] emu|core|u_hs3|u_bsc|ord_wdata[*]}] -to [get_registers {emu|core|u_u2_nand|*}]
+set_min_delay 0    -from [get_registers {emu|core|u_hs3|u_bsc|ord_w8 emu|core|u_hs3|u_bsc|ord_w16 emu|core|u_hs3|u_bsc|ord_ba[*] emu|core|u_hs3|u_bsc|ord_subs[*] emu|core|u_hs3|u_bsc|ord_wdata[*]}] -to [get_registers {emu|core|u_u2_nand|*}]
+# r6: BSC ordinary-bus fields -> blit_fetch skid head (surfaced by the
+# r6 re-triage).  Launches are the same mid-grid movers (c102 registers
+# that reload only on CKIO-grid events: accept / beat advance); the
+# skid/skid_hq captures sit behind blit_fetch's CKIO_PCEN-gated bus
+# enables (the H7b.8d-proven grid property of the fetch bus bank).
+# Grid-to-grid transfer >= one CKIO => one c102 (9.76) is conservative.
+set_max_delay 9.76 -from [get_registers {emu|core|u_hs3|u_bsc|ord_wdata[*] emu|core|u_hs3|u_bsc|ord_ba[*]}] -to [get_registers {emu|core|u_blit|u_blit_fetch|skid*}]
+set_min_delay 0    -from [get_registers {emu|core|u_hs3|u_bsc|ord_wdata[*] emu|core|u_hs3|u_bsc|ord_ba[*]}] -to [get_registers {emu|core|u_blit|u_blit_fetch|skid*}]
 
 # The ONE genuine mid-grid 102.4->153.6 launch: HS3's registered CKIO
 # phase flop (ckio_ph = CKIO_PCEN) sampled by the blit-domain enable

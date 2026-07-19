@@ -1,0 +1,214 @@
+Info: *******************************************************************
+Info: Running Quartus Prime TimeQuest Timing Analyzer
+    Info: Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+    Info: Copyright (C) 2017  Intel Corporation. All rights reserved.
+    Info: Your use of Intel Corporation's design tools, logic functions 
+    Info: and other software and tools, and its AMPP partner logic 
+    Info: functions, and any output files from any of the foregoing 
+    Info: (including device programming or simulation files), and any 
+    Info: associated documentation or information are expressly subject 
+    Info: to the terms and conditions of the Intel Program License 
+    Info: Subscription Agreement, the Intel Quartus Prime License Agreement,
+    Info: the Intel MegaCore Function License Agreement, or other 
+    Info: applicable license agreement, including, without limitation, 
+    Info: that your use is for the sole purpose of programming logic 
+    Info: devices manufactured by Intel and sold by Intel or its 
+    Info: authorized distributors.  Please refer to the applicable 
+    Info: agreement for further details.
+    Info: Processing started: Sun Jul 19 02:20:53 2026
+Info: Command: quartus_sta -t sta_r5chk.tcl
+Info (293032): Detected changes in source files.
+    Info (293027): Source file: /host/ikacore_CV1k.sdc has changed.
+Info (20030): Parallel compilation is enabled and will use 16 of the 48 processors detected
+Info (21077): Core supply voltage is 1.1V
+Info (332164): Evaluating HDL-embedded SDC commands
+    Info (332165): Entity altera_std_synchronizer
+        Info (332166): set_false_path -to [get_keepers {*altera_std_synchronizer:*|din_s1}]
+Info (332104): Reading SDC File: 'sys/sys_top.sdc'
+Info (332110): Deriving PLL clocks
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]} -divide_by 8 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin} -divide_by 512 -multiply_by 12595 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|vco0ph[0]} -divide_by 12 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|vco0ph[0]} -divide_by 12 -phase 56.26 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|divclk}
+    Info (332110): create_generated_clock -source {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]} -divide_by 3 -duty_cycle 50.00 -name {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk} {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}
+    Info (332110): create_generated_clock -source {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin} -divide_by 512 -multiply_by 4563 -duty_cycle 50.00 -name {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]} {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]}
+    Info (332110): create_generated_clock -source {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|refclkin} -divide_by 512 -multiply_by 4279 -duty_cycle 50.00 -name {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|vcoph[0]} {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|vcoph[0]}
+    Info (332110): create_generated_clock -source {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|vco0ph[0]} -divide_by 17 -duty_cycle 50.00 -name {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk} {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk}
+Info (332151): Clock uncertainty is not calculated until you update the timing netlist.
+Warning (332174): Ignored filter at sys_top.sdc(60): arc* could not be matched with a clock or keeper File: /host/sys/sys_top.sdc Line: 60
+Warning (332174): Ignored filter at sys_top.sdc(61): arx* could not be matched with a clock or keeper or register or port or pin or cell or partition File: /host/sys/sys_top.sdc Line: 61
+Warning (332174): Ignored filter at sys_top.sdc(61): ary* could not be matched with a clock or keeper or register or port or pin or cell or partition File: /host/sys/sys_top.sdc Line: 61
+Warning (332049): Ignored set_false_path at sys_top.sdc(61): Argument <from> is not an object ID File: /host/sys/sys_top.sdc Line: 61
+    Info (332050): set_false_path -from {arx* ary*} File: /host/sys/sys_top.sdc Line: 61
+Info (332104): Reading SDC File: 'ikacore_CV1k.sdc'
+Info (332151): Clock uncertainty is not calculated until you update the timing netlist.
+Warning (332174): Ignored filter at ikacore_CV1k.sdc(55): *u_gpr_bram*DATA_IN* could not be matched with a register File: /host/ikacore_CV1k.sdc Line: 55
+Info (332097): The following timing edges are non-unate.  TimeQuest will assume pos-unate behavior for these edges in the clock network.
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll  from: refclkin  to: fbclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL  from: refclkin  to: fbclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll  from: refclkin  to: fbclk
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_762
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_827
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_920
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_7
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_6
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_5
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_3  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_4
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_3
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_2
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_1
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_3  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_0
+Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
+r5chk match count: 77
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_9
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_15
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_17
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_13
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_12
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_18
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_14
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_11
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_19
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_5
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_16
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_7
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_8
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_10
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_A_DATA_IN_6
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a0~PORT_B_WRITE_ENABLE_REG
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_9
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_15
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_17
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_13
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_12
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_18
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_14
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_11
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_19
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_5
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_16
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_7
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_8
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_10
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_A_DATA_IN_6
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_9
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_15
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_17
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_13
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_12
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_18
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_14
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_11
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_19
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_5
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_16
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_7
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_8
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_10
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_A_DATA_IN_6
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a8~PORT_B_WRITE_ENABLE_REG
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_9
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_15
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_17
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_13
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_12
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_18
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_14
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_11
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_19
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_5
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_16
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_7
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_8
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_10
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_A_DATA_IN_6
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_B_WRITE_ENABLE_REG
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_15
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_18
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_11
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_5
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_16
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_7
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_8
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_10
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_6
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_12
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_13
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_A_DATA_IN_17
+r5chk: ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_B_WRITE_ENABLE_REG
+########## r5chk c153 worst after ascal fp ##########
+Info (332115): Report Timing: Found 6 setup paths (6 violated).  Worst case slack is -2.829
+    Info (332115): -to_clock [get_clocks {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}]
+    Info (332115): -setup
+    Info (332115): -npaths 6
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.829 (VIOLATED)
+    Info (332115):    Slack        : -2.829 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pend_v~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|sv_after[1]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.122
+    Info (332115):    Data Delay   : 8.881
+Info (332115): Path #2: Setup slack is -2.829 (VIOLATED)
+    Info (332115):    Slack        : -2.829 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pend_v~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|sv_after[5]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.122
+    Info (332115):    Data Delay   : 8.881
+Info (332115): Path #3: Setup slack is -2.824 (VIOLATED)
+    Info (332115):    Slack        : -2.824 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pend_v~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|sv_after[0]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.117
+    Info (332115):    Data Delay   : 8.881
+Info (332115): Path #4: Setup slack is -2.824 (VIOLATED)
+    Info (332115):    Slack        : -2.824 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pend_v~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|sv_after[6]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.117
+    Info (332115):    Data Delay   : 8.881
+Info (332115): Path #5: Setup slack is -2.824 (VIOLATED)
+    Info (332115):    Slack        : -2.824 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pend_v~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|sv_after[4]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.117
+    Info (332115):    Data Delay   : 8.881
+Info (332115): Path #6: Setup slack is -2.824 (VIOLATED)
+    Info (332115):    Slack        : -2.824 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pend_v~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|sv_after[12]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.117
+    Info (332115):    Data Delay   : 8.881
+Info (23030): Evaluation of Tcl script sta_r5chk.tcl was successful
+Info: Quartus Prime TimeQuest Timing Analyzer was successful. 0 errors, 5 warnings
+    Info: Peak virtual memory: 1737 megabytes
+    Info: Processing ended: Sun Jul 19 02:20:58 2026
+    Info: Elapsed time: 00:00:05
+    Info: Total CPU time (on all processors): 00:00:05

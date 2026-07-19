@@ -1,0 +1,851 @@
+Info: *******************************************************************
+Info: Running Quartus Prime TimeQuest Timing Analyzer
+    Info: Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+    Info: Copyright (C) 2017  Intel Corporation. All rights reserved.
+    Info: Your use of Intel Corporation's design tools, logic functions 
+    Info: and other software and tools, and its AMPP partner logic 
+    Info: functions, and any output files from any of the foregoing 
+    Info: (including device programming or simulation files), and any 
+    Info: associated documentation or information are expressly subject 
+    Info: to the terms and conditions of the Intel Program License 
+    Info: Subscription Agreement, the Intel Quartus Prime License Agreement,
+    Info: the Intel MegaCore Function License Agreement, or other 
+    Info: applicable license agreement, including, without limitation, 
+    Info: that your use is for the sole purpose of programming logic 
+    Info: devices manufactured by Intel and sold by Intel or its 
+    Info: authorized distributors.  Please refer to the applicable 
+    Info: agreement for further details.
+    Info: Processing started: Sun Jul 19 02:11:25 2026
+Info: Command: quartus_sta -t sta_r5base.tcl
+Info (20030): Parallel compilation is enabled and will use 16 of the 48 processors detected
+Info (21077): Core supply voltage is 1.1V
+Info (332164): Evaluating HDL-embedded SDC commands
+    Info (332165): Entity altera_std_synchronizer
+        Info (332166): set_false_path -to [get_keepers {*altera_std_synchronizer:*|din_s1}]
+Info (332104): Reading SDC File: 'sys/sys_top.sdc'
+Info (332110): Deriving PLL clocks
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]} -divide_by 8 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin} -divide_by 512 -multiply_by 12595 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|vco0ph[0]} -divide_by 12 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|vco0ph[0]} -divide_by 12 -phase 56.26 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|divclk}
+    Info (332110): create_generated_clock -source {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]} -divide_by 3 -duty_cycle 50.00 -name {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk} {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}
+    Info (332110): create_generated_clock -source {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin} -divide_by 512 -multiply_by 4563 -duty_cycle 50.00 -name {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]} {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]}
+    Info (332110): create_generated_clock -source {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|refclkin} -divide_by 512 -multiply_by 4279 -duty_cycle 50.00 -name {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|vcoph[0]} {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|vcoph[0]}
+    Info (332110): create_generated_clock -source {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|vco0ph[0]} -divide_by 17 -duty_cycle 50.00 -name {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk} {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk}
+Info (332151): Clock uncertainty is not calculated until you update the timing netlist.
+Warning (332174): Ignored filter at sys_top.sdc(60): arc* could not be matched with a clock or keeper File: /host/sys/sys_top.sdc Line: 60
+Warning (332174): Ignored filter at sys_top.sdc(61): arx* could not be matched with a clock or keeper or register or port or pin or cell or partition File: /host/sys/sys_top.sdc Line: 61
+Warning (332174): Ignored filter at sys_top.sdc(61): ary* could not be matched with a clock or keeper or register or port or pin or cell or partition File: /host/sys/sys_top.sdc Line: 61
+Warning (332049): Ignored set_false_path at sys_top.sdc(61): Argument <from> is not an object ID File: /host/sys/sys_top.sdc Line: 61
+    Info (332050): set_false_path -from {arx* ary*} File: /host/sys/sys_top.sdc Line: 61
+Info (332104): Reading SDC File: 'ikacore_CV1k.sdc'
+Info (332151): Clock uncertainty is not calculated until you update the timing netlist.
+Warning (332174): Ignored filter at ikacore_CV1k.sdc(55): *u_gpr_bram*DATA_IN* could not be matched with a register File: /host/ikacore_CV1k.sdc Line: 55
+Info (332097): The following timing edges are non-unate.  TimeQuest will assume pos-unate behavior for these edges in the clock network.
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll  from: refclkin  to: fbclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL  from: refclkin  to: fbclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll  from: refclkin  to: fbclk
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_762
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_827
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_920
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_7
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_6
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_5
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_3  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_4
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_3
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_2
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_1
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_3  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_0
+Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
+########## r5 c153-latched worst 20 (summary) ##########
+Info (332115): Report Timing: Found 20 setup paths (20 violated).  Worst case slack is -2.920
+    Info (332115): -to_clock [get_clocks {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}]
+    Info (332115): -setup
+    Info (332115): -npaths 20
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.920 (VIOLATED)
+    Info (332115):    Slack        : -2.920 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[3]_OTERM157
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.158
+    Info (332115):    Data Delay   : 7.936
+Info (332115): Path #2: Setup slack is -2.919 (VIOLATED)
+    Info (332115):    Slack        : -2.919 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[2]_OTERM163
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.159
+    Info (332115):    Data Delay   : 7.934
+Info (332115): Path #3: Setup slack is -2.919 (VIOLATED)
+    Info (332115):    Slack        : -2.919 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[7]_OTERM129
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.159
+    Info (332115):    Data Delay   : 7.934
+Info (332115): Path #4: Setup slack is -2.919 (VIOLATED)
+    Info (332115):    Slack        : -2.919 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[0]_OTERM177
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.159
+    Info (332115):    Data Delay   : 7.934
+Info (332115): Path #5: Setup slack is -2.914 (VIOLATED)
+    Info (332115):    Slack        : -2.914 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[5]_OTERM145
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.152
+    Info (332115):    Data Delay   : 7.936
+Info (332115): Path #6: Setup slack is -2.914 (VIOLATED)
+    Info (332115):    Slack        : -2.914 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[6]_OTERM139
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.154
+    Info (332115):    Data Delay   : 7.934
+Info (332115): Path #7: Setup slack is -2.914 (VIOLATED)
+    Info (332115):    Slack        : -2.914 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[4]_OTERM151
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.154
+    Info (332115):    Data Delay   : 7.934
+Info (332115): Path #8: Setup slack is -2.914 (VIOLATED)
+    Info (332115):    Slack        : -2.914 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[1]_OTERM169
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.154
+    Info (332115):    Data Delay   : 7.934
+Info (332115): Path #9: Setup slack is -2.890 (VIOLATED)
+    Info (332115):    Slack        : -2.890 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[3]_OTERM157
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.158
+    Info (332115):    Data Delay   : 7.906
+Info (332115): Path #10: Setup slack is -2.889 (VIOLATED)
+    Info (332115):    Slack        : -2.889 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[2]_OTERM163
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.159
+    Info (332115):    Data Delay   : 7.904
+Info (332115): Path #11: Setup slack is -2.889 (VIOLATED)
+    Info (332115):    Slack        : -2.889 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[7]_OTERM129
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.159
+    Info (332115):    Data Delay   : 7.904
+Info (332115): Path #12: Setup slack is -2.889 (VIOLATED)
+    Info (332115):    Slack        : -2.889 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[0]_OTERM177
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.159
+    Info (332115):    Data Delay   : 7.904
+Info (332115): Path #13: Setup slack is -2.889 (VIOLATED)
+    Info (332115):    Slack        : -2.889 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.b[3]_OTERM53
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.171
+    Info (332115):    Data Delay   : 7.892
+Info (332115): Path #14: Setup slack is -2.889 (VIOLATED)
+    Info (332115):    Slack        : -2.889 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.b[2]_OTERM59
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.171
+    Info (332115):    Data Delay   : 7.892
+Info (332115): Path #15: Setup slack is -2.889 (VIOLATED)
+    Info (332115):    Slack        : -2.889 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.b[6]_OTERM35
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.171
+    Info (332115):    Data Delay   : 7.892
+Info (332115): Path #16: Setup slack is -2.889 (VIOLATED)
+    Info (332115):    Slack        : -2.889 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a16~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.b[0]_OTERM73
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.171
+    Info (332115):    Data Delay   : 7.892
+Info (332115): Path #17: Setup slack is -2.885 (VIOLATED)
+    Info (332115):    Slack        : -2.885 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.g[5]_OTERM117
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.180
+    Info (332115):    Data Delay   : 7.879
+Info (332115): Path #18: Setup slack is -2.885 (VIOLATED)
+    Info (332115):    Slack        : -2.885 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.g[7]_OTERM105
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.180
+    Info (332115):    Data Delay   : 7.879
+Info (332115): Path #19: Setup slack is -2.885 (VIOLATED)
+    Info (332115):    Slack        : -2.885 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a9~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.g[1]_OTERM93
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.180
+    Info (332115):    Data Delay   : 7.879
+Info (332115): Path #20: Setup slack is -2.884 (VIOLATED)
+    Info (332115):    Slack        : -2.884 (VIOLATED)
+    Info (332115):    From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : ascal:ascal|i_pix.r[5]_OTERM145
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.152
+    Info (332115):    Data Delay   : 7.906
+########## r5 c153-latched worst 3 (full path) ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -2.920
+    Info (332115): -to_clock [get_clocks {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail full_path
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.920 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115): To Node      : ascal:ascal|i_pix.r[3]_OTERM157
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):      4.347      1.738 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):      5.383      1.036 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):      5.693      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):      8.103      2.410 RR    IC  ascal|i_mem[0].r[7]__1|auto_generated|ram_block1a3|clk0
+    Info (332115):      9.667      1.564 RR  CELL  ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):      9.667      0.000     uTco  ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):     10.696      1.029 RF  CELL  ascal|i_mem[0].r[7]__1|auto_generated|ram_block1a3|portbdataout[4]
+    Info (332115):     11.927      1.231 FF    IC  ascal|Add35~8|bx[0]
+    Info (332115):     15.561      3.634 FF  CELL  ascal|Add35~8|resulta[16]
+    Info (332115):     16.363      0.802 FF    IC  ascal|i_pix.r[0]~1|dataf
+    Info (332115):     16.445      0.082 FF  CELL  ascal|i_pix.r[0]~1|combout
+    Info (332115):     16.722      0.277 FF    IC  ascal|i_pix.r[3]_NEW_REG156|sclr
+    Info (332115):     17.603      0.881 FR  CELL  ascal:ascal|i_pix.r[3]_OTERM157
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      6.504      6.504           latch edge time
+    Info (332115):      6.504      0.000           source latency
+    Info (332115):      6.504      0.000           FPGA_CLK2_50
+    Info (332115):      6.504      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      7.270      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      8.443      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      8.753      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      8.753      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      8.604     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      8.604      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):     10.074      1.470 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):     10.984      0.910 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):     11.270      0.286 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):     13.201      1.931 RR    IC  ascal|i_pix.r[3]_NEW_REG156|clk
+    Info (332115):     13.702      0.501 RR  CELL  ascal:ascal|i_pix.r[3]_OTERM157
+    Info (332115):     15.013      1.311           clock pessimism removed
+    Info (332115):     14.683     -0.330           clock uncertainty
+    Info (332115):     14.683      0.000     uTsu  ascal:ascal|i_pix.r[3]_OTERM157
+    Info (332115): Data Arrival Time  :    17.603
+    Info (332115): Data Required Time :    14.683
+    Info (332115): Slack              :    -2.920 (VIOLATED)
+    Info (332115): ===================================================================
+Info (332115): Path #2: Setup slack is -2.919 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115): To Node      : ascal:ascal|i_pix.r[2]_OTERM163
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):      4.347      1.738 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):      5.383      1.036 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):      5.693      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):      8.103      2.410 RR    IC  ascal|i_mem[0].r[7]__1|auto_generated|ram_block1a3|clk0
+    Info (332115):      9.667      1.564 RR  CELL  ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):      9.667      0.000     uTco  ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):     10.696      1.029 RF  CELL  ascal|i_mem[0].r[7]__1|auto_generated|ram_block1a3|portbdataout[4]
+    Info (332115):     11.927      1.231 FF    IC  ascal|Add35~8|bx[0]
+    Info (332115):     15.561      3.634 FF  CELL  ascal|Add35~8|resulta[16]
+    Info (332115):     16.363      0.802 FF    IC  ascal|i_pix.r[0]~1|dataf
+    Info (332115):     16.445      0.082 FF  CELL  ascal|i_pix.r[0]~1|combout
+    Info (332115):     16.722      0.277 FF    IC  ascal|i_pix.r[2]_NEW_REG162|sclr
+    Info (332115):     17.601      0.879 FR  CELL  ascal:ascal|i_pix.r[2]_OTERM163
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      6.504      6.504           latch edge time
+    Info (332115):      6.504      0.000           source latency
+    Info (332115):      6.504      0.000           FPGA_CLK2_50
+    Info (332115):      6.504      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      7.270      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      8.443      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      8.753      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      8.753      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      8.604     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      8.604      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):     10.074      1.470 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):     10.984      0.910 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):     11.270      0.286 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):     13.201      1.931 RR    IC  ascal|i_pix.r[2]_NEW_REG162|clk
+    Info (332115):     13.701      0.500 RR  CELL  ascal:ascal|i_pix.r[2]_OTERM163
+    Info (332115):     15.012      1.311           clock pessimism removed
+    Info (332115):     14.682     -0.330           clock uncertainty
+    Info (332115):     14.682      0.000     uTsu  ascal:ascal|i_pix.r[2]_OTERM163
+    Info (332115): Data Arrival Time  :    17.601
+    Info (332115): Data Required Time :    14.682
+    Info (332115): Slack              :    -2.919 (VIOLATED)
+    Info (332115): ===================================================================
+Info (332115): Path #3: Setup slack is -2.919 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115): To Node      : ascal:ascal|i_pix.r[7]_OTERM129
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):      4.347      1.738 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):      5.383      1.036 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):      5.693      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):      8.103      2.410 RR    IC  ascal|i_mem[0].r[7]__1|auto_generated|ram_block1a3|clk0
+    Info (332115):      9.667      1.564 RR  CELL  ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):      9.667      0.000     uTco  ascal:ascal|altsyncram:i_mem[0].r[7]__1|altsyncram_89q1:auto_generated|ram_block1a3~PORT_B_WRITE_ENABLE_REG
+    Info (332115):     10.696      1.029 RF  CELL  ascal|i_mem[0].r[7]__1|auto_generated|ram_block1a3|portbdataout[4]
+    Info (332115):     11.927      1.231 FF    IC  ascal|Add35~8|bx[0]
+    Info (332115):     15.561      3.634 FF  CELL  ascal|Add35~8|resulta[16]
+    Info (332115):     16.363      0.802 FF    IC  ascal|i_pix.r[0]~1|dataf
+    Info (332115):     16.445      0.082 FF  CELL  ascal|i_pix.r[0]~1|combout
+    Info (332115):     16.722      0.277 FF    IC  ascal|i_pix.r[7]_NEW_REG128|sclr
+    Info (332115):     17.601      0.879 FR  CELL  ascal:ascal|i_pix.r[7]_OTERM129
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      6.504      6.504           latch edge time
+    Info (332115):      6.504      0.000           source latency
+    Info (332115):      6.504      0.000           FPGA_CLK2_50
+    Info (332115):      6.504      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      7.270      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      8.443      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      8.753      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      8.753      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      8.604     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      8.604      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]
+    Info (332115):     10.074      1.470 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):     10.984      0.910 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|inclk
+    Info (332115):     11.270      0.286 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[0]~CLKENA0|outclk
+    Info (332115):     13.201      1.931 RR    IC  ascal|i_pix.r[7]_NEW_REG128|clk
+    Info (332115):     13.701      0.500 RR  CELL  ascal:ascal|i_pix.r[7]_OTERM129
+    Info (332115):     15.012      1.311           clock pessimism removed
+    Info (332115):     14.682     -0.330           clock uncertainty
+    Info (332115):     14.682      0.000     uTsu  ascal:ascal|i_pix.r[7]_OTERM129
+    Info (332115): Data Arrival Time  :    17.601
+    Info (332115): Data Required Time :    14.682
+    Info (332115): Slack              :    -2.919 (VIOLATED)
+    Info (332115): ===================================================================
+########## r5 c102-latched worst 20 (summary) ##########
+Info (332115): Report Timing: Found 20 setup paths (20 violated).  Worst case slack is -3.859
+    Info (332115): -to_clock [get_clocks {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk}]
+    Info (332115): -setup
+    Info (332115): -npaths 20
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -3.859 (VIOLATED)
+    Info (332115):    Slack        : -3.859 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~36
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.511
+    Info (332115):    Data Delay   : 12.904
+Info (332115): Path #2: Setup slack is -3.859 (VIOLATED)
+    Info (332115):    Slack        : -3.859 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~4
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.509
+    Info (332115):    Data Delay   : 12.906
+Info (332115): Path #3: Setup slack is -3.859 (VIOLATED)
+    Info (332115):    Slack        : -3.859 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~2
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.509
+    Info (332115):    Data Delay   : 12.906
+Info (332115): Path #4: Setup slack is -3.859 (VIOLATED)
+    Info (332115):    Slack        : -3.859 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~3
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.509
+    Info (332115):    Data Delay   : 12.906
+Info (332115): Path #5: Setup slack is -3.802 (VIOLATED)
+    Info (332115):    Slack        : -3.802 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_IDLE
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.095
+    Info (332115):    Data Delay   : 13.263
+Info (332115): Path #6: Setup slack is -3.779 (VIOLATED)
+    Info (332115):    Slack        : -3.779 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~36
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.511
+    Info (332115):    Data Delay   : 12.824
+Info (332115): Path #7: Setup slack is -3.779 (VIOLATED)
+    Info (332115):    Slack        : -3.779 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~4
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.509
+    Info (332115):    Data Delay   : 12.826
+Info (332115): Path #8: Setup slack is -3.779 (VIOLATED)
+    Info (332115):    Slack        : -3.779 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~2
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.509
+    Info (332115):    Data Delay   : 12.826
+Info (332115): Path #9: Setup slack is -3.779 (VIOLATED)
+    Info (332115):    Slack        : -3.779 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~3
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.509
+    Info (332115):    Data Delay   : 12.826
+Info (332115): Path #10: Setup slack is -3.753 (VIOLATED)
+    Info (332115):    Slack        : -3.753 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~36
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.511
+    Info (332115):    Data Delay   : 12.798
+Info (332115): Path #11: Setup slack is -3.753 (VIOLATED)
+    Info (332115):    Slack        : -3.753 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~4
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.509
+    Info (332115):    Data Delay   : 12.800
+Info (332115): Path #12: Setup slack is -3.753 (VIOLATED)
+    Info (332115):    Slack        : -3.753 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~2
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.509
+    Info (332115):    Data Delay   : 12.800
+Info (332115): Path #13: Setup slack is -3.753 (VIOLATED)
+    Info (332115):    Slack        : -3.753 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~3
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.509
+    Info (332115):    Data Delay   : 12.800
+Info (332115): Path #14: Setup slack is -3.728 (VIOLATED)
+    Info (332115):    Slack        : -3.728 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4772
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~36
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.507
+    Info (332115):    Data Delay   : 12.777
+Info (332115): Path #15: Setup slack is -3.728 (VIOLATED)
+    Info (332115):    Slack        : -3.728 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4772
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~4
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.505
+    Info (332115):    Data Delay   : 12.779
+Info (332115): Path #16: Setup slack is -3.728 (VIOLATED)
+    Info (332115):    Slack        : -3.728 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4772
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~2
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.505
+    Info (332115):    Data Delay   : 12.779
+Info (332115): Path #17: Setup slack is -3.728 (VIOLATED)
+    Info (332115):    Slack        : -3.728 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4772
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~3
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.505
+    Info (332115):    Data Delay   : 12.779
+Info (332115): Path #18: Setup slack is -3.726 (VIOLATED)
+    Info (332115):    Slack        : -3.726 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~7
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.515
+    Info (332115):    Data Delay   : 12.767
+Info (332115): Path #19: Setup slack is -3.722 (VIOLATED)
+    Info (332115):    Slack        : -3.722 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_IDLE
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.095
+    Info (332115):    Data Delay   : 13.183
+Info (332115): Path #20: Setup slack is -3.720 (VIOLATED)
+    Info (332115):    Slack        : -3.720 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4784
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~36
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.513
+    Info (332115):    Data Delay   : 12.763
+########## r5 c102-latched worst 3 (full path) ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -3.859
+    Info (332115): -to_clock [get_clocks {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail full_path
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -3.859 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115): To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~36
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|vco0ph[0]
+    Info (332115):      4.137      1.528 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):      5.153      1.016 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|inclk
+    Info (332115):      5.482      0.329 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|outclk
+    Info (332115):      7.814      2.332 RR    IC  emu|core|u_hs3|u_cpu|u_cache|state.S_DRAIN_REQ_OTERM1648_NEW_REG4777|clk
+    Info (332115):      8.379      0.565 RR  CELL  emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):      8.379      0.000     uTco  emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):      8.379      0.000 FF  CELL  emu|core|u_hs3|u_cpu|u_cache|state.S_DRAIN_REQ_OTERM1648_NEW_REG4777|q
+    Info (332115):      8.736      0.357 FF    IC  emu|core|u_hs3|u_cpu|u_cache|state~115|dataa
+    Info (332115):      9.305      0.569 FF  CELL  emu|core|u_hs3|u_cpu|u_cache|state~115|combout
+    Info (332115):     11.117      1.812 FF    IC  emu|core|u_hs3|u_cpu|u_cache|state~63|datae
+    Info (332115):     11.342      0.225 FF  CELL  emu|core|u_hs3|u_cpu|u_cache|state~63|combout
+    Info (332115):     11.553      0.211 FF    IC  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[29]~0|dataf
+    Info (332115):     11.640      0.087 FF  CELL  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[29]~0|combout
+    Info (332115):     12.727      1.087 FF    IC  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[13]~14|dataf
+    Info (332115):     12.824      0.097 FR  CELL  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[13]~14|combout
+    Info (332115):     13.264      0.440 RR    IC  emu|core|u_hs3|u_bsc|fe_port~1|datac
+    Info (332115):     13.764      0.500 RF  CELL  emu|core|u_hs3|u_bsc|fe_port~1|combout
+    Info (332115):     14.752      0.988 FF    IC  emu|core|u_hs3|u_bsc|fe_port~2|datad
+    Info (332115):     15.130      0.378 FF  CELL  emu|core|u_hs3|u_bsc|fe_port~2|combout
+    Info (332115):     15.379      0.249 FF    IC  emu|core|u_hs3|u_bsc|fe_port~6|datad
+    Info (332115):     15.893      0.514 FF  CELL  emu|core|u_hs3|u_bsc|fe_port~6|combout
+    Info (332115):     16.219      0.326 FF    IC  emu|core|u_hs3|u_bsc|fe_acc~0|datab
+    Info (332115):     16.803      0.584 FR  CELL  emu|core|u_hs3|u_bsc|fe_acc~0|combout
+    Info (332115):     17.222      0.419 RR    IC  emu|core|u_hs3|u_bsc|obuf~168|dataa
+    Info (332115):     17.834      0.612 RR  CELL  emu|core|u_hs3|u_bsc|obuf~168|combout
+    Info (332115):     18.212      0.378 RR    IC  emu|core|u_hs3|u_bsc|obuf~169|datac
+    Info (332115):     18.714      0.502 RF  CELL  emu|core|u_hs3|u_bsc|obuf~169|combout
+    Info (332115):     20.582      1.868 FF    IC  emu|core|u_hs3|u_bsc|obuf~36|ena
+    Info (332115):     21.283      0.701 FF  CELL  emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~36
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      9.756      9.756           latch edge time
+    Info (332115):      9.756      0.000           source latency
+    Info (332115):      9.756      0.000           FPGA_CLK2_50
+    Info (332115):      9.756      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):     10.522      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):     11.695      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):     12.005      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):     12.005      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):     11.856     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):     11.856      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|vco0ph[0]
+    Info (332115):     13.128      1.272 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):     14.075      0.947 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|inclk
+    Info (332115):     14.379      0.304 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|outclk
+    Info (332115):     16.287      1.908 RR    IC  emu|core|u_hs3|u_bsc|obuf~36|clk
+    Info (332115):     16.765      0.478 RR  CELL  emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~36
+    Info (332115):     17.624      0.859           clock pessimism removed
+    Info (332115):     17.424     -0.200           clock uncertainty
+    Info (332115):     17.424      0.000     uTsu  emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~36
+    Info (332115): Data Arrival Time  :    21.283
+    Info (332115): Data Required Time :    17.424
+    Info (332115): Slack              :    -3.859 (VIOLATED)
+    Info (332115): ===================================================================
+Info (332115): Path #2: Setup slack is -3.859 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115): To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~4
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|vco0ph[0]
+    Info (332115):      4.137      1.528 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):      5.153      1.016 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|inclk
+    Info (332115):      5.482      0.329 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|outclk
+    Info (332115):      7.814      2.332 RR    IC  emu|core|u_hs3|u_cpu|u_cache|state.S_DRAIN_REQ_OTERM1648_NEW_REG4777|clk
+    Info (332115):      8.379      0.565 RR  CELL  emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):      8.379      0.000     uTco  emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):      8.379      0.000 FF  CELL  emu|core|u_hs3|u_cpu|u_cache|state.S_DRAIN_REQ_OTERM1648_NEW_REG4777|q
+    Info (332115):      8.736      0.357 FF    IC  emu|core|u_hs3|u_cpu|u_cache|state~115|dataa
+    Info (332115):      9.305      0.569 FF  CELL  emu|core|u_hs3|u_cpu|u_cache|state~115|combout
+    Info (332115):     11.117      1.812 FF    IC  emu|core|u_hs3|u_cpu|u_cache|state~63|datae
+    Info (332115):     11.342      0.225 FF  CELL  emu|core|u_hs3|u_cpu|u_cache|state~63|combout
+    Info (332115):     11.553      0.211 FF    IC  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[29]~0|dataf
+    Info (332115):     11.640      0.087 FF  CELL  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[29]~0|combout
+    Info (332115):     12.727      1.087 FF    IC  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[13]~14|dataf
+    Info (332115):     12.824      0.097 FR  CELL  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[13]~14|combout
+    Info (332115):     13.264      0.440 RR    IC  emu|core|u_hs3|u_bsc|fe_port~1|datac
+    Info (332115):     13.764      0.500 RF  CELL  emu|core|u_hs3|u_bsc|fe_port~1|combout
+    Info (332115):     14.752      0.988 FF    IC  emu|core|u_hs3|u_bsc|fe_port~2|datad
+    Info (332115):     15.130      0.378 FF  CELL  emu|core|u_hs3|u_bsc|fe_port~2|combout
+    Info (332115):     15.379      0.249 FF    IC  emu|core|u_hs3|u_bsc|fe_port~6|datad
+    Info (332115):     15.893      0.514 FF  CELL  emu|core|u_hs3|u_bsc|fe_port~6|combout
+    Info (332115):     16.219      0.326 FF    IC  emu|core|u_hs3|u_bsc|fe_acc~0|datab
+    Info (332115):     16.803      0.584 FR  CELL  emu|core|u_hs3|u_bsc|fe_acc~0|combout
+    Info (332115):     17.222      0.419 RR    IC  emu|core|u_hs3|u_bsc|obuf~168|dataa
+    Info (332115):     17.834      0.612 RR  CELL  emu|core|u_hs3|u_bsc|obuf~168|combout
+    Info (332115):     18.212      0.378 RR    IC  emu|core|u_hs3|u_bsc|obuf~169|datac
+    Info (332115):     18.714      0.502 RF  CELL  emu|core|u_hs3|u_bsc|obuf~169|combout
+    Info (332115):     20.582      1.868 FF    IC  emu|core|u_hs3|u_bsc|obuf~4|ena
+    Info (332115):     21.285      0.703 FF  CELL  emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~4
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      9.756      9.756           latch edge time
+    Info (332115):      9.756      0.000           source latency
+    Info (332115):      9.756      0.000           FPGA_CLK2_50
+    Info (332115):      9.756      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):     10.522      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):     11.695      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):     12.005      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):     12.005      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):     11.856     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):     11.856      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|vco0ph[0]
+    Info (332115):     13.128      1.272 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):     14.075      0.947 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|inclk
+    Info (332115):     14.379      0.304 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|outclk
+    Info (332115):     16.287      1.908 RR    IC  emu|core|u_hs3|u_bsc|obuf~4|clk
+    Info (332115):     16.767      0.480 RR  CELL  emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~4
+    Info (332115):     17.626      0.859           clock pessimism removed
+    Info (332115):     17.426     -0.200           clock uncertainty
+    Info (332115):     17.426      0.000     uTsu  emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~4
+    Info (332115): Data Arrival Time  :    21.285
+    Info (332115): Data Required Time :    17.426
+    Info (332115): Slack              :    -3.859 (VIOLATED)
+    Info (332115): ===================================================================
+Info (332115): Path #3: Setup slack is -3.859 (VIOLATED)
+    Info (332115): ===================================================================
+    Info (332115): From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115): To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~2
+    Info (332115): Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115): Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115): Data Arrival Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      0.000      0.000           launch edge time
+    Info (332115):      0.000      0.000           source latency
+    Info (332115):      0.000      0.000           FPGA_CLK2_50
+    Info (332115):      0.000      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):      0.766      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):      2.097      1.331 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):      2.430      0.333 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):      2.430      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):      2.609      0.179 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):      2.609      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|vco0ph[0]
+    Info (332115):      4.137      1.528 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):      5.153      1.016 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|inclk
+    Info (332115):      5.482      0.329 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|outclk
+    Info (332115):      7.814      2.332 RR    IC  emu|core|u_hs3|u_cpu|u_cache|state.S_DRAIN_REQ_OTERM1648_NEW_REG4777|clk
+    Info (332115):      8.379      0.565 RR  CELL  emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):      8.379      0.000     uTco  emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM1648_OTERM4778
+    Info (332115):      8.379      0.000 FF  CELL  emu|core|u_hs3|u_cpu|u_cache|state.S_DRAIN_REQ_OTERM1648_NEW_REG4777|q
+    Info (332115):      8.736      0.357 FF    IC  emu|core|u_hs3|u_cpu|u_cache|state~115|dataa
+    Info (332115):      9.305      0.569 FF  CELL  emu|core|u_hs3|u_cpu|u_cache|state~115|combout
+    Info (332115):     11.117      1.812 FF    IC  emu|core|u_hs3|u_cpu|u_cache|state~63|datae
+    Info (332115):     11.342      0.225 FF  CELL  emu|core|u_hs3|u_cpu|u_cache|state~63|combout
+    Info (332115):     11.553      0.211 FF    IC  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[29]~0|dataf
+    Info (332115):     11.640      0.087 FF  CELL  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[29]~0|combout
+    Info (332115):     12.727      1.087 FF    IC  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[13]~14|dataf
+    Info (332115):     12.824      0.097 FR  CELL  emu|core|u_hs3|u_arb|CORE_BUS.req_addr[13]~14|combout
+    Info (332115):     13.264      0.440 RR    IC  emu|core|u_hs3|u_bsc|fe_port~1|datac
+    Info (332115):     13.764      0.500 RF  CELL  emu|core|u_hs3|u_bsc|fe_port~1|combout
+    Info (332115):     14.752      0.988 FF    IC  emu|core|u_hs3|u_bsc|fe_port~2|datad
+    Info (332115):     15.130      0.378 FF  CELL  emu|core|u_hs3|u_bsc|fe_port~2|combout
+    Info (332115):     15.379      0.249 FF    IC  emu|core|u_hs3|u_bsc|fe_port~6|datad
+    Info (332115):     15.893      0.514 FF  CELL  emu|core|u_hs3|u_bsc|fe_port~6|combout
+    Info (332115):     16.219      0.326 FF    IC  emu|core|u_hs3|u_bsc|fe_acc~0|datab
+    Info (332115):     16.803      0.584 FR  CELL  emu|core|u_hs3|u_bsc|fe_acc~0|combout
+    Info (332115):     17.222      0.419 RR    IC  emu|core|u_hs3|u_bsc|obuf~168|dataa
+    Info (332115):     17.834      0.612 RR  CELL  emu|core|u_hs3|u_bsc|obuf~168|combout
+    Info (332115):     18.212      0.378 RR    IC  emu|core|u_hs3|u_bsc|obuf~169|datac
+    Info (332115):     18.714      0.502 RF  CELL  emu|core|u_hs3|u_bsc|obuf~169|combout
+    Info (332115):     20.582      1.868 FF    IC  emu|core|u_hs3|u_bsc|obuf~2|ena
+    Info (332115):     21.285      0.703 FF  CELL  emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~2
+    Info (332115): Data Required Path:
+    Info (332115): Total (ns)  Incr (ns)     Type  Element
+    Info (332115): ==========  ========= ==  ====  ===================================
+    Info (332115):      9.756      9.756           latch edge time
+    Info (332115):      9.756      0.000           source latency
+    Info (332115):      9.756      0.000           FPGA_CLK2_50
+    Info (332115):      9.756      0.000 RR    IC  FPGA_CLK2_50~input|i
+    Info (332115):     10.522      0.766 RR  CELL  FPGA_CLK2_50~input|o
+    Info (332115):     11.695      1.173 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkin[0]
+    Info (332115):     12.005      0.310 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT|clkout
+    Info (332115):     12.005      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin
+    Info (332115):     11.856     -0.149 RR  COMP  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]
+    Info (332115):     11.856      0.000 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|vco0ph[0]
+    Info (332115):     13.128      1.272 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):     14.075      0.947 RR    IC  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|inclk
+    Info (332115):     14.379      0.304 RR  CELL  emu|pll|pll_inst|altera_pll_i|cyclonev_pll|divclk[1]~CLKENA0|outclk
+    Info (332115):     16.287      1.908 RR    IC  emu|core|u_hs3|u_bsc|obuf~2|clk
+    Info (332115):     16.767      0.480 RR  CELL  emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~2
+    Info (332115):     17.626      0.859           clock pessimism removed
+    Info (332115):     17.426     -0.200           clock uncertainty
+    Info (332115):     17.426      0.000     uTsu  emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~2
+    Info (332115): Data Arrival Time  :    21.285
+    Info (332115): Data Required Time :    17.426
+    Info (332115): Slack              :    -3.859 (VIOLATED)
+    Info (332115): ===================================================================
+Info (23030): Evaluation of Tcl script sta_r5base.tcl was successful
+Info: Quartus Prime TimeQuest Timing Analyzer was successful. 0 errors, 5 warnings
+    Info: Peak virtual memory: 1756 megabytes
+    Info: Processing ended: Sun Jul 19 02:11:30 2026
+    Info: Elapsed time: 00:00:05
+    Info: Total CPU time (on all processors): 00:00:07

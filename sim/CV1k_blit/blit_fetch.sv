@@ -442,6 +442,14 @@ module blit_fetch #(
                                          // wst transition cone; maintained as
                                          // an exact next-value at every
                                          // w_need assignment (oracle below)
+    reg         w_z8;                    // r7: == (w_need[25:8] == 0) at every
+                                         // W_BODY cycle -- the w_is1
+                                         // maintenance compare reads 9 live
+                                         // bits instead of 26 (the r6 ship
+                                         // -2.17 w_need->w_is1 family); the
+                                         // 0->1 crossing is exact (a -1 step
+                                         // clears [25:8] only from 256) and
+                                         // within an op it is monotone
 
     assign end_seen   = (wst == W_END);
     assign walk_fault = (wst == W_FAULT);
@@ -450,12 +458,22 @@ module blit_fetch #(
     // FIFO storage
     reg  [15:0] fmem [0:FIFO_WORDS-1];
     reg  [15:0] f_wp, f_rp, f_lvl;
+    // r5: registered non-empty flag (exact next-value off the same push/
+    // pop terms that move f_lvl -- the fifo_room_q/o_af recipe).  The
+    // fit-#2 -2.52 arc was f_lvl -> (!=0) -> the draw pop/adv fan all the
+    // way into the batch o_af next-value; the flag cuts the compare out
+    // of that cone.  f_nz_q == (f_lvl != 0) every cycle (oracle below).
+    reg         f_nz_q;
+    // r7: registered free flag (same exact next-value recipe) -- the 16-bit
+    // (f_lvl != FIFO_WORDS) compare sat in EVERY parser enable through
+    // skid_pop_word; the flag makes the parser selects register-fed.
+    reg         f_free_q;
     assign fifo_level   = f_lvl;
-    assign o_fifo_valid = (f_lvl != 16'd0);
+    assign o_fifo_valid = f_nz_q;
     assign o_fifo_word  = fmem[f_rp];
 
-    wire fifo_free      = (f_lvl != FIFO_WORDS[15:0]);
-    assign skid_pop_word = skid_avail && fifo_free && (wst != W_FAULT);
+    wire fifo_free      = (f_lvl != FIFO_WORDS[15:0]);   // oracle form
+    assign skid_pop_word = skid_avail && f_free_q && (wst != W_FAULT);
     wire fifo_push      = skid_pop_word && (wst != W_END);
 
     // UPLOAD payload sizing, register x register (14x13, <= 2^25; r4: both
@@ -482,11 +500,14 @@ module blit_fetch #(
             w_dy1_is2 <= 1'b0;
             w_pxpend  <= 1'b0;
             w_is1     <= 1'b0;
+            w_z8      <= 1'b0;
             skid_half <= 1'b0;
             skid_rp   <= 3'd0;
             f_wp      <= 16'd0;
             f_rp      <= 16'd0;
             f_lvl     <= 16'd0;
+            f_nz_q    <= 1'b0;
+            f_free_q  <= 1'b1;
             fifo_room_q <= 1'b1;
         end
         else begin
@@ -508,9 +529,9 @@ module blit_fetch #(
                         w_idx <= 4'd1;
                         case (skid_word[15:12])
                             4'h0, 4'hF: wst <= W_END;                 // END word
-                            4'hC: begin w_need <= 26'd1;  w_is1 <= 1'b1; w_upl <= 1'b0; wst <= W_BODY; end
-                            4'h1: begin w_need <= 26'd9;  w_is1 <= 1'b0; w_upl <= 1'b0; wst <= W_BODY; end
-                            4'h2: begin w_need <= 26'd7;  w_is1 <= 1'b0; w_upl <= 1'b1; wst <= W_BODY; end
+                            4'hC: begin w_need <= 26'd1;  w_is1 <= 1'b1; w_z8 <= 1'b1; w_upl <= 1'b0; wst <= W_BODY; end
+                            4'h1: begin w_need <= 26'd9;  w_is1 <= 1'b0; w_z8 <= 1'b1; w_upl <= 1'b0; wst <= W_BODY; end
+                            4'h2: begin w_need <= 26'd7;  w_is1 <= 1'b0; w_z8 <= 1'b1; w_upl <= 1'b1; wst <= W_BODY; end
                             default: begin
                                 wst <= W_FAULT;
 `ifndef SYNTHESIS
@@ -522,9 +543,13 @@ module blit_fetch #(
                     W_BODY: begin
                         w_idx  <= (w_idx == 4'hF) ? 4'hF : w_idx + 4'd1;
                         w_need <= w_need - 26'd1;
-                        w_is1  <= (w_need == 26'd2);      // r4 iter2: exact
-                                                          // next-value of
-                                                          // (w_need == 1)
+                        w_z8   <= w_z8 || (w_need == 26'd256);
+                        w_is1  <= w_z8 && (w_need[7:0] == 8'd2);
+                                                          // r4 iter2 / r7:
+                                                          // exact next-value
+                                                          // of (w_need == 1)
+                                                          // through the high-
+                                                          // zero flag
                         if (w_upl && w_idx == 4'd6) begin // header word 6: dimx
                             w_dimx1   <= {1'b0, skid_word[12:0]} + 14'd1;
                             w_dx1_is1 <= (skid_word[12:0] == 13'd0);
@@ -533,6 +558,7 @@ module blit_fetch #(
                         if (w_pxpend) begin               // first payload word:
                             w_pxpend <= 1'b0;             // deferred product lands
                             w_need   <= w_pxm1[25:0];     // (dimx+1)*(dimy+1)-1
+                            w_z8     <= (w_pxm1[25:8] == 18'd0);
                             w_is1    <= (w_dx1_is2 && w_dy1_is1)   // px == 2
                                      || (w_dx1_is1 && w_dy1_is2);
                             if (w_dx1_is1 && w_dy1_is1)   // 1-word payload ends here
@@ -552,21 +578,28 @@ module blit_fetch #(
                 endcase
             end
 
-            // FIFO push/pop
+            // FIFO push/pop (r5: the pop guard reads the registered flag --
+            // identical by the f_nz_q == (f_lvl != 0) invariant)
             if (fifo_push) begin
                 fmem[f_wp] <= skid_word;
                 f_wp       <= (f_wp == FIFO_WORDS[15:0] - 16'd1) ? 16'd0
                                                                  : f_wp + 16'd1;
             end
-            if (i_fifo_pop && o_fifo_valid)
+            if (i_fifo_pop && f_nz_q)
                 f_rp <= (f_rp == FIFO_WORDS[15:0] - 16'd1) ? 16'd0
                                                            : f_rp + 16'd1;
             f_lvl <= f_lvl + (fifo_push ? 16'd1 : 16'd0)
-                           - ((i_fifo_pop && o_fifo_valid) ? 16'd1 : 16'd0);
+                           - ((i_fifo_pop && f_nz_q) ? 16'd1 : 16'd0);
+            f_nz_q <= fifo_push ? 1'b1
+                                : ((i_fifo_pop && f_nz_q) ? (f_lvl != 16'd1)
+                                                          : f_nz_q);
             fifo_room_q <= (FIFO_WORDS[15:0]
                             - (f_lvl + (fifo_push ? 16'd1 : 16'd0)
-                                     - ((i_fifo_pop && o_fifo_valid) ? 16'd1 : 16'd0)))
+                                     - ((i_fifo_pop && f_nz_q) ? 16'd1 : 16'd0)))
                            > 16'd40;
+            f_free_q <= (f_lvl + (fifo_push ? 16'd1 : 16'd0)
+                               - ((i_fifo_pop && f_nz_q) ? 16'd1 : 16'd0))
+                        != FIFO_WORDS[15:0];
         end
     end
 
@@ -576,6 +609,21 @@ module blit_fetch #(
         if (i_RST_n && wst == W_BODY && w_is1 != (w_need == 26'd1))
             $fatal(2, "[blit_fetch] r4 w_is1 diverged (is1=%b need=%0d) t=%0t",
                    w_is1, w_need, $time);
+    // r5 oracle: the registered non-empty flag tracks (f_lvl != 0)
+    always @(posedge i_CLK)
+        if (i_RST_n && f_nz_q != (f_lvl != 16'd0))
+            $fatal(2, "[blit_fetch] r5 f_nz_q diverged (nz=%b lvl=%0d) t=%0t",
+                   f_nz_q, f_lvl, $time);
+    // r7 oracle: the high-zero flag tracks w_need[25:8] at every W_BODY cycle
+    always @(posedge i_CLK)
+        if (i_RST_n && wst == W_BODY && w_z8 != (w_need[25:8] == 18'd0))
+            $fatal(2, "[blit_fetch] r7 w_z8 diverged (z8=%b need=%0d) t=%0t",
+                   w_z8, w_need, $time);
+    // r7 oracle: the registered free flag tracks (f_lvl != FIFO_WORDS)
+    always @(posedge i_CLK)
+        if (i_RST_n && f_free_q != fifo_free)
+            $fatal(2, "[blit_fetch] r7 f_free_q diverged (fr=%b lvl=%0d) t=%0t",
+                   f_free_q, f_lvl, $time);
 `endif
 
 endmodule

@@ -152,6 +152,9 @@ module blit_gov (
     reg [12:0] t_rwwr;                   // P_RW + P_WR, kept pre-summed
     reg [7:0]  t_c_src4, t_c_dst4;
     reg [15:0] t_hline_p;                // half-VCLK
+    reg [16:0] t_hline_p1, t_hline_m1;   // r5: t_hline_p +/- 1, pre-summed
+                                         // (rtl2 gotcha class: kept at the
+                                         // load sites like t_rwwr)
     reg [11:0] t_steal;                  // VCLK
     reg        t_steal_en;
     reg [15:0] t_window;                 // chunks
@@ -171,6 +174,8 @@ module blit_gov (
             t_c_src4   <= 8'd1;
             t_c_dst4   <= 8'd2;
             t_hline_p  <= 16'd9768;      // 4884 VCLK
+            t_hline_p1 <= 17'd9769;
+            t_hline_m1 <= 17'd9767;
             t_steal    <= 12'd166;
             t_steal_en <= 1'b1;
             t_window   <= 16'd512;       // fifo_study frozen window
@@ -192,7 +197,11 @@ module blit_gov (
                 4'd3 : t_p_spr    <= i_tbl_data[11:0];
                 4'd4 : t_c_src4   <= i_tbl_data[7:0];
                 4'd5 : t_c_dst4   <= i_tbl_data[7:0];
-                4'd6 : t_hline_p  <= i_tbl_data[15:0];
+                4'd6 : begin
+                    t_hline_p  <= i_tbl_data[15:0];
+                    t_hline_p1 <= {1'b0, i_tbl_data[15:0]} + 17'd1;
+                    t_hline_m1 <= {1'b0, i_tbl_data[15:0]} - 17'd1;
+                end
                 4'd7 : t_steal    <= i_tbl_data[11:0];
                 4'd8 : t_steal_en <= i_tbl_data[0];
                 4'd9 : t_window   <= i_tbl_data[15:0];
@@ -840,11 +849,34 @@ module blit_gov (
     wire [47:0] steal2 = {35'd0, t_steal, 1'b0};             // VCLK -> half-VCLK
     wire [47:0] cost2  = {20'd0, h_cost, 1'b0};
 
+    // r5: the timeline decisions as MAINTAINED DIFFERENCE registers -- the
+    // live 48-bit compares (now >= engine_free / next_bnd <= now /
+    // next_bnd < engine_free) were the fit-#1 worst c153 family (the
+    // compare fans into the engine_free load selects AND, through the
+    // steal decision, all the way to the batch o_af next-value).  Each
+    // difference updates with ONE register-fed add per reachable arm
+    // (every operand move is a known increment), and the sign bit IS the
+    // decision -- pop instants, engine_free values and every report value
+    // are identical.  The always-on oracle below re-proves register ==
+    // formula each cycle over every rig (incl. the i_warp replay arms).
+    // Horizon note: the maintained differences stay exact where the raw
+    // 48-bit compares would first break (the ~42-day free-run wrap).
+    reg signed [48:0] tdiff;   // now - engine_free   (>=0  <=> pop-ready)
+    reg signed [48:0] tnbd;    // next_bnd - now - 1  (<0   <=> next_bnd <= now)
+    reg signed [48:0] tnbe;    // next_bnd - engine_free  (<0 <=> steal loop on)
+    wire [48:0] p3 = i_CKIO_PCEN ? 49'd3 : 49'd0;
+    wire [48:0] th = {33'd0, t_hline_p};
+    wire [48:0] thp1 = {32'd0, t_hline_p1};   // th + 1, table-registered
+    wire [48:0] thm1 = {32'd0, t_hline_m1};   // th - 1, table-registered
+
     always_ff @(posedge i_CLK or negedge i_RST_n) begin
         if (!i_RST_n) begin
             now           <= 48'd0;
             engine_free   <= 48'd0;
             next_bnd      <= 48'd0;
+            tdiff         <= 49'sd0;
+            tnbd          <= -49'sd1;
+            tnbe          <= 49'sd0;
             r_t0          <= 48'd0;
             win_r         <= 21'd0;
             stealing      <= 1'b0;
@@ -874,29 +906,50 @@ module blit_gov (
             if (i_CKIO_PCEN)
                 now <= now + 48'd3;
 
+            // r5 difference-bank base arms (overridden below exactly where
+            // their operands take a non-increment assignment)
+            tdiff <= tdiff + $signed(p3);
+            tnbd  <= tnbd - $signed(p3);
+
             // boundary tracker, busy or idle.  While `stealing`, one hline
             // boundary per cycle (C++ add_steals loop, pre-accounting the
             // popped draw's steals); otherwise keep next_bnd = first
             // boundary after `now`, snapping to the real scanline whenever
             // i_hline pulses (exact + idempotent: both sides count the
             // same CKIO grid).  Boundaries pre-accounted ahead of `now`
-            // ignore the pulse.
+            // ignore the pulse.  (r5: compares = difference sign bits)
             if (stealing) begin
-                if (next_bnd < engine_free) begin
+                if (tnbe[48]) begin              // next_bnd < engine_free
                     engine_free <= engine_free + steal2;
                     next_bnd    <= next_bnd + {32'd0, t_hline_p};
+                    tdiff       <= tdiff + $signed(p3) - $signed({1'b0, steal2});
+                    tnbd        <= tnbd + $signed(th) - $signed(p3);
+                    tnbe        <= tnbe + $signed(th) - $signed({1'b0, steal2});
                 end
                 else
                     stealing <= 1'b0;
             end
-            else if (next_bnd <= now)
+            else if (tnbd[48]) begin             // next_bnd <= now
                 next_bnd <= i_hline ? (now + {32'd0, t_hline_p})
                                     : (next_bnd + {32'd0, t_hline_p});
+                tnbd <= i_hline ? ($signed(thm1) - $signed(p3))
+                                : (tnbd + $signed(th) - $signed(p3));
+                // tnbe: nb moves; ef may ALSO move this edge only via the
+                // exec-take arm below (pop is excluded: it needs
+                // next_bnd > now) -- that arm overrides tnbe again.
+                tnbe <= tnbe + $signed(th);
+            end
 
             if (i_exec) begin
                 if (!o_busy) begin
                     o_busy      <= 1'b1;
                     engine_free <= now;
+                    tdiff       <= $signed(p3);          // now' - now
+                    // nb unchanged unless the snap arm above also fired
+                    tnbe        <= (!stealing && tnbd[48])
+                                   ? (i_hline ? $signed(th)          // (now+th)-now
+                                              : (tnbd + $signed(thp1)))
+                                   : (tnbd + 49'sd1);    // nb - now
                     r_t0        <= now;
                     win_r       <= 21'd0;
                     r_first_v   <= 1'b0;
@@ -907,9 +960,9 @@ module blit_gov (
                 else $display("[blit_gov] WARNING: EXEC while governor busy");
 `endif
             end
-            else if (o_busy && !stealing && next_bnd > now
+            else if (o_busy && !stealing && !tnbd[48]   // next_bnd > now
                      && q_avail && !q_pop) begin
-                if (now >= engine_free) begin
+                if (!tdiff[48]) begin            // now >= engine_free
                     // op_start = now (= max(engine_free, arrival))
                     q_pop <= 1'b1;
                     if (!r_first_v) begin
@@ -919,9 +972,13 @@ module blit_gov (
                     case (h_kind)
                         2'd0: begin              // zero-cost op
                             engine_free <= now;
+                            tdiff       <= $signed(p3);
+                            tnbe        <= tnbd + 49'sd1;
                         end
                         2'd1: begin              // draw
                             engine_free <= now + cost2;
+                            tdiff       <= $signed(p3) - $signed({1'b0, cost2});
+                            tnbe        <= tnbd + 49'sd1 - $signed({1'b0, cost2});
                             win_r       <= win_r + {19'd0, h_nslot};
                             stealing    <= t_steal_en;
                             r_ndraw     <= r_ndraw + 32'd1;
@@ -941,11 +998,29 @@ module blit_gov (
                         end
                     endcase
                 end
-                else if (i_warp)
-                    now <= engine_free;          // TB fast-forward
+                else if (i_warp) begin
+                    now   <= engine_free;        // TB fast-forward
+                    tdiff <= 49'sd0;
+                    tnbd  <= tnbe - 49'sd1;      // nb - ef - 1
+                end
             end
         end
     end
+
+`ifndef SYNTHESIS
+    // r5 oracle: the difference bank must equal the retired live formulas
+    // every cycle -- any unmirrored arm dies here, not at a wrong pop.
+    always @(posedge i_CLK) begin
+        if (i_RST_n) begin
+            if (tdiff !== $signed({1'b0, now}) - $signed({1'b0, engine_free}))
+                $fatal(2, "[blit_gov] r5 tdiff diverged t=%0t", $time);
+            if (tnbd !== $signed({1'b0, next_bnd}) - $signed({1'b0, now}) - 49'sd1)
+                $fatal(2, "[blit_gov] r5 tnbd diverged t=%0t", $time);
+            if (tnbe !== $signed({1'b0, next_bnd}) - $signed({1'b0, engine_free}))
+                $fatal(2, "[blit_gov] r5 tnbe diverged t=%0t", $time);
+        end
+    end
+`endif
 
 endmodule
 `default_nettype none

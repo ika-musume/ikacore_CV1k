@@ -144,9 +144,14 @@ module CV1k_ddr3_harness #(
     // launch (HPS-corner placement + clock-network skew) stops reaching
     // their capture registers directly.  Those clients' fills shift +1
     // i_CLK with train-level slack; the oq bookkeeping stays on the RAW
-    // pair.  The NAND client also stays RAW: its fill completion drives
-    // R/B#, which the CPU polls on the CKIO grid -- a +1 there would
-    // perturb the frozen FASTBOOT datum.
+    // pair.  r5: the NAND client joins the relay -- its raw f2sdram ->
+    // mode-FSM decode was the fit-#2 -2.58 family.  The +1 shifts every
+    // page-fill word and the fill completion (hence the R/B# rise) by one
+    // i_CLK; the CPU polls R/B# through the CPLD on the CKIO grid (3 x
+    // slower), and the shift is proven absorbed by the datum gauntlet
+    // (FASTBOOT byte-identical + NAND stream byte-identical in the
+    // matrix).  If a future workload ever lands an R/B# rise exactly on
+    // a poll boundary, this is the register to revisit.
     reg         rq_vld;
     reg  [63:0] rq_data;
     reg  [2:0]  rq_own;
@@ -168,8 +173,8 @@ module CV1k_ddr3_harness #(
     assign o_lf_data  = rq_data;
     assign o_prd_dvld = rq_vld && (rq_own == OWN_BAT);
     assign o_prd_data = rq_data;
-    assign o_nd_dvld  = DDRAM_DOUT_READY && oq_head_v && (ret_own == OWN_ND);
-    assign o_nd_data  = DDRAM_DOUT;
+    assign o_nd_dvld  = rq_vld && (rq_own == OWN_ND);
+    assign o_nd_data  = rq_data;
     assign o_ym_dvld  = rq_vld && (rq_own == OWN_YMZ);
     assign o_ym_data  = rq_data;
 
@@ -215,16 +220,31 @@ module CV1k_ddr3_harness #(
     assign o_nd_rdy  = (own == OWN_ND)  && !np_v;
     assign o_ym_rdy  = (own == OWN_YMZ) && !yp_v;
 
+    // r7: one-word posted-write skid.  The old ready ANDed (!DDRAM_WE ||
+    // !DDRAM_BUSY) into the client's pop/emit cone -- DDRAM_BUSY is the
+    // f2sdram waitrequest, so an HPS-corner launch sat inside the batch's
+    // bb_wfifo o_af next-value (the r6 ship -2.54 family).  With the skid
+    // the ready reads LOCAL registers only; the word that would have
+    // stalled on BUSY parks here, and the face sees the SAME words at the
+    // SAME BUSY-gated instants (the steer below loads the WE stage
+    // directly whenever it is free-or-freeing, so sustained full-rate
+    // flow is untouched; only the client-visible stall onset/release
+    // shifts by one word around BUSY episodes -- flow-control elasticity,
+    // datum-gated).
+    reg         bw_v;
+    reg  [28:0] bw_addr;
+    reg  [63:0] bw_data;
+    reg  [7:0]  bw_be;
+
     // batch writes pass through whenever the batch owns the port and the
-    // face can take a word at this edge (a held WE word leaves exactly when
-    // !BUSY, so a new one may load the same edge -> full-rate posted words)
-    assign o_pwr_rdy = (own == OWN_BAT) && !DDRAM_RD && !bp_v
-                       && (!DDRAM_WE || !DDRAM_BUSY);
+    // skid slot is free (a held WE word leaves exactly when !BUSY; the
+    // steer keeps same-edge reload, so posted words still flow full-rate)
+    assign o_pwr_rdy = (own == OWN_BAT) && !DDRAM_RD && !bp_v && !bw_v;
 
     // batch activity (train framing + live handshakes): OWN_BAT persists
     // while any of it is up or read returns are outstanding for it
     wire bat_busy = i_rd_train || i_wr_train || i_prd_req || i_pwr_req
-                    || bp_v || DDRAM_WE;
+                    || bp_v || bw_v || DDRAM_WE;
 
     reg [1:0] vid_seg;                 // 0 idle / 1 first burst / 2 second
 
@@ -236,6 +256,7 @@ module CV1k_ddr3_harness #(
             oq_left <= '0; oq_head_v <= 1'b0;
             vid_pend <= 1'b0; vid_y <= '0; vid_x0 <= '0;
             bp_v <= 1'b0; bp_addr <= '0; bp_left <= '0;
+            bw_v <= 1'b0; bw_addr <= '0; bw_data <= '0; bw_be <= '0;
             np_v <= 1'b0; np_addr <= '0; np_left <= '0;
             yp_v <= 1'b0; yp_addr <= '0; yp_left <= '0;
             vid_seg <= 2'd0;
@@ -341,7 +362,7 @@ module CV1k_ddr3_harness #(
                     bp_addr <= VRAM_BASE_W + {6'd0, i_prd_addr};
                     bp_left <= i_prd_len;
                 end
-                if (bp_v && !DDRAM_RD && !DDRAM_WE && oq_room_q) begin
+                if (bp_v && !DDRAM_RD && !DDRAM_WE && !bw_v && oq_room_q) begin
                     DDRAM_RD       <= 1'b1;
                     DDRAM_ADDR     <= bp_addr;
                     DDRAM_BURSTCNT <= bp_burst;
@@ -351,14 +372,37 @@ module CV1k_ddr3_harness #(
                     bp_left <= bp_left - {3'd0, bp_burst};
                     if (bp_left <= BL_MAX) bp_v <= 1'b0;
                 end
-                // posted write words (BURSTCNT=1)
-                if (i_pwr_req && o_pwr_rdy) begin
+                // r7 skid drain: the freed face takes the parked word (a
+                // held WE word leaves exactly when !BUSY; this reload wins
+                // over the face clear above, so WE never gaps under it)
+                if (bw_v && (!DDRAM_WE || !DDRAM_BUSY)) begin
                     DDRAM_WE       <= 1'b1;
-                    DDRAM_ADDR     <= VRAM_BASE_W + {6'd0, i_pwr_addr};
+                    DDRAM_ADDR     <= bw_addr;
                     DDRAM_BURSTCNT <= 8'd1;
-                    DDRAM_DIN      <= i_pwr_data;
-                    DDRAM_BE       <= {{2{i_pwr_be[3]}}, {2{i_pwr_be[2]}},
-                                       {2{i_pwr_be[1]}}, {2{i_pwr_be[0]}}};
+                    DDRAM_DIN      <= bw_data;
+                    DDRAM_BE       <= bw_be;
+                    bw_v           <= 1'b0;
+                end
+                // posted write words (BURSTCNT=1): the accept steers to the
+                // face when it can take a word this edge, else parks in the
+                // skid.  rdy carries !bw_v, so a drain and an accept never
+                // share an edge and client order is preserved.
+                if (i_pwr_req && o_pwr_rdy) begin
+                    if (!DDRAM_WE || !DDRAM_BUSY) begin
+                        DDRAM_WE       <= 1'b1;
+                        DDRAM_ADDR     <= VRAM_BASE_W + {6'd0, i_pwr_addr};
+                        DDRAM_BURSTCNT <= 8'd1;
+                        DDRAM_DIN      <= i_pwr_data;
+                        DDRAM_BE       <= {{2{i_pwr_be[3]}}, {2{i_pwr_be[2]}},
+                                           {2{i_pwr_be[1]}}, {2{i_pwr_be[0]}}};
+                    end
+                    else begin
+                        bw_v    <= 1'b1;
+                        bw_addr <= VRAM_BASE_W + {6'd0, i_pwr_addr};
+                        bw_data <= i_pwr_data;
+                        bw_be   <= {{2{i_pwr_be[3]}}, {2{i_pwr_be[2]}},
+                                    {2{i_pwr_be[1]}}, {2{i_pwr_be[0]}}};
+                    end
                 end
                 // release between trains (never mid-train)
                 if (!bat_busy && !DDRAM_RD && !DDRAM_WE)
@@ -409,6 +453,18 @@ module CV1k_ddr3_harness #(
             endcase
         end
     end
+
+`ifndef SYNTHESIS
+    // r7 skid invariants: a parked word implies a held WE face (fills only
+    // under WE&&BUSY, drains the moment the face frees), and ownership can
+    // never leave the batch with a word parked
+    always @(posedge i_CLK) begin
+        if (i_RST_n && bw_v && !DDRAM_WE)
+            $fatal(2, "[ddr3_harness] r7 skid parked with a free face t=%0t", $time);
+        if (i_RST_n && bw_v && own != OWN_BAT)
+            $fatal(2, "[ddr3_harness] r7 skid parked without OWN_BAT t=%0t", $time);
+    end
+`endif
 
 endmodule
 `default_nettype none

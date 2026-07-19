@@ -1,0 +1,1219 @@
+Info: *******************************************************************
+Info: Running Quartus Prime TimeQuest Timing Analyzer
+    Info: Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+    Info: Copyright (C) 2017  Intel Corporation. All rights reserved.
+    Info: Your use of Intel Corporation's design tools, logic functions 
+    Info: and other software and tools, and its AMPP partner logic 
+    Info: functions, and any output files from any of the foregoing 
+    Info: (including device programming or simulation files), and any 
+    Info: associated documentation or information are expressly subject 
+    Info: to the terms and conditions of the Intel Program License 
+    Info: Subscription Agreement, the Intel Quartus Prime License Agreement,
+    Info: the Intel MegaCore Function License Agreement, or other 
+    Info: applicable license agreement, including, without limitation, 
+    Info: that your use is for the sole purpose of programming logic 
+    Info: devices manufactured by Intel and sold by Intel or its 
+    Info: authorized distributors.  Please refer to the applicable 
+    Info: agreement for further details.
+    Info: Processing started: Sun Jul 19 05:23:01 2026
+Info: Command: quartus_sta -t sta_cones.tcl
+Info (20030): Parallel compilation is enabled and will use 16 of the 48 processors detected
+Info (21077): Core supply voltage is 1.1V
+Info (334003): Started post-fitting delay annotation
+Info (334004): Delay annotation completed successfully
+Info (332164): Evaluating HDL-embedded SDC commands
+    Info (332165): Entity altera_std_synchronizer
+        Info (332166): set_false_path -to [get_keepers {*altera_std_synchronizer:*|din_s1}]
+Info (332104): Reading SDC File: 'sys/sys_top.sdc'
+Info (332110): Deriving PLL clocks
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]} -divide_by 8 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin} -divide_by 512 -multiply_by 12595 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|vco0ph[0]} -divide_by 12 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk}
+    Info (332110): create_generated_clock -source {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|vco0ph[0]} -divide_by 12 -phase 56.26 -duty_cycle 50.00 -name {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|divclk} {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter|divclk}
+    Info (332110): create_generated_clock -source {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|vco0ph[0]} -divide_by 3 -duty_cycle 50.00 -name {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk} {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}
+    Info (332110): create_generated_clock -source {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|refclkin} -divide_by 512 -multiply_by 4563 -duty_cycle 50.00 -name {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]} {pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll|vcoph[0]}
+    Info (332110): create_generated_clock -source {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|refclkin} -divide_by 512 -multiply_by 4279 -duty_cycle 50.00 -name {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|vcoph[0]} {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL|vcoph[0]}
+    Info (332110): create_generated_clock -source {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|vco0ph[0]} -divide_by 17 -duty_cycle 50.00 -name {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk} {pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk}
+Info (332151): Clock uncertainty is not calculated until you update the timing netlist.
+Warning (332174): Ignored filter at sys_top.sdc(60): arc* could not be matched with a clock or keeper File: /host/sys/sys_top.sdc Line: 60
+Warning (332174): Ignored filter at sys_top.sdc(61): arx* could not be matched with a clock or keeper or register or port or pin or cell or partition File: /host/sys/sys_top.sdc Line: 61
+Warning (332174): Ignored filter at sys_top.sdc(61): ary* could not be matched with a clock or keeper or register or port or pin or cell or partition File: /host/sys/sys_top.sdc Line: 61
+Warning (332049): Ignored set_false_path at sys_top.sdc(61): Argument <from> is not an object ID File: /host/sys/sys_top.sdc Line: 61
+    Info (332050): set_false_path -from {arx* ary*} File: /host/sys/sys_top.sdc Line: 61
+Info (332104): Reading SDC File: 'ikacore_CV1k.sdc'
+Info (332151): Clock uncertainty is not calculated until you update the timing netlist.
+Warning (332174): Ignored filter at ikacore_CV1k.sdc(55): *u_gpr_bram*DATA_IN* could not be matched with a register File: /host/ikacore_CV1k.sdc Line: 55
+Warning (332174): Ignored filter at ikacore_CV1k.sdc(193): emu|core|u_u2_nand|cur_word_q[*] could not be matched with a register File: /host/ikacore_CV1k.sdc Line: 193
+Info (332097): The following timing edges are non-unate.  TimeQuest will assume pos-unate behavior for these edges in the clock network.
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[2].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: emu|pll|pll_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll  from: refclkin  to: fbclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~FRACTIONAL_PLL  from: refclkin  to: fbclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: pll_audio|pll_audio_inst|altera_pll_i|general[0].gpll~PLL_REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter  from: vco0ph[0]  to: divclk
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|REFCLK_SELECT  from: clkin[0]  to: clkout
+    Info (332098): Cell: pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|fpll_0|fpll  from: refclkin  to: fbclk
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_762
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_827
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|cmd_port_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_920
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_7
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_6
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_5
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|rd_clk_3  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_4
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_0  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_3
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_1  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_2
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_2  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_1
+    Info (332098): From: sysmem|fpga_interfaces|f2sdram|wr_clk_3  to: sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_0
+Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
+########## c153-to gov ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -1.992
+    Info (332115): -to [get_registers {emu|core|u_blit|u_blit_gov|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -1.992 (VIOLATED)
+    Info (332115):    Slack        : -1.992 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|tdiff[48]_OTERM2641
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|tnbe[40]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.070
+    Info (332115):    Data Delay   : 8.096
+Info (332115): Path #2: Setup slack is -1.913 (VIOLATED)
+    Info (332115):    Slack        : -1.913 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|gc_maxy[10]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|y_chh[0]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.130
+    Info (332115):    Data Delay   : 7.957
+Info (332115): Path #3: Setup slack is -1.909 (VIOLATED)
+    Info (332115):    Slack        : -1.909 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|tdiff[48]_OTERM2641
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|tnbe[6]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.399
+    Info (332115):    Data Delay   : 7.684
+########## c153-to draw ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -2.416
+    Info (332115): -to [get_registers {emu|core|u_blit|u_blit_draw|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.416 (VIOLATED)
+    Info (332115):    Slack        : -2.416 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|altsyncram_vfc1:altsyncram4|ram_block7a0
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|b3i_sb[1][1]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.261
+    Info (332115):    Data Delay   : 8.329
+Info (332115): Path #2: Setup slack is -2.410 (VIOLATED)
+    Info (332115):    Slack        : -2.410 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|altsyncram_vfc1:altsyncram4|ram_block7a0
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|b3i_sb[1][0]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.263
+    Info (332115):    Data Delay   : 8.321
+Info (332115): Path #3: Setup slack is -2.375 (VIOLATED)
+    Info (332115):    Slack        : -2.375 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|altsyncram_vfc1:altsyncram4|ram_block7a0
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|b3i_sb[1][1]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.261
+    Info (332115):    Data Delay   : 8.288
+########## c153-to fetch153 ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -2.369
+    Info (332115): -to [get_registers {emu|core|u_blit|u_blit_fetch|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.369 (VIOLATED)
+    Info (332115):    Slack        : -2.369 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[0]_OTERM3383
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_is1
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.443
+    Info (332115):    Data Delay   : 8.100
+Info (332115): Path #2: Setup slack is -2.281 (VIOLATED)
+    Info (332115):    Slack        : -2.281 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[0]_OTERM3383
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_is1
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.443
+    Info (332115):    Data Delay   : 8.012
+Info (332115): Path #3: Setup slack is -2.243 (VIOLATED)
+    Info (332115):    Slack        : -2.243 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[0]_OTERM3383
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_is1
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.443
+    Info (332115):    Data Delay   : 7.974
+########## c153-to video ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -1.997
+    Info (332115): -to [get_registers {emu|core|u_blit|u_blit_video|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -1.997 (VIOLATED)
+    Info (332115):    Slack        : -1.997 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_video:u_blit_video|hcnt[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_video:u_blit_video|y_v[10]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.497
+    Info (332115):    Data Delay   : 7.674
+Info (332115): Path #2: Setup slack is -1.924 (VIOLATED)
+    Info (332115):    Slack        : -1.924 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_video:u_blit_video|hcnt[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_video:u_blit_video|y_v[10]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.497
+    Info (332115):    Data Delay   : 7.601
+Info (332115): Path #3: Setup slack is -1.892 (VIOLATED)
+    Info (332115):    Slack        : -1.892 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_video:u_blit_video|hcnt[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_video:u_blit_video|y_v[8]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.497
+    Info (332115):    Data Delay   : 7.569
+########## c153-to batch ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -2.598
+    Info (332115): -to [get_registers {emu|core|u_batch|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.598 (VIOLATED)
+    Info (332115):    Slack        : -2.598 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pfp_dnw[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|hd_diff0[3]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.113
+    Info (332115):    Data Delay   : 8.659
+Info (332115): Path #2: Setup slack is -2.531 (VIOLATED)
+    Info (332115):    Slack        : -2.531 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pfp_snw[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|hd_diff0[3]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.100
+    Info (332115):    Data Delay   : 8.605
+Info (332115): Path #3: Setup slack is -2.408 (VIOLATED)
+    Info (332115):    Slack        : -2.408 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pfp_dnw[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|hd_diff0[11]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.133
+    Info (332115):    Data Delay   : 8.449
+########## c153-to harness ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -0.566
+    Info (332115): -to [get_registers {emu|core|u_harness|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -0.566 (VIOLATED)
+    Info (332115):    Slack        : -0.566 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ddr3_harness:u_harness|vid_x0[6]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_ddr3_harness:u_harness|altsyncram:oq_rtl_1|altsyncram_vho1:auto_generated|ram_block1a0~porta_datain_reg4
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.086
+    Info (332115):    Data Delay   : 6.654
+Info (332115): Path #2: Setup slack is -0.563 (VIOLATED)
+    Info (332115):    Slack        : -0.563 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ddr3_harness:u_harness|bp_left[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_ddr3_harness:u_harness|altsyncram:oq_rtl_1|altsyncram_vho1:auto_generated|ram_block1a0~porta_datain_reg4
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.080
+    Info (332115):    Data Delay   : 6.657
+Info (332115): Path #3: Setup slack is -0.559 (VIOLATED)
+    Info (332115):    Slack        : -0.559 (VIOLATED)
+    Info (332115):    From Node    : sysmem_lite:sysmem|sysmem_HPS_fpga_interfaces:fpga_interfaces|f2sdram~FF_3780
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_ddr3_harness:u_harness|DDRAM_BURSTCNT[6]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.139
+    Info (332115):    Data Delay   : 5.594
+########## c153-to nand ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -1.675
+    Info (332115): -to [get_registers {emu|core|u_u2_nand|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -1.675 (VIOLATED)
+    Info (332115):    Slack        : -1.675 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ddr3_harness:u_harness|altsyncram:oq_rtl_0|altsyncram_o2n1:auto_generated|ram_block1a8~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|altsyncram:page_buf_rtl_0|altsyncram_q3q1:auto_generated|ram_block1a0~porta_we_reg
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.671
+    Info (332115):    Data Delay   : 6.178
+Info (332115): Path #2: Setup slack is -1.614 (VIOLATED)
+    Info (332115):    Slack        : -1.614 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ddr3_harness:u_harness|altsyncram:oq_rtl_0|altsyncram_o2n1:auto_generated|ram_block1a8~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|altsyncram:page_buf_rtl_0|altsyncram_q3q1:auto_generated|ram_block1a0~porta_we_reg
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.671
+    Info (332115):    Data Delay   : 6.117
+Info (332115): Path #3: Setup slack is -1.433 (VIOLATED)
+    Info (332115):    Slack        : -1.433 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ddr3_harness:u_harness|altsyncram:oq_rtl_0|altsyncram_o2n1:auto_generated|ram_block1a8~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|altsyncram:page_buf_rtl_0|altsyncram_q3q1:auto_generated|ram_block1a7~porta_we_reg
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.688
+    Info (332115):    Data Delay   : 5.919
+########## c153-to ioctl ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -0.660
+    Info (332115): -to [get_registers {emu|core|u_ioctl|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -0.660 (VIOLATED)
+    Info (332115):    Slack        : -0.660 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|ioctl_download~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_ioctl:u_ioctl|pk_req_t
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.095
+    Info (332115):    Data Delay   : 10.121
+Info (332115): Path #2: Setup slack is -0.657 (VIOLATED)
+    Info (332115):    Slack        : -0.657 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|ioctl_download~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_ioctl:u_ioctl|pk_req_t~DUPLICATE
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.090
+    Info (332115):    Data Delay   : 10.123
+Info (332115): Path #3: Setup slack is -0.011 (VIOLATED)
+    Info (332115):    Slack        : -0.011 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|ioctl_index[13]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_ioctl:u_ioctl|pk_req_t
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.470
+    Info (332115):    Data Delay   : 9.097
+########## c153-from govF ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -1.992
+    Info (332115): -from [get_registers {emu|core|u_blit|u_blit_gov|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -1.992 (VIOLATED)
+    Info (332115):    Slack        : -1.992 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|tdiff[48]_OTERM2641
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|tnbe[40]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.070
+    Info (332115):    Data Delay   : 8.096
+Info (332115): Path #2: Setup slack is -1.913 (VIOLATED)
+    Info (332115):    Slack        : -1.913 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|gc_maxy[10]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|y_chh[0]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.130
+    Info (332115):    Data Delay   : 7.957
+Info (332115): Path #3: Setup slack is -1.909 (VIOLATED)
+    Info (332115):    Slack        : -1.909 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|tdiff[48]_OTERM2641
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|tnbe[6]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.399
+    Info (332115):    Data Delay   : 7.684
+########## c153-from drawF ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -2.416
+    Info (332115): -from [get_registers {emu|core|u_blit|u_blit_draw|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.416 (VIOLATED)
+    Info (332115):    Slack        : -2.416 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|altsyncram_vfc1:altsyncram4|ram_block7a0
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|b3i_sb[1][1]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.261
+    Info (332115):    Data Delay   : 8.329
+Info (332115): Path #2: Setup slack is -2.410 (VIOLATED)
+    Info (332115):    Slack        : -2.410 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|altsyncram_vfc1:altsyncram4|ram_block7a0
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|b3i_sb[1][0]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.263
+    Info (332115):    Data Delay   : 8.321
+Info (332115): Path #3: Setup slack is -2.375 (VIOLATED)
+    Info (332115):    Slack        : -2.375 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|altsyncram_vfc1:altsyncram4|ram_block7a0
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|b3i_sb[1][1]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.261
+    Info (332115):    Data Delay   : 8.288
+########## c153-from fetchF ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -2.369
+    Info (332115): -from [get_registers {emu|core|u_blit|u_blit_fetch|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.369 (VIOLATED)
+    Info (332115):    Slack        : -2.369 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[0]_OTERM3383
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_is1
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.443
+    Info (332115):    Data Delay   : 8.100
+Info (332115): Path #2: Setup slack is -2.281 (VIOLATED)
+    Info (332115):    Slack        : -2.281 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[0]_OTERM3383
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_is1
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.443
+    Info (332115):    Data Delay   : 8.012
+Info (332115): Path #3: Setup slack is -2.243 (VIOLATED)
+    Info (332115):    Slack        : -2.243 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_need[0]_OTERM3383
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_fetch:u_blit_fetch|w_is1
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.443
+    Info (332115):    Data Delay   : 7.974
+########## c153-from batchF ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -2.598
+    Info (332115): -from [get_registers {emu|core|u_batch|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.598 (VIOLATED)
+    Info (332115):    Slack        : -2.598 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pfp_dnw[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|hd_diff0[3]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.113
+    Info (332115):    Data Delay   : 8.659
+Info (332115): Path #2: Setup slack is -2.531 (VIOLATED)
+    Info (332115):    Slack        : -2.531 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pfp_snw[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|hd_diff0[3]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.100
+    Info (332115):    Data Delay   : 8.605
+Info (332115): Path #3: Setup slack is -2.408 (VIOLATED)
+    Info (332115):    Slack        : -2.408 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|pfp_dnw[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_batch:u_batch|hd_diff0[11]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -0.133
+    Info (332115):    Data Delay   : 8.449
+########## c153-from harnessF ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -1.675
+    Info (332115): -from [get_registers {emu|core|u_harness|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -1.675 (VIOLATED)
+    Info (332115):    Slack        : -1.675 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ddr3_harness:u_harness|altsyncram:oq_rtl_0|altsyncram_o2n1:auto_generated|ram_block1a8~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|altsyncram:page_buf_rtl_0|altsyncram_q3q1:auto_generated|ram_block1a0~porta_we_reg
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.671
+    Info (332115):    Data Delay   : 6.178
+Info (332115): Path #2: Setup slack is -1.614 (VIOLATED)
+    Info (332115):    Slack        : -1.614 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ddr3_harness:u_harness|altsyncram:oq_rtl_0|altsyncram_o2n1:auto_generated|ram_block1a8~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|altsyncram:page_buf_rtl_0|altsyncram_q3q1:auto_generated|ram_block1a0~porta_we_reg
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.671
+    Info (332115):    Data Delay   : 6.117
+Info (332115): Path #3: Setup slack is -1.433 (VIOLATED)
+    Info (332115):    Slack        : -1.433 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ddr3_harness:u_harness|altsyncram:oq_rtl_0|altsyncram_o2n1:auto_generated|ram_block1a8~PORT_B_WRITE_ENABLE_REG
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|altsyncram:page_buf_rtl_0|altsyncram_q3q1:auto_generated|ram_block1a7~porta_we_reg
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.504
+    Info (332115):    Clock Skew   : -1.688
+    Info (332115):    Data Delay   : 5.919
+########## c102-to cache ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -3.477
+    Info (332115): -to [get_registers {emu|core|u_hs3|u_cpu|u_cache|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -3.477 (VIOLATED)
+    Info (332115):    Slack        : -3.477 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|int_pipe:u_int_pipe|fwd_lane_a_agu[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|rsp_inst[2]_OTERM1985_OTERM4181
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.480
+    Info (332115):    Data Delay   : 12.553
+Info (332115): Path #2: Setup slack is -3.419 (VIOLATED)
+    Info (332115):    Slack        : -3.419 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|int_pipe:u_int_pipe|ma_seq:u_ma_seq|second_access_agu~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|rsp_inst[2]_OTERM1985_OTERM4181
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.483
+    Info (332115):    Data Delay   : 12.492
+Info (332115): Path #3: Setup slack is -3.413 (VIOLATED)
+    Info (332115):    Slack        : -3.413 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|int_pipe:u_int_pipe|fwd_lane_a_agu[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|rsp_inst[2]_OTERM1985_OTERM4181
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.480
+    Info (332115):    Data Delay   : 12.489
+########## c102-to intpipe ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -3.639
+    Info (332115): -to [get_registers {emu|core|u_hs3|u_cpu|u_int_pipe|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -3.639 (VIOLATED)
+    Info (332115):    Slack        : -3.639 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|int_pipe:u_int_pipe|ifid.pd.b_sel[1]_OTERM1669
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|int_pipe:u_int_pipe|idex.src_a_value[30]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.518
+    Info (332115):    Data Delay   : 12.677
+Info (332115): Path #2: Setup slack is -3.552 (VIOLATED)
+    Info (332115):    Slack        : -3.552 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|int_pipe:u_int_pipe|ifid.pd.a_used_OTERM2743
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|int_pipe:u_int_pipe|idex.src_a_value[30]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.546
+    Info (332115):    Data Delay   : 12.562
+Info (332115): Path #3: Setup slack is -3.518 (VIOLATED)
+    Info (332115):    Slack        : -3.518 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|int_pipe:u_int_pipe|hz_a_id[3]_OTERM2463
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|int_pipe:u_int_pipe|idex.src_a_value[30]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.510
+    Info (332115):    Data Delay   : 12.564
+########## c102-to bsc ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -2.890
+    Info (332115): -to [get_registers {emu|core|u_hs3|u_bsc|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.890 (VIOLATED)
+    Info (332115):    Slack        : -2.890 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_FLUSH_OTERM195_OTERM4005_OTERM5102
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~41
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.535
+    Info (332115):    Data Delay   : 11.911
+Info (332115): Path #2: Setup slack is -2.874 (VIOLATED)
+    Info (332115):    Slack        : -2.874 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_FLUSH_OTERM195_OTERM4005_OTERM5102
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|obuf~105
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.533
+    Info (332115):    Data Delay   : 11.897
+Info (332115): Path #3: Setup slack is -2.785 (VIOLATED)
+    Info (332115):    Slack        : -2.785 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|state.S_DRAIN_REQ_OTERM2443
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|ord_addr[24]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.505
+    Info (332115):    Data Delay   : 11.836
+########## c102-to pump ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -2.894
+    Info (332115): -to [get_registers {emu|core|u_pump|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.894 (VIOLATED)
+    Info (332115):    Slack        : -2.894 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|dq_n[11]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|rd_lo[11]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk (INVERTED)
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 4.878
+    Info (332115):    Clock Skew   : -1.329
+    Info (332115):    Data Delay   : 6.243
+Info (332115): Path #2: Setup slack is -2.814 (VIOLATED)
+    Info (332115):    Slack        : -2.814 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|dq_n[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|rd_lo[8]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk (INVERTED)
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 4.878
+    Info (332115):    Clock Skew   : -1.330
+    Info (332115):    Data Delay   : 6.162
+Info (332115): Path #3: Setup slack is -2.517 (VIOLATED)
+    Info (332115):    Slack        : -2.517 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|dq_n[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|nor_data[8]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk (INVERTED)
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 4.878
+    Info (332115):    Clock Skew   : -1.321
+    Info (332115):    Data Delay   : 5.874
+########## c102-from bscF ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -2.418
+    Info (332115): -from [get_registers {emu|core|u_hs3|u_bsc|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.418 (VIOLATED)
+    Info (332115):    Slack        : -2.418 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|sd_a[5]~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|cache_data_bank_wt:g_way[1].u_data|di_q[27]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.478
+    Info (332115):    Data Delay   : 11.496
+Info (332115): Path #2: Setup slack is -2.350 (VIOLATED)
+    Info (332115):    Slack        : -2.350 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|sd_a[5]~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|cache_data_bank_wt:g_way[1].u_data|di_q[11]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.457
+    Info (332115):    Data Delay   : 11.449
+Info (332115): Path #3: Setup slack is -2.292 (VIOLATED)
+    Info (332115):    Slack        : -2.292 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|sd_a[5]~DUPLICATE
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|cache_data_bank_wt:g_way[0].u_data|di_q[11]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.462
+    Info (332115):    Data Delay   : 11.386
+########## c102-from pumpF ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -2.894
+    Info (332115): -from [get_registers {emu|core|u_pump|*}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.894 (VIOLATED)
+    Info (332115):    Slack        : -2.894 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|dq_n[11]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|rd_lo[11]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk (INVERTED)
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 4.878
+    Info (332115):    Clock Skew   : -1.329
+    Info (332115):    Data Delay   : 6.243
+Info (332115): Path #2: Setup slack is -2.814 (VIOLATED)
+    Info (332115):    Slack        : -2.814 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|dq_n[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|rd_lo[8]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk (INVERTED)
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 4.878
+    Info (332115):    Clock Skew   : -1.330
+    Info (332115):    Data Delay   : 6.162
+Info (332115): Path #3: Setup slack is -2.517 (VIOLATED)
+    Info (332115):    Slack        : -2.517 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|dq_n[8]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|nor_data[8]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk (INVERTED)
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 4.878
+    Info (332115):    Clock Skew   : -1.321
+    Info (332115):    Data Delay   : 5.874
+########## cross c153->c102 ##########
+Info (332115): Report Timing: Found 4 setup paths (4 violated).  Worst case slack is -2.102
+    Info (332115): -from_clock [get_clocks {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}]
+    Info (332115): -to_clock [get_clocks {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk}]
+    Info (332115): -setup
+    Info (332115): -npaths 4
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -2.102 (VIOLATED)
+    Info (332115):    Slack        : -2.102 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|mode.M_STREAM
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|dmac:u_dmac|addr_q[7]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -1.006
+    Info (332115):    Data Delay   : 7.026
+Info (332115): Path #2: Setup slack is -2.102 (VIOLATED)
+    Info (332115):    Slack        : -2.102 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|mode.M_STREAM
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|dmac:u_dmac|addr_q[10]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -1.006
+    Info (332115):    Data Delay   : 7.026
+Info (332115): Path #3: Setup slack is -2.093 (VIOLATED)
+    Info (332115):    Slack        : -2.093 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|mode.M_STREAM
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|dmac:u_dmac|addr_q[3]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -1.000
+    Info (332115):    Data Delay   : 7.023
+Info (332115): Path #4: Setup slack is -2.090 (VIOLATED)
+    Info (332115):    Slack        : -2.090 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|mode.M_STREAM
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|dmac:u_dmac|addr_q[21]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -1.004
+    Info (332115):    Data Delay   : 7.016
+########## cross c102->c153 ##########
+Info (332115): Report Timing: Found 4 setup paths (4 violated).  Worst case slack is -1.158
+    Info (332115): -from_clock [get_clocks {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk}]
+    Info (332115): -to_clock [get_clocks {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}]
+    Info (332115): -setup
+    Info (332115): -npaths 4
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -1.158 (VIOLATED)
+    Info (332115):    Slack        : -1.158 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|ord_wdata[17]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|rst_cnt[14]~DUPLICATE
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.782
+    Info (332115):    Data Delay   : 6.306
+Info (332115): Path #2: Setup slack is -1.158 (VIOLATED)
+    Info (332115):    Slack        : -1.158 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|ord_wdata[17]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|rst_cnt[8]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.782
+    Info (332115):    Data Delay   : 6.306
+Info (332115): Path #3: Setup slack is -1.158 (VIOLATED)
+    Info (332115):    Slack        : -1.158 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|ord_wdata[17]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|rst_cnt[15]~DUPLICATE
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.784
+    Info (332115):    Data Delay   : 6.304
+Info (332115): Path #4: Setup slack is -1.158 (VIOLATED)
+    Info (332115):    Slack        : -1.158 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|HS3:u_hs3|bsc:u_bsc|ord_wdata[17]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_nand:u_u2_nand|rst_cnt[7]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.784
+    Info (332115):    Data Delay   : 6.304
+########## SDRAM_CLK out ##########
+Info (332115): Report Timing: Found 6 setup paths (6 violated).  Worst case slack is -1.669
+    Info (332115): -to_clock [get_clocks {SDRAM_CLK}]
+    Info (332115): -setup
+    Info (332115): -npaths 6
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -1.669 (VIOLATED)
+    Info (332115):    Slack        : -1.669 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|o_S_DQ_OE~SynDup_13
+    Info (332115):    To Node      : SDRAM_DQ[13]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : SDRAM_CLK
+    Info (332115):    Relationship : 1.524
+    Info (332115):    Clock Skew   : 1.677
+    Info (332115):    Data Delay   : 3.060
+Info (332115): Path #2: Setup slack is -1.661 (VIOLATED)
+    Info (332115):    Slack        : -1.661 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|o_S_DQ_OE~SynDup_10
+    Info (332115):    To Node      : SDRAM_DQ[1]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : SDRAM_CLK
+    Info (332115):    Relationship : 1.524
+    Info (332115):    Clock Skew   : 1.683
+    Info (332115):    Data Delay   : 3.058
+Info (332115): Path #3: Setup slack is -1.620 (VIOLATED)
+    Info (332115):    Slack        : -1.620 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|o_S_DQ_OE~SynDup_9
+    Info (332115):    To Node      : SDRAM_DQ[2]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : SDRAM_CLK
+    Info (332115):    Relationship : 1.524
+    Info (332115):    Clock Skew   : 1.712
+    Info (332115):    Data Delay   : 3.046
+Info (332115): Path #4: Setup slack is -1.579 (VIOLATED)
+    Info (332115):    Slack        : -1.579 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|o_S_DQ_O[13]
+    Info (332115):    To Node      : SDRAM_DQ[13]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : SDRAM_CLK
+    Info (332115):    Relationship : 1.524
+    Info (332115):    Clock Skew   : 1.868
+    Info (332115):    Data Delay   : 3.161
+Info (332115): Path #5: Setup slack is -1.572 (VIOLATED)
+    Info (332115):    Slack        : -1.572 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|o_S_DQ_O[1]
+    Info (332115):    To Node      : SDRAM_DQ[1]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : SDRAM_CLK
+    Info (332115):    Relationship : 1.524
+    Info (332115):    Clock Skew   : 1.874
+    Info (332115):    Data Delay   : 3.160
+Info (332115): Path #6: Setup slack is -1.505 (VIOLATED)
+    Info (332115):    Slack        : -1.505 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|o_S_DQ_OE~SynDup_14
+    Info (332115):    To Node      : SDRAM_DQ[14]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : SDRAM_CLK
+    Info (332115):    Relationship : 1.524
+    Info (332115):    Clock Skew   : 1.866
+    Info (332115):    Data Delay   : 3.085
+########## SDRAM DQ in (dq_n bank) ##########
+Info (332115): Report Timing: Found 3 setup paths (3 violated).  Worst case slack is -0.089
+    Info (332115): -from [get_ports {SDRAM_DQ[*]}]
+    Info (332115): -setup
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Setup slack is -0.089 (VIOLATED)
+    Info (332115):    Slack        : -0.089 (VIOLATED)
+    Info (332115):    From Node    : SDRAM_DQ[9]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|dq_n[9]
+    Info (332115):    Launch Clock : SDRAM_CLK
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk (INVERTED)
+    Info (332115):    Relationship : 13.110
+    Info (332115):    Clock Skew   : -4.351
+    Info (332115):    Data Delay   : 2.538
+Info (332115): Path #2: Setup slack is -0.075 (VIOLATED)
+    Info (332115):    Slack        : -0.075 (VIOLATED)
+    Info (332115):    From Node    : SDRAM_DQ[4]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|dq_n[4]
+    Info (332115):    Launch Clock : SDRAM_CLK
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk (INVERTED)
+    Info (332115):    Relationship : 13.110
+    Info (332115):    Clock Skew   : -4.522
+    Info (332115):    Data Delay   : 2.353
+Info (332115): Path #3: Setup slack is -0.053 (VIOLATED)
+    Info (332115):    Slack        : -0.053 (VIOLATED)
+    Info (332115):    From Node    : SDRAM_DQ[6]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|CV1k_sdram_control:u_pump|dq_n[6]
+    Info (332115):    Launch Clock : SDRAM_CLK
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk (INVERTED)
+    Info (332115):    Relationship : 13.110
+    Info (332115):    Clock Skew   : -4.510
+    Info (332115):    Data Delay   : 2.343
+########## recovery c153 ##########
+Info (332115): Report Timing: Found 20 recovery paths (20 violated).  Worst case slack is -3.499
+    Info (332115): -to_clock [get_clocks {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk}]
+    Info (332115): -recovery
+    Info (332115): -npaths 20
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[0]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #2: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[1]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #3: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[2]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #4: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[3]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #5: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[4]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #6: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[5]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #7: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[6]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #8: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[7]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #9: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[8]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #10: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[9]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #11: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[10]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #12: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[11]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #13: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[12]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #14: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[13]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #15: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[14]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #16: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[15]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #17: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[16]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #18: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[17]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #19: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[18]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+Info (332115): Path #20: Recovery slack is -3.499 (VIOLATED)
+    Info (332115):    Slack        : -3.499 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|hps_io:hps_io|status[0]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_gov:u_blit_gov|m_psrc[19]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 6.200
+    Info (332115):    Clock Skew   : -0.450
+    Info (332115):    Data Delay   : 8.979
+########## recovery c102 ##########
+Info (332115): Report Timing: Found 6 recovery paths (6 violated).  Worst case slack is -1.680
+    Info (332115): -to_clock [get_clocks {emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk}]
+    Info (332115): -recovery
+    Info (332115): -npaths 6
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Recovery slack is -1.680 (VIOLATED)
+    Info (332115):    Slack        : -1.680 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ioctl:u_ioctl|pk_be_acc[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|rsp_inst[14]_OTERM1967_OTERM4165
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.545
+    Info (332115):    Data Delay   : 10.691
+Info (332115): Path #2: Recovery slack is -1.680 (VIOLATED)
+    Info (332115):    Slack        : -1.680 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ioctl:u_ioctl|pk_be_acc[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|cpu_core:u_cpu|cache:u_cache|rsp_inst[6]_OTERM1685_OTERM4125
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.545
+    Info (332115):    Data Delay   : 10.691
+Info (332115): Path #3: Recovery slack is -1.675 (VIOLATED)
+    Info (332115):    Slack        : -1.675 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ioctl:u_ioctl|pk_be_acc[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|dmac:u_dmac|buf_q[1][27]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.529
+    Info (332115):    Data Delay   : 10.702
+Info (332115): Path #4: Recovery slack is -1.675 (VIOLATED)
+    Info (332115):    Slack        : -1.675 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ioctl:u_ioctl|pk_be_acc[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|dmac:u_dmac|buf_q[1][20]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.529
+    Info (332115):    Data Delay   : 10.702
+Info (332115): Path #5: Recovery slack is -1.672 (VIOLATED)
+    Info (332115):    Slack        : -1.672 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ioctl:u_ioctl|pk_be_acc[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|dmac:u_dmac|buf_q[1][6]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.533
+    Info (332115):    Data Delay   : 10.695
+Info (332115): Path #6: Recovery slack is -1.672 (VIOLATED)
+    Info (332115):    Slack        : -1.672 (VIOLATED)
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|CV1k_ioctl:u_ioctl|pk_be_acc[1]
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|HS3:u_hs3|dmac:u_dmac|buf_q[1][31]
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[1].output_counter|divclk
+    Info (332115):    Relationship : 9.756
+    Info (332115):    Clock Skew   : -0.533
+    Info (332115):    Data Delay   : 10.695
+########## hold worst ##########
+Info (332115): Report Timing: Found 3 hold paths (0 violated).  Worst case slack is 0.184
+    Info (332115): -hold
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Hold slack is 0.184 
+    Info (332115):    Slack        : 0.184 
+    Info (332115):    From Node    : ascal:ascal|o_poly_phase_b.t3[5]
+    Info (332115):    To Node      : ascal:ascal|o_poly_phase_b2.t3[5]
+    Info (332115):    Launch Clock : pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 0.000
+    Info (332115):    Clock Skew   : 0.715
+    Info (332115):    Data Delay   : 0.899
+Info (332115): Path #2: Hold slack is 0.190 
+    Info (332115):    Slack        : 0.190 
+    Info (332115):    From Node    : ascal:ascal|o_poly_phase_b.t3[6]
+    Info (332115):    To Node      : ascal:ascal|o_poly_phase_b2.t3[6]
+    Info (332115):    Launch Clock : pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 0.000
+    Info (332115):    Clock Skew   : 0.718
+    Info (332115):    Data Delay   : 0.908
+Info (332115): Path #3: Hold slack is 0.199 
+    Info (332115):    Slack        : 0.199 
+    Info (332115):    From Node    : ascal:ascal|o_poly_phase_b.t2[1]
+    Info (332115):    To Node      : ascal:ascal|o_poly_phase_b2.t2[1]
+    Info (332115):    Launch Clock : pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : pll_hdmi|pll_hdmi_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 0.000
+    Info (332115):    Clock Skew   : 0.710
+    Info (332115):    Data Delay   : 0.909
+########## removal worst ##########
+Info (332115): Report Timing: Found 3 removal paths (0 violated).  Worst case slack is 0.566
+    Info (332115): -removal
+    Info (332115): -npaths 3
+    Info (332115): -detail summary
+    Info (332115): -stdout
+Info (332115): Path #1: Removal slack is 0.566 
+    Info (332115):    Slack        : 0.566 
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|dffe6
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|altsyncram_vfc1:altsyncram4|ram_block7a15
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 0.000
+    Info (332115):    Clock Skew   : 0.682
+    Info (332115):    Data Delay   : 1.248
+Info (332115): Path #2: Removal slack is 0.566 
+    Info (332115):    Slack        : 0.566 
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|dffe6
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|altsyncram_vfc1:altsyncram4|ram_block7a13
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 0.000
+    Info (332115):    Clock Skew   : 0.682
+    Info (332115):    Data Delay   : 1.248
+Info (332115): Path #3: Removal slack is 0.568 
+    Info (332115):    Slack        : 0.568 
+    Info (332115):    From Node    : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|dffe6
+    Info (332115):    To Node      : emu:emu|ikacore_CV1k:core|blit_top:u_blit|blit_draw:u_blit_draw|altshift_taps:b1_px1_rtl_0|shift_taps_juv:auto_generated|altsyncram_vfc1:altsyncram4|ram_block7a2
+    Info (332115):    Launch Clock : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Latch Clock  : emu|pll|pll_inst|altera_pll_i|cyclonev_pll|counter[0].output_counter|divclk
+    Info (332115):    Relationship : 0.000
+    Info (332115):    Clock Skew   : 0.680
+    Info (332115):    Data Delay   : 1.248
+Info (23030): Evaluation of Tcl script sta_cones.tcl was successful
+Info: Quartus Prime TimeQuest Timing Analyzer was successful. 0 errors, 6 warnings
+    Info: Peak virtual memory: 2476 megabytes
+    Info: Processing ended: Sun Jul 19 05:23:17 2026
+    Info: Elapsed time: 00:00:16
+    Info: Total CPU time (on all processors): 00:01:12

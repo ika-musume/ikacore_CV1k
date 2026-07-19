@@ -81,6 +81,8 @@ logic [7:0]  chroma_LUT_COS = 8'd0; // Chroma cos LUT reference
 logic [7:0]  chroma_LUT_SIN = 8'd0; // Chroma sin LUT reference
 logic [7:0]  chroma_LUT_BURST = 8'd0; // Chroma colorburst LUT reference
 logic [7:0]  chroma_LUT = 8'd0;
+// [ikacore r5] pre-registered LUT values (see the pipeline note below)
+logic signed [10:0] sin_lut_q = 11'd0, cos_lut_q = 11'd0, burst_lut_q = 11'd0;
 
 /*
 The following LUT table was calculated by Sin(2*pi*t/2^8) where t: 0 - 255
@@ -180,6 +182,18 @@ always_ff @(posedge clk) begin
 	chroma_LUT_SIN <= chroma_LUT;
 	chroma_LUT_COS <= chroma_LUT + 8'd64;
 
+	// [ikacore r5] Pre-registered LUT VALUES: each mirrors the index
+	// register above -- both load from the same expression on the same
+	// edge, so sin_lut_q == chroma_sin(chroma_LUT_SIN) on every cycle
+	// (values and instants identical).  The modulate multiplies below
+	// then run register x register instead of dragging the 64-entry LUT
+	// mux tree into the multiplier cycle (fit-#1 c153 -2.73 family).
+	sin_lut_q   <= chroma_sin(chroma_LUT);
+	cos_lut_q   <= chroma_sin(chroma_LUT + 8'd64);
+	burst_lut_q <= chroma_sin(PAL_EN ? (PAL_FLIP ? (chroma_LUT + 8'd160)
+	                                             : (chroma_LUT + 8'd96))
+	                                 : (chroma_LUT + 8'd128));
+
 	// Calculate for U, V - Bit Shift Multiple by u = by * 1024 x 0.492 = 504, v = ry * 1024 x 0.877 = 898
 	phase[0].u <= $signed({2'b0 ,(blue_2)}) - $signed({2'b0 ,phase[0].y[17:10]});
 	phase[0].v <= $signed({2'b0 , (red_2)}) - $signed({2'b0 ,phase[0].y[17:10]});
@@ -203,7 +217,7 @@ always_ff @(posedge clk) begin
 	else begin // Generate Colorburst for 9 cycles
 		if (cburst_phase >= COLORBURST_RANGE[16:10] && cburst_phase <= COLORBURST_RANGE[9:0]) begin // Start the color burst signal at 40 samples or 0.9 us
 			// COLORBURST SIGNAL GENERATION (9 CYCLES ONLY or between count 40 - 240)
-			phase[2].u <= $signed({chroma_sin(chroma_LUT_BURST),5'd0});
+			phase[2].u <= $signed({burst_lut_q, 5'd0});   // [ikacore r5] == chroma_sin(chroma_LUT_BURST)
 			phase[2].v <= 21'b0;
 			phase[2].burst <= 1'b1;
 			phase[2].chroma_en <= 1'b0;
@@ -220,8 +234,8 @@ always_ff @(posedge clk) begin
 			U,V are both multiplied by 1024 earlier to scale for the decimals in the YUV colorspace conversion.
 			U and V are both divided by 2^10 which introduce chroma subsampling of 4:1:1 (25% or from 8 bit to 6 bit)
 			*/
-			phase[2].u <= $signed((phase[1].u)>>>10) * $signed(chroma_sin(chroma_LUT_SIN));
-			phase[2].v <= $signed((phase[1].v)>>>10) * $signed(chroma_sin(chroma_LUT_COS));
+			phase[2].u <= $signed((phase[1].u)>>>10) * sin_lut_q;   // [ikacore r5] reg x reg
+			phase[2].v <= $signed((phase[1].v)>>>10) * cos_lut_q;   // == chroma_sin(chroma_LUT_SIN/COS)
 			phase[2].burst <= 1'b0;
 			phase[2].chroma_en <= de_dly3;
 

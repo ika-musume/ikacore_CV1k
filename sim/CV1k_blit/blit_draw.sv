@@ -211,6 +211,8 @@ module blit_draw (
     // clip window (FRONT-owned; snapshot into the op buffer per DRAW).
     // Signed 18-bit: clip origin is a u16, margins can push past 0/65535.
     reg signed [17:0] fc_min_x, fc_max_x, fc_min_y, fc_max_y;
+    reg [15:0]        cw_w1q;    // r5: deferred CLIP w1 (see F_CW)
+    reg               cw_pend;
     reg        [15:0] exec_cx, exec_cy;   // origin latched at EXEC (CLIP re-arms from it)
 
     // op buffer: FRONT commits one decoded DRAW, BACK consumes.
@@ -246,10 +248,28 @@ module blit_draw (
     // unchanged (proven by datum + matrix).
     reg         b1_v, b2_v, b2r_v, b3_v, b4_v;
     reg         b1_bk, b2_bk, b2r_bk, b3_bk, b4_bk;
-    reg         b1_px1, b2_px1, b2r_px1;       // 1-pixel beat (strict smear mode)
-    reg  [24:0] b1_sa_, b1_wa, b2_wa, b2r_wa, b3_wa, b4_wa;
-    reg  [3:0]  b1_en, b2_en, b2r_en, b3_mask, b4_mask;
+    // r6: the 3-deep px1/wa/en staging chains are pure 1:1 delays, which
+    // shift-register recognition rebuilt as ONE M10K altshift_taps -- the
+    // pipe context bits then LAUNCH from a RAM block's Tco + inter-block
+    // route into the ALU1 cone (r5 ship -2.42 family).  preserve pins
+    // them as fabric registers beside their consumers; ~60 FFs, free.
+    (* preserve *) reg b1_px1, b2_px1;
+    reg         b2r_px1;                       // 1-pixel beat (strict smear mode)
+    reg  [24:0] b1_sa_;
+    (* preserve *) reg [24:0] b1_wa, b2_wa;
+    reg  [24:0] b2r_wa, b3_wa, b4_wa;
+    (* preserve *) reg [3:0]  b1_en, b2_en;
+    reg  [3:0]  b2r_en, b3_mask, b4_mask;
     reg  [63:0] b2r_s, b2r_d;                  // captured src / dst read beats
+    // r7 NOTE: a B2m product stage here (ALU1 multiply cut at its own
+    // capture bank, permute behind it, pipe +1) was BUILT and REVERTED --
+    // the datum stayed byte-identical but the anchor gauntlet caught the
+    // gov coupling: pipe_empty gates strict-beat emission and the upload
+    // F_UPW/F_END serialization, so the deeper pipe stretches REAL engine
+    // completion into the gov-observable timeline (busy_end/deassert/
+    // chunk gaps drifted vs the r5i5d baseline; all 11 anchors still
+    // PASSed their bands).  A future +1 on this path needs an explicit
+    // anchor re-baseline decision, not latitude.
     // H7b.8e: B3i is a plain 1:1 delay stage between ALU1 and ALU2 (values
     // identical, one cycle later) -- the two serial 5x6 / x2115 multiplies
     // of the blend algebra span more than one period, and this register
@@ -307,7 +327,32 @@ module blit_draw (
     reg  [3:0][10:0] b3_ps_r, b3_ps_g, b3_ps_b; // src-leg first products
     reg  [3:0][10:0] b3_pd_r, b3_pd_g, b3_pd_b; // dst-leg first products
 
-    wire pipe_empty = !b1_v && !b2_v && !b2r_v && !b3i_v && !b3_v && !b4_v;
+    // r5: B3s operand-select stage between B3i and B3 (pipe depth 6 -> 7).
+    // The −2.69 residual arc was b3i regs -> operand-select case -> the
+    // 5x6 soft multiplier -> b3_ps (the retimer had folded the capture
+    // into the lpm padder).  B3s registers the SELECTED AND REV-INVERTED
+    // operands (xe/ye) plus every field B3 consumes, so the mult cycle is
+    // a pure register-fed xe*y product and the select cycle is two LUTs.
+    // Values identical: same expressions, cut at a register; instants +1
+    // (the precedented engine-latitude class -- gauntlet-gated).  The
+    // bk_simple/bk_blend bank reads stay on the B3i->B3s edge, so the
+    // bank-read window is unchanged; the occupancy guards below grow the
+    // stage, which extends each bank's protected lifetime accordingly.
+    reg             b3s_v;
+    reg             b3s_bk;
+    reg  [24:0]     b3s_wa;
+    reg  [3:0]      b3s_mask;
+    reg  [63:0]     b3s_raw;
+    reg  [3:0][4:0] b3s_sr, b3s_sg, b3s_sb;
+    reg  [3:0][4:0] b3s_dr, b3s_dg, b3s_db;
+    reg  [3:0]      b3s_a;
+    reg  [2:0]      b3s_sm, b3s_dm;
+    reg             b3s_simple, b3s_blendf;
+    reg  [3:0][4:0] b3s_xer, b3s_xeg, b3s_xeb;  // ps operand, post-invert
+    reg  [3:0][4:0] b3s_yer, b3s_yeg, b3s_yeb;  // pd operand, post-invert
+
+    wire pipe_empty = !b1_v && !b2_v && !b2r_v && !b3i_v && !b3s_v
+                      && !b3_v && !b4_v;
 
     // pipe advance: stall sources are a write beat not accepted and, behind
     // a variable-latency backend (H7), a read not yet served (i_rd_vld=0)
@@ -388,6 +433,7 @@ module blit_draw (
             exec_cx  <= 16'd0;  exec_cy <= 16'd0;
             fc_min_x <= 18'sd0; fc_max_x <= 18'sd8191;
             fc_min_y <= 18'sd0; fc_max_y <= 18'sd4095;
+            cw_w1q   <= 16'd0;  cw_pend  <= 1'b0;
             up_addr  <= 25'd0;  up_row  <= 25'd0; up_beat <= 25'd0;
             up_x     <= 14'd0;  up_y    <= 13'd0;
             up_dimx  <= 14'd1;  up_dimy <= 13'd1;
@@ -405,6 +451,21 @@ module blit_draw (
                 pend_v  <= 1'b1;
                 pend_cx <= i_clip_x;
                 pend_cy <= i_clip_y;
+            end
+
+            // r5: deferred CLIP application (registered compare + enables)
+            if (cw_pend) begin
+                cw_pend <= 1'b0;
+                if (cw_w1q != 16'd0) begin
+                    fc_min_x <= 18'($signed({2'b0, exec_cx})) - 18'sd32;
+                    fc_max_x <= 18'($signed({2'b0, exec_cx})) + 18'sd351;
+                    fc_min_y <= 18'($signed({2'b0, exec_cy})) - 18'sd32;
+                    fc_max_y <= 18'($signed({2'b0, exec_cy})) + 18'sd271;
+                end
+                else begin
+                    fc_min_x <= 18'sd0; fc_max_x <= 18'sd8191;
+                    fc_min_y <= 18'sd0; fc_max_y <= 18'sd4095;
+                end
             end
 
             case (fst)
@@ -437,16 +498,14 @@ module blit_draw (
             end
 
             F_CW: if (pop_fire) begin          // CLIP: w1!=0 window, ==0 full
-                if (i_fifo_word != 16'd0) begin
-                    fc_min_x <= 18'($signed({2'b0, exec_cx})) - 18'sd32;
-                    fc_max_x <= 18'($signed({2'b0, exec_cx})) + 18'sd351;
-                    fc_min_y <= 18'($signed({2'b0, exec_cy})) - 18'sd32;
-                    fc_max_y <= 18'($signed({2'b0, exec_cy})) + 18'sd271;
-                end
-                else begin
-                    fc_min_x <= 18'sd0; fc_max_x <= 18'sd8191;
-                    fc_min_y <= 18'sd0; fc_max_y <= 18'sd4095;
-                end
+                // r5: the fc_* application defers ONE cycle behind a
+                // registered copy of w1 -- the popped-word != 0 compare
+                // (launched by the fmem RAM/bypass, fit-#3 -2.69) leaves
+                // the four 18-bit load-enable fans.  Value-at-consumption
+                // is identical: the earliest fc_* read after a CLIP op is
+                // the NEXT op's F_CMT capture, >= 11 pops away.
+                cw_w1q  <= i_fifo_word;
+                cw_pend <= 1'b1;
                 fst <= F_OP;
             end
 
@@ -628,6 +687,7 @@ module blit_draw (
                                (b2_v  && (b2_bk  == bk_sel)) ||
                                (b2r_v && (b2r_bk == bk_sel)) ||
                                (b3i_v && (b3i_bk == bk_sel)) ||
+                               (b3s_v && (b3s_bk == bk_sel)) ||
                                (b3_v  && (b3_bk  == bk_sel)) ||
                                (b4_v  && (b4_bk  == bk_sel)));
     // S3 writes the mode bank the op is ABOUT to take (~bk_sel): it must
@@ -642,6 +702,7 @@ module blit_draw (
                                   (b2_v  && (b2_bk  == ~bk_sel)) ||
                                   (b2r_v && (b2r_bk == ~bk_sel)) ||
                                   (b3i_v && (b3i_bk == ~bk_sel)) ||
+                                  (b3s_v && (b3s_bk == ~bk_sel)) ||
                                   (b3_v  && (b3_bk  == ~bk_sel)) ||
                                   (b4_v  && (b4_bk  == ~bk_sel)));
     wire [2:0]  lane_cnt  = q_px1 ? 3'd1 :
@@ -914,29 +975,46 @@ module blit_draw (
     // ---------------------------------------------------------------------
     // pixel pipe B1..B4
     // ---------------------------------------------------------------------
-    // ALU1 (comb, from the B2r raw-capture registers): lane un-flip,
-    // channel extract, tint multiply, trans/A masking.  Results register
-    // into B3.  Register->register: no RAM Tco or routing in this cone.
+    // ALU1 (comb, from the B2r raw-capture registers): channel extract +
+    // tint multiply per PHYSICAL lane, then the px1/flip lane permute
+    // picks finished results.  r6: the permute used to sit in FRONT of
+    // the tint multiply (select + multiply in series, b2r_flip -2.19) --
+    // the multiply distributes over the lane mux, so px1/flip enter once,
+    // at the last plane.  Same 12 f_mulop_k instances, identical values
+    // by substitution (rw of output lane l IS physical lane p's word).
+    logic [3:0][15:0] f1_w;                    // per-physical-lane word
+    logic [3:0][4:0]  f1_r, f1_g, f1_b;        // tinted channels
+    logic [3:0]       f1_a;
+    always_comb begin
+        for (int p = 0; p < 4; p++) begin
+            automatic logic [15:0] sw;
+            sw      = b2r_s[p*16 +: 16];
+            f1_w[p] = sw;
+            f1_a[p] = sw[15];
+            f1_r[p] = b2r_tint ? f_mulop_k(sw[14:10], b2r_ktr) : sw[14:10];
+            f1_g[p] = b2r_tint ? f_mulop_k(sw[9:5],   b2r_ktg) : sw[9:5];
+            f1_b[p] = b2r_tint ? f_mulop_k(sw[4:0],   b2r_ktb) : sw[4:0];
+        end
+    end
     logic [3:0][15:0] a1_raw;
     logic [3:0][4:0]  a1_sr, a1_sg, a1_sb, a1_dr, a1_dg, a1_db;
     logic [3:0]       a1_a, a1_mask;
     always_comb begin
         for (int l = 0; l < 4; l++) begin
-            automatic logic [15:0] rw;
+            automatic logic [1:0]  p;
             automatic logic [15:0] dw_;
             // src lane un-flip: 4-px beats read ascending, output descending
-            rw  = b2r_px1 ? b2r_s[15:0]
-                : (b2r_flip ? b2r_s[(3-l)*16 +: 16] : b2r_s[l*16 +: 16]);
+            p   = b2r_px1 ? 2'd0 : (b2r_flip ? 2'(3 - l) : 2'(l));
             dw_ = b2r_d[l*16 +: 16];
-            a1_raw[l] = rw;
-            a1_a[l]   = rw[15];
-            a1_sr[l]  = b2r_tint ? f_mulop_k(rw[14:10], b2r_ktr) : rw[14:10];
-            a1_sg[l]  = b2r_tint ? f_mulop_k(rw[9:5],   b2r_ktg) : rw[9:5];
-            a1_sb[l]  = b2r_tint ? f_mulop_k(rw[4:0],   b2r_ktb) : rw[4:0];
+            a1_raw[l] = f1_w[p];
+            a1_a[l]   = f1_a[p];
+            a1_sr[l]  = f1_r[p];
+            a1_sg[l]  = f1_g[p];
+            a1_sb[l]  = f1_b[p];
             a1_dr[l]  = dw_[14:10];
             a1_dg[l]  = dw_[9:5];
             a1_db[l]  = dw_[4:0];
-            a1_mask[l]= b2r_en[l] && (!b2r_trans || rw[15]);
+            a1_mask[l]= b2r_en[l] && (!b2r_trans || f1_a[p]);
         end
     end
 
@@ -951,6 +1029,13 @@ module blit_draw (
             b3i_v <= 1'b0; b3i_bk <= 1'b0; b3i_wa <= '0; b3i_mask <= '0;
             b3i_raw <= '0; b3i_sr <= '0; b3i_sg <= '0; b3i_sb <= '0;
             b3i_dr <= '0; b3i_dg <= '0; b3i_db <= '0; b3i_a <= '0;
+            b3s_v <= 1'b0; b3s_bk <= 1'b0; b3s_wa <= '0; b3s_mask <= '0;
+            b3s_raw <= '0; b3s_sr <= '0; b3s_sg <= '0; b3s_sb <= '0;
+            b3s_dr <= '0; b3s_dg <= '0; b3s_db <= '0; b3s_a <= '0;
+            b3s_sm <= '0; b3s_dm <= '0;
+            b3s_simple <= 1'b0; b3s_blendf <= 1'b0;
+            b3s_xer <= '0; b3s_xeg <= '0; b3s_xeb <= '0;
+            b3s_yer <= '0; b3s_yeg <= '0; b3s_yeb <= '0;
             b3_raw <= '0; b4_data <= '0;
             b3_sr <= '0; b3_sg <= '0; b3_sb <= '0;
             b3_dr <= '0; b3_dg <= '0; b3_db <= '0; b3_a <= '0;
@@ -970,23 +1055,35 @@ module blit_draw (
             b4_wa   <= b3_wa;
             b4_mask <= b3_v ? b3_mask : 4'b0;
             b4_data <= {a2_out[3], a2_out[2], a2_out[1], a2_out[0]};
-            // B3i -> B3 (H7b.8e; r4: no longer a plain delay -- the edge
-            // captures the ALU2a first products, cutting the blend cone at
-            // this boundary by hand.  Values/instants identical: b4_data
-            // is the same function of the B3i inputs, split where the
-            // retimer used to split it with reconstruction LUTs)
-            b3_v   <= b3i_v;  b3_bk <= b3i_bk;
-            b3_wa  <= b3i_wa; b3_mask <= b3i_mask;
-            b3_raw <= b3i_raw;
-            b3_sr <= b3i_sr;  b3_sg <= b3i_sg;  b3_sb <= b3i_sb;
-            b3_dr <= b3i_dr;  b3_dg <= b3i_dg;  b3_db <= b3i_db;
-            b3_a  <= b3i_a;
-            b3_sm     <= b3i_sm;
-            b3_dm     <= b3i_dm;
-            b3_simple <= bk_simple[b3i_bk];
-            b3_blendf <= bk_blend[b3i_bk];
+            // B3s -> B3 (r5: the ALU2a xe*y products, now register-fed from
+            // the B3s operand banks; everything else is a 1:1 field copy)
+            b3_v   <= b3s_v;  b3_bk <= b3s_bk;
+            b3_wa  <= b3s_wa; b3_mask <= b3s_mask;
+            b3_raw <= b3s_raw;
+            b3_sr <= b3s_sr;  b3_sg <= b3s_sg;  b3_sb <= b3s_sb;
+            b3_dr <= b3s_dr;  b3_dg <= b3s_dg;  b3_db <= b3s_db;
+            b3_a  <= b3s_a;
+            b3_sm     <= b3s_sm;
+            b3_dm     <= b3s_dm;
+            b3_simple <= b3s_simple;
+            b3_blendf <= b3s_blendf;
             b3_ps_r <= a2a_ps_r;  b3_ps_g <= a2a_ps_g;  b3_ps_b <= a2a_ps_b;
             b3_pd_r <= a2a_pd_r;  b3_pd_g <= a2a_pd_g;  b3_pd_b <= a2a_pd_b;
+            // B3i -> B3s (r5: operand select + rev-invert registered; the
+            // bk_simple/bk_blend reads keep their B3i-edge indexing, so the
+            // bank-read window is unchanged by the extra stage)
+            b3s_v   <= b3i_v;  b3s_bk <= b3i_bk;
+            b3s_wa  <= b3i_wa; b3s_mask <= b3i_mask;
+            b3s_raw <= b3i_raw;
+            b3s_sr <= b3i_sr;  b3s_sg <= b3i_sg;  b3s_sb <= b3i_sb;
+            b3s_dr <= b3i_dr;  b3s_dg <= b3i_dg;  b3s_db <= b3i_db;
+            b3s_a  <= b3i_a;
+            b3s_sm <= b3i_sm;
+            b3s_dm <= b3i_dm;
+            b3s_simple <= bk_simple[b3i_bk];
+            b3s_blendf <= bk_blend[b3i_bk];
+            b3s_xer <= a2s_xer;  b3s_xeg <= a2s_xeg;  b3s_xeb <= a2s_xeb;
+            b3s_yer <= a2s_yer;  b3s_yeg <= a2s_yeg;  b3s_yeb <= a2s_yeb;
             // B2r -> B3i (ALU1 from the captured read beats.  r4: the
             // ALU2a selects/constants ride this edge from the mode bank --
             // bank stable while the op occupies b2r, per s3_bank_clear)
@@ -1058,10 +1155,13 @@ module blit_draw (
     assign o_dsc_upl_dimx = up_dimx;
     assign o_dsc_upl_dimy = up_dimy;
 
-    // ALU2a (comb, from B3i): operand select + rev-invert + the xe*y first
-    // products.  Registers into b3_ps_*/b3_pd_* at the B3i->B3 edge.
-    logic [3:0][10:0] a2a_ps_r, a2a_ps_g, a2a_ps_b;
-    logic [3:0][10:0] a2a_pd_r, a2a_pd_g, a2a_pd_b;
+    // ALU2a select half (comb, from B3i): operand select + rev-invert,
+    // registered into the B3s xe/ye banks at the B3i->B3s edge.  r5: the
+    // xe*y products moved one stage later (see the B3s header note) --
+    // f_mulop_a(x,y,rev) == f_xe(x,rev) * y with f_xe registered, the
+    // same split f_mulop_a itself performs internally.
+    logic [3:0][4:0] a2s_xer, a2s_xeg, a2s_xeb;
+    logic [3:0][4:0] a2s_yer, a2s_yeg, a2s_yeb;
     always_comb begin
         for (int l = 0; l < 4; l++) begin
             automatic logic [4:0] xr, xg, xb, yr, yg, yb;
@@ -1071,18 +1171,33 @@ module blit_draw (
                 2'd1: begin xr = b3i_sr[l];    xg = b3i_sg[l];    xb = b3i_sb[l];    end
                 default: begin xr = b3i_dr[l]; xg = b3i_dg[l];    xb = b3i_db[l];    end
             endcase
-            a2a_ps_r[l] = f_mulop_a(xr, {1'b0, b3i_sr[l]}, b3i_sm[2]);
-            a2a_ps_g[l] = f_mulop_a(xg, {1'b0, b3i_sg[l]}, b3i_sm[2]);
-            a2a_ps_b[l] = f_mulop_a(xb, {1'b0, b3i_sb[l]}, b3i_sm[2]);
+            a2s_xer[l] = b3i_sm[2] ? ~xr : xr;
+            a2s_xeg[l] = b3i_sm[2] ? ~xg : xg;
+            a2s_xeb[l] = b3i_sm[2] ? ~xb : xb;
             // dterm = f(dmode)
             case (b3i_dm[1:0])
                 2'd0: begin yr = b3i_dac;      yg = b3i_dac;      yb = b3i_dac;      end
                 2'd1: begin yr = b3i_sr[l];    yg = b3i_sg[l];    yb = b3i_sb[l];    end
                 default: begin yr = b3i_dr[l]; yg = b3i_dg[l];    yb = b3i_db[l];    end
             endcase
-            a2a_pd_r[l] = f_mulop_a(yr, {1'b0, b3i_dr[l]}, b3i_dm[2]);
-            a2a_pd_g[l] = f_mulop_a(yg, {1'b0, b3i_dg[l]}, b3i_dm[2]);
-            a2a_pd_b[l] = f_mulop_a(yb, {1'b0, b3i_db[l]}, b3i_dm[2]);
+            a2s_yer[l] = b3i_dm[2] ? ~yr : yr;
+            a2s_yeg[l] = b3i_dm[2] ? ~yg : yg;
+            a2s_yeb[l] = b3i_dm[2] ? ~yb : yb;
+        end
+    end
+
+    // ALU2a product half (comb, from B3s): pure register-fed 5x6 products,
+    // registered into b3_ps_*/b3_pd_* at the B3s->B3 edge.
+    logic [3:0][10:0] a2a_ps_r, a2a_ps_g, a2a_ps_b;
+    logic [3:0][10:0] a2a_pd_r, a2a_pd_g, a2a_pd_b;
+    always_comb begin
+        for (int l = 0; l < 4; l++) begin
+            a2a_ps_r[l] = b3s_xer[l] * {1'b0, b3s_sr[l]};
+            a2a_ps_g[l] = b3s_xeg[l] * {1'b0, b3s_sg[l]};
+            a2a_ps_b[l] = b3s_xeb[l] * {1'b0, b3s_sb[l]};
+            a2a_pd_r[l] = b3s_yer[l] * {1'b0, b3s_dr[l]};
+            a2a_pd_g[l] = b3s_yeg[l] * {1'b0, b3s_dg[l]};
+            a2a_pd_b[l] = b3s_yeb[l] * {1'b0, b3s_db[l]};
         end
     end
 
